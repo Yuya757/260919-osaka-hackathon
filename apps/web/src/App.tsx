@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import { ProfileDialog } from './ProfileDialog'
+import { loadProfile, profileStorageKey } from './profile'
+import type { Profile } from './profile'
 
 type Filter = 'all' | 'soon' | 'online'
 
@@ -97,6 +100,26 @@ function PinIcon() {
 }
 
 function App() {
+  const [initialProfile] = useState(loadProfile)
+  const [profile, setProfile] = useState(initialProfile.profile)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [persisted, setPersisted] = useState(initialProfile.profile !== null)
+  const [profileNotice, setProfileNotice] = useState(initialProfile.notice)
+
+  const saveProfile = (value: Profile, remember: boolean): string | null => {
+    try {
+      if (remember) localStorage.setItem(profileStorageKey, JSON.stringify(value))
+      else localStorage.removeItem(profileStorageKey)
+    } catch {
+      // 既存の保存内容が残る場合は、保存解除に成功したと表示しない。
+      if (remember || persisted) return 'ブラウザの保存設定を変更できませんでした。設定を確認して再度お試しください。'
+    }
+    setProfile(value)
+    setPersisted(remember)
+    setProfileNotice(remember ? 'プロフィールをこのブラウザに保存しました。' : 'プロフィールを登録しました。再読み込みすると内容は消えます。')
+    setProfileOpen(false)
+    return null
+  }
   const [filter, setFilter] = useState<Filter>('all')
   const [synced, setSynced] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
@@ -153,11 +176,11 @@ function App() {
           </p>
         </div>
 
-        <button className="profile" type="button">
+        <button className="profile" type="button" aria-label="プロフィールを登録・編集" aria-haspopup="dialog" onClick={() => setProfileOpen(true)}>
           <span className="avatar">YK</span>
           <span>
             Yuya Kaneko
-            <small>関西・生成AI・GCP</small>
+            <small>{profile ? [profile.prefecture, ...profile.genres].join('・') : 'プロフィール未登録'}</small>
           </span>
           <span aria-hidden="true">•••</span>
         </button>
@@ -179,6 +202,9 @@ function App() {
             {refreshing ? '探索しています…' : 'イベントを更新'}
           </button>
         </header>
+
+        {!profile && <div className="profile-registration"><span>参加しやすい場所と興味を登録しましょう。</span><button type="button" onClick={() => setProfileOpen(true)}>プロフィール新規登録</button></div>}
+        <p className="profile-notice" role="status">{profileNotice}</p>
 
         <section className="deadline-board" aria-labelledby="deadline-heading">
           <div className="deadline-copy">
@@ -308,6 +334,7 @@ function App() {
           </div>
         </section>
       </main>
+      {profileOpen && <ProfileDialog profile={profile} persisted={persisted} onClose={() => setProfileOpen(false)} onSave={saveProfile} />}
     </div>
   )
 }

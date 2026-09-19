@@ -675,6 +675,100 @@ h1 {
   }
 }
 
+.profile-registration, .profile-actions, .profile-dialog-header, .profile-sns-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.profile-registration {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 13px;
+}
+
+.profile-registration button, .profile-dialog button:not(.refresh-button) {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.profile-notice, .profile-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.profile-notice:empty { display: none; }
+.profile-registration + .profile-notice:empty { display: block; margin-bottom: 20px; }
+
+.profile-dialog {
+  width: min(660px, calc(100% - 24px));
+  max-height: calc(100dvh - 32px);
+  padding: 28px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 24px 80px rgb(16 42 67 / 25%);
+}
+
+.profile-dialog::backdrop { background: rgb(16 42 67 / 60%); }
+.profile-dialog-header { color: var(--muted); font-size: 12px; }
+.profile-dialog h2 { font-size: 22px; margin-bottom: 8px; }
+.profile-steps { display: flex; gap: 16px; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.profile-steps li { padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+.profile-steps [aria-current] { color: var(--event); border-color: var(--event); font-weight: 700; }
+.profile-fields { display: grid; gap: 18px; }
+.profile-fields label, .profile-fields legend { font-size: 14px; font-weight: 700; }
+.profile-fields input:not([type=checkbox]), .profile-fields select, .profile-fields textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-weight: 400;
+}
+.profile-fields textarea { resize: vertical; }
+.profile-fields :is(input, select, textarea, summary):focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.profile-fields input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--event); }
+.profile-fields fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.profile-fields legend { margin-bottom: 10px; }
+.profile-fields .profile-help { margin: -8px 0 0; }
+.profile-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.profile-check, .profile-choice { display: flex; gap: 9px; align-items: center; }
+.profile-choice { padding: 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.profile-choice:has(:checked) { background: var(--event-soft); border-color: var(--event); }
+.profile-sns { padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.profile-sns summary { cursor: pointer; font-size: 14px; font-weight: 700; }
+.profile-sns .profile-help { margin: 12px 0; }
+.profile-sns-row { margin-bottom: 12px; }
+.profile-dialog .profile-sns-row button:disabled { color: var(--muted); cursor: not-allowed; }
+.profile-actions { position: sticky; bottom: -28px; padding: 16px 0; background: var(--paper); border-top: 1px solid var(--line); }
+.profile-error { color: var(--deadline); font-size: 13px; }
+
+@media (max-width: 900px) {
+  .sidebar .profile { display: grid; grid-column: 1 / -1; margin-top: 16px; }
+}
+
+@media (max-width: 480px) {
+  .profile-dialog { padding: 18px; }
+  .profile-actions { bottom: -18px; }
+  .profile-actions .refresh-button { min-width: auto; font-size: 12px; }
+  .profile-registration { align-items: flex-start; flex-direction: column; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
