@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Firebase
+.firebase/
+firebase-debug.log*
+
+# Google GitHub Actions credentials
+gha-creds-*.json
+
+# Local browser review output
+.playwright-mcp/
+artifacts/
+
+# Editors and operating systems
+.DS_Store
+*.swp

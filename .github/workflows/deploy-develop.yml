@@ -1,0 +1,112 @@
+name: Deploy develop
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/web/**'
+      - 'services/agent/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/deploy-develop.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  agent:
+    name: Build and deploy agent API
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push agent image
+        working-directory: services/agent
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/apps/event-agent:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy Cloud Run service
+        id: deploy
+        run: |
+          gcloud run deploy event-agent \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --allow-unauthenticated \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.0-flash-001|AGENT_DEMO_MODE=true|CORS_ORIGINS=https://${{ vars.FIREBASE_SITE_ID }}.web.app,http://localhost:5173" \
+            --quiet
+          URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  web:
+    name: Build and deploy web demo
+    needs: agent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: develop
+      url: https://${{ vars.FIREBASE_SITE_ID }}.web.app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Type-check
+        working-directory: apps/web
+        run: npm run check
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Firebase Hosting
+        run: >
+          npx --yes firebase-tools@14.16.0 deploy
+          --only hosting
+          --project ${{ vars.GCP_PROJECT_ID }}
+          --non-interactive

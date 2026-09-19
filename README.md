@@ -2,6 +2,11 @@
 
 ユーザーの関心に合うイベントをGeminiで探索・検証し、「申込締切」と「開催日」を分けて提示するイベント管理アプリケーションです。
 
+## デモ
+
+- [Firebase Hosting](https://osaka-hackathon-260919.web.app)
+- `develop` ブランチへのpushでGitHub Actionsが自動デプロイします。
+
 ## 技術構成
 
 - Frontend: React + Vite + TypeScript
@@ -29,9 +34,7 @@
 ├── scripts/                    # WSLで実行する開発・デプロイスクリプト
 ├── .cursor/
 │   └── skills/                 # プロジェクト固有のCursor Skills
-├── AGENTS.md                   # AI Agent向けプロジェクト規約
-├── Agent詳細要件定義書.md
-└── イベント自律管理AIエージェント 要件定義書.md
+└── AGENTS.md                   # AI Agent向けプロジェクト規約
 ```
 
 ## 開発方針
@@ -41,12 +44,40 @@
 - 手動収集はCloud Tasks経由、定期収集はCloud SchedulerとCloud Run Jobで実行する
 - Calendarへの書き込みはユーザーの明示操作後にのみ行う
 - 日時情報には根拠URLを保持し、不明な値を推測しない
+- エージェント対話はサイドバーのチャットから行う
 
 ## ドキュメント
 
-- [プロジェクト要件定義書](イベント自律管理AIエージェント%20要件定義書.md)
-- [Agent詳細要件定義書](Agent詳細要件定義書.md)
+- [プロジェクト要件定義書](docs/イベント自律管理AIエージェント%20要件定義書.md)
+- [Agent詳細要件定義書](docs/Agent詳細要件定義書.md)
 
 ## セットアップ
 
-実装開始時に、各ディレクトリへ個別のセットアップ手順を追加します。
+### Web
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+### Agent API
+
+```bash
+cd services/agent
+uv venv .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+cp .env.example .env
+export PYTHONPATH=src
+uvicorn event_agent.entrypoints.service:app --reload --host 0.0.0.0 --port 8080
+```
+
+Vite は `/api` を `localhost:8080` へプロキシします。サイドバーのチャットからエージェントへ接続できます。
+
+GCP環境の再構成には、WSLから以下を実行します。
+
+```bash
+./scripts/bootstrap-gcp.sh
+./scripts/setup-firebase.sh
+```
