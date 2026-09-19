@@ -3,6 +3,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from event_agent.ekispert import RouteSummary
+
 
 class UserPreferences(BaseModel):
     interests_prompt: str = Field(
@@ -101,6 +103,9 @@ class EventLocation(BaseModel):
     type: Literal["online", "offline", "hybrid", "unknown"] = "unknown"
     venue: str | None = None
     region: str | None = None
+    nearest_station: str | None = Field(default=None, alias="nearestStation")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class EventDates(BaseModel):
@@ -140,3 +145,11 @@ class ApiEvent(BaseModel):
 
 class EventsResponse(BaseModel):
     events: list[ApiEvent]
+
+
+class EventRouteResponse(BaseModel):
+    event_id: str = Field(alias="eventId")
+    arrive_by: datetime = Field(alias="arriveBy")
+    route: RouteSummary
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}

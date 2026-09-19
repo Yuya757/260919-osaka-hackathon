@@ -9,6 +9,7 @@ FastAPI + ADK-style deterministic workflow for event discovery. Uses Vertex AI G
 - `POST /api/agent-runs` — `{ "forceRefresh?" }` → `{ runId, status }`
 - `GET /api/agent-runs/{runId}`
 - `GET /api/events?sourceRunId=`
+- `GET /api/events/{eventId}/route?from=<出発駅名>` — 駅すぱあと API でイベント開始時刻に到着する経路を 1 件返す（`EKISPERT_API_KEY` 必須。未設定時は 503）
 
 ## Local run (WSL)
 

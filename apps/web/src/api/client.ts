@@ -1,4 +1,10 @@
-import type { AgentRun, ApiEvent, ChatRequest, ChatResponse } from '../types/api'
+import type {
+  AgentRun,
+  ApiEvent,
+  ChatRequest,
+  ChatResponse,
+  EventRouteResponse,
+} from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -10,11 +16,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || `API error ${response.status}`)
+    throw new Error(await readErrorDetail(response))
   }
 
   return response.json() as Promise<T>
+}
+
+/** FastAPI returns `{ detail }` for HTTPException; fall back to the raw body. */
+async function readErrorDetail(response: Response): Promise<string> {
+  const text = await response.text()
+  try {
+    const parsed = JSON.parse(text) as { detail?: unknown }
+    if (typeof parsed.detail === 'string') return parsed.detail
+  } catch {
+    // not JSON
+  }
+  return text || `API error ${response.status}`
 }
 
 export function sendChat(body: ChatRequest): Promise<ChatResponse> {
@@ -38,6 +55,11 @@ export function getAgentRun(runId: string): Promise<AgentRun> {
 export function listEvents(sourceRunId?: string): Promise<{ events: ApiEvent[] }> {
   const query = sourceRunId ? `?sourceRunId=${encodeURIComponent(sourceRunId)}` : ''
   return request<{ events: ApiEvent[] }>(`/api/events${query}`)
+}
+
+export function getEventRoute(eventId: string, from: string): Promise<EventRouteResponse> {
+  const query = `?from=${encodeURIComponent(from)}`
+  return request<EventRouteResponse>(`/api/events/${encodeURIComponent(eventId)}/route${query}`)
 }
 
 export async function pollAgentRun(
