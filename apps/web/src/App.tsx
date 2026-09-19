@@ -85,8 +85,6 @@ function App() {
           </a>
         </nav>
 
-        <AgentChat onEventsUpdated={onEventsUpdated} onRunStateChange={setRefreshing} />
-
         <button className="profile" type="button">
           <span className="avatar">YK</span>
           <span>
@@ -142,9 +140,11 @@ function App() {
               <span className="rail-line" />
               <time>{nearestDeadline?.eventDate || '—'}</time>
             </div>
-            <span className="days-between">サイドバーのエージェントから探索できます</span>
+            <span className="days-between">下のエージェントから探索できます</span>
           </div>
         </section>
+
+        <AgentChat onEventsUpdated={onEventsUpdated} onRunStateChange={setRefreshing} />
 
         <section className="event-section" aria-labelledby="event-heading">
           <div className="section-header">

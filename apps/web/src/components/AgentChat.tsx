@@ -71,7 +71,7 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
           text:
             run.status === 'failed'
               ? run.errorMessage || '探索に失敗しました。もう一度試してください。'
-              : `${result.events.length}件のイベントを更新しました。右側の一覧を確認してください。`,
+              : `${result.events.length}件のイベントを更新しました。下の一覧を確認してください。`,
         })
       }
 
