@@ -4,8 +4,8 @@
 
 This repository builds an event discovery application that separates application deadlines from event dates. Read the following documents before changing architecture or Agent behavior:
 
-- `イベント自律管理AIエージェント 要件定義書.md`
-- `Agent詳細要件定義書.md`
+- `docs/イベント自律管理AIエージェント 要件定義書.md`
+- `docs/Agent詳細要件定義書.md`
 
 ## Architecture
 
