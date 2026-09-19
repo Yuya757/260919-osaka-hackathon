@@ -64,7 +64,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="site-header">
         <a className="brand" href="#" aria-label="超イベント管理 ホーム">
           <span className="brand-mark">〆</span>
           <span>
@@ -75,25 +75,16 @@ function App() {
 
         <nav className="primary-nav" aria-label="メインナビゲーション">
           <a className="nav-item active" href="#">
-            <span>⌂</span>今日のイベント
+            今日のイベント
           </a>
           <a className="nav-item" href="#">
-            <span>▦</span>カレンダー
+            カレンダー
           </a>
           <a className="nav-item" href="#">
-            <span>♡</span>保存したイベント
+            保存したイベント
           </a>
         </nav>
-
-        <button className="profile" type="button">
-          <span className="avatar">YK</span>
-          <span>
-            Yuya Kaneko
-            <small>関西・生成AI・GCP</small>
-          </span>
-          <span aria-hidden="true">•••</span>
-        </button>
-      </aside>
+      </header>
 
       <main>
         <header className="topbar">
@@ -117,7 +108,7 @@ function App() {
 
         <section className="deadline-board" aria-labelledby="deadline-heading">
           <div className="deadline-copy">
-            <p>次の申込締切まで</p>
+            <p className="deadline-eyebrow">次の申込締切まで</p>
             <div className="countdown">
               <strong>
                 {nearestDeadline?.deadlineDay.match(/\d+/)?.[0]?.padStart(2, '0') || '—'}
@@ -132,13 +123,15 @@ function App() {
           <div className="date-rails" aria-label="締切日と開催日の時間差">
             <div className="rail deadline-rail">
               <span className="rail-label">申込締切</span>
-              <span className="rail-line" />
-              <time>{nearestDeadline?.deadline || '—'}</time>
+              <time dateTime="2026-09-22T23:59:00+09:00">
+                9/22 <small>火</small>
+              </time>
             </div>
             <div className="rail event-rail">
               <span className="rail-label">イベント開催</span>
-              <span className="rail-line" />
-              <time>{nearestDeadline?.eventDate || '—'}</time>
+              <time dateTime="2026-10-11">
+                10/11 <small>日</small>
+              </time>
             </div>
             <span className="days-between">下のエージェントから探索できます</span>
           </div>
@@ -150,7 +143,7 @@ function App() {
           <div className="section-header">
             <div>
               <h2 id="event-heading">あなた向けのイベント</h2>
-              <p>AIが公式情報を確認し、関心との近さで並べています。</p>
+              <p>公式情報を確認済み · 関心に近い順</p>
             </div>
             <div className="filters" role="group" aria-label="イベント絞り込み">
               {[
@@ -162,6 +155,7 @@ function App() {
                   key={value}
                   className={filter === value ? 'selected' : ''}
                   type="button"
+                  aria-pressed={filter === value}
                   onClick={() => setFilter(value as Filter)}
                 >
                   {label}
