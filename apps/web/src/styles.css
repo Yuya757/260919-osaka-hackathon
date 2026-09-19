@@ -126,7 +126,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.25; letter-spa
   margin-bottom: 40px;
   border: 1px solid #cdd9e1;
   border-radius: 14px;
-  background: var(--paper);
+  background: #fff;
   box-shadow: 0 12px 36px rgb(33 64 89 / 8%);
   overflow: hidden;
 }
@@ -251,13 +251,13 @@ h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.25; letter-spa
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--ink);
-  background: var(--paper);
+  background: #fff;
   font: inherit;
   font-size: 13px;
 }
 
 .chat-composer textarea:focus-visible {
-  outline: 3px solid var(--focus);
+  outline: 3px solid #efad48;
   outline-offset: 1px;
 }
 
@@ -267,7 +267,7 @@ h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.25; letter-spa
   border: 0;
   border-radius: 10px;
   color: #102a43;
-  background: var(--focus);
+  background: #efad48;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -292,5 +292,157 @@ h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.25; letter-spa
 
   .chat-bubble {
     max-width: 92%;
+  }
+}
+
+.route-panel {
+  margin-top: 12px;
+}
+
+.route-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--event);
+  background: none;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.route-toggle:hover {
+  text-decoration: underline;
+}
+
+.route-body {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7fafc;
+}
+
+.route-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.route-form input {
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.route-form input:focus-visible {
+  outline: 3px solid #efad48;
+  outline-offset: 1px;
+}
+
+.route-arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.route-destination {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.route-form button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: var(--event);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.route-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.route-error {
+  margin: 10px 0 0;
+  color: var(--deadline);
+  font-size: 11px;
+}
+
+.route-result {
+  margin-top: 12px;
+}
+
+.route-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.route-summary strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.route-legs {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-legs li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 2px 10px;
+  padding-left: 12px;
+  border-left: 3px solid var(--event);
+  font-size: 11px;
+}
+
+.route-leg-time {
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-leg-line {
+  font-weight: 700;
+}
+
+.route-leg-stations {
+  grid-column: 2;
+  color: var(--muted);
+}
+
+.route-credit {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+@media (max-width: 680px) {
+  .route-legs li {
+    grid-template-columns: 1fr;
+  }
+
+  .route-leg-stations {
+    grid-column: 1;
   }
 }

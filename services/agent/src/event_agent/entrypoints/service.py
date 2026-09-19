@@ -2,17 +2,28 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from event_agent.agents.chat import handle_chat
 from event_agent.config import get_settings
+from event_agent.demo_catalog import demo_catalog
+from event_agent.ekispert import (
+    EkispertError,
+    EkispertNotConfigured,
+    RouteNotFound,
+    StationNotFound,
+    ekispert_client,
+)
 from event_agent.schemas import (
+    AgentRun,
     AgentRunCreateRequest,
     AgentRunCreateResponse,
-    AgentRun,
+    ApiEvent,
     ChatRequest,
     ChatResponse,
+    EventRouteResponse,
     EventsResponse,
     HealthResponse,
 )
@@ -20,6 +31,8 @@ from event_agent.store import store
 from event_agent.workflows.collect import schedule_collect_run
 
 logging.basicConfig(level=logging.INFO)
+# httpx logs full request URLs (including API keys in query strings) at INFO.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
@@ -82,3 +95,48 @@ async def list_events(
         if e.validation_status in ("verified", "partial")
     ]
     return EventsResponse(events=events)
+
+
+def _find_event(event_id: str) -> ApiEvent | None:
+    for event in [*store.list_events(), *demo_catalog()]:
+        if event.event_id == event_id:
+            return event
+    return None
+
+
+@app.get("/api/events/{event_id}/route", response_model=EventRouteResponse)
+async def get_event_route(
+    event_id: str,
+    origin: str = Query(alias="from", min_length=1, max_length=40, description="出発駅名"),
+) -> EventRouteResponse:
+    event = _find_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.location.type == "online":
+        raise HTTPException(status_code=400, detail="オンライン開催のため経路検索はできません。")
+    destination_name = event.location.nearest_station or event.location.region
+    if not destination_name:
+        raise HTTPException(status_code=400, detail="会場の最寄駅が未確認のため経路検索できません。")
+    if not ekispert_client.configured:
+        raise HTTPException(status_code=503, detail="経路検索は現在利用できません。")
+
+    try:
+        origin_station = await ekispert_client.find_station(origin)
+        destination_station = await ekispert_client.find_station(destination_name)
+        route = await ekispert_client.search_route_arriving_by(
+            origin_station, destination_station, event.dates.event_start
+        )
+    except EkispertNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except StationNotFound as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RouteNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except EkispertError as exc:
+        logger.warning("route search failed for %s: %s", event_id, exc)
+        raise HTTPException(status_code=502, detail="経路検索サービスでエラーが発生しました。") from exc
+    except httpx.HTTPError as exc:
+        logger.warning("route search transport error for %s: %s %s", event_id, type(exc).__name__, exc)
+        raise HTTPException(status_code=502, detail="経路検索サービスに接続できませんでした。") from exc
+
+    return EventRouteResponse(eventId=event.event_id, arriveBy=event.dates.event_start, route=route)
