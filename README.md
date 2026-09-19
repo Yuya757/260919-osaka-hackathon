@@ -44,6 +44,7 @@
 - 手動収集はCloud Tasks経由、定期収集はCloud SchedulerとCloud Run Jobで実行する
 - Calendarへの書き込みはユーザーの明示操作後にのみ行う
 - 日時情報には根拠URLを保持し、不明な値を推測しない
+- エージェント対話はサイドバーのチャットから行う
 
 ## ドキュメント
 
@@ -52,11 +53,27 @@
 
 ## セットアップ
 
+### Web
+
 ```bash
 cd apps/web
 npm ci
 npm run dev
 ```
+
+### Agent API
+
+```bash
+cd services/agent
+uv venv .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+cp .env.example .env
+export PYTHONPATH=src
+uvicorn event_agent.entrypoints.service:app --reload --host 0.0.0.0 --port 8080
+```
+
+Vite は `/api` を `localhost:8080` へプロキシします。サイドバーのチャットからエージェントへ接続できます。
 
 GCP環境の再構成には、WSLから以下を実行します。
 
