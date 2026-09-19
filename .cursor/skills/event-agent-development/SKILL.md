@@ -8,7 +8,7 @@ description: Implements and reviews the event discovery Agent using Google ADK, 
 ## Before changing code
 
 1. Read `AGENTS.md`.
-2. Read the relevant sections of `Agent詳細要件定義書.md`.
+2. Read the relevant sections of `docs/Agent詳細要件定義書.md`.
 3. Identify affected contracts, validation rules, prompts, and evaluation cases.
 
 ## Required workflow
