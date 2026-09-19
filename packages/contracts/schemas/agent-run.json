@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/agent-run.json",
+  "title": "Agent Run API",
+  "$defs": {
+    "AgentRunStatus": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "partial_success",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "AgentRunTriggerType": {
+      "type": "string",
+      "enum": ["manual", "scheduled"]
+    },
+    "CreateAgentRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "forceRefresh": { "type": "boolean", "default": false }
+      }
+    },
+    "CreateAgentRunResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "status"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "const": "queued"
+        }
+      }
+    },
+    "AgentRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "userId", "triggerType", "idempotencyKey", "status", "startedAt"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "triggerType": { "$ref": "#/$defs/AgentRunTriggerType" },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/AgentRunStatus" },
+        "currentStep": { "type": "string" },
+        "model": { "type": "string" },
+        "queryCount": { "type": "integer", "minimum": 0 },
+        "candidateCount": { "type": "integer", "minimum": 0 },
+        "verifiedCount": { "type": "integer", "minimum": 0 },
+        "partialCount": { "type": "integer", "minimum": 0 },
+        "quarantinedCount": { "type": "integer", "minimum": 0 },
+        "duplicateCount": { "type": "integer", "minimum": 0 },
+        "errorCount": { "type": "integer", "minimum": 0 },
+        "errorMessage": {
+          "type": ["string", "null"],
+          "description": "User-safe error summary; no stack traces or secrets (section 8.2)"
+        },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": ["string", "null"], "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

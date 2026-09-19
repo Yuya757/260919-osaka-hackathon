@@ -1,75 +1,9 @@
 import { useMemo, useState } from 'react'
+import { AgentChat } from './components/AgentChat'
+import { DEMO_EVENTS, toEventCard, type EventCardModel } from './data/events'
+import type { ApiEvent } from './types/api'
 
 type Filter = 'all' | 'soon' | 'online'
-
-type EventItem = {
-  id: string
-  title: string
-  organizer: string
-  category: string
-  location: string
-  format: '会場' | 'オンライン' | 'ハイブリッド'
-  deadline: string
-  deadlineDay: string
-  eventDate: string
-  eventDay: string
-  description: string
-  match: number
-  source: string
-  urgent?: boolean
-}
-
-const events: EventItem[] = [
-  {
-    id: 'gemini-hack',
-    title: 'Gemini API ハッカソン 2026',
-    organizer: 'Google for Developers',
-    category: '生成AI・ハッカソン',
-    location: 'グランフロント大阪',
-    format: '会場',
-    deadline: '9月22日 23:59',
-    deadlineDay: 'あと3日',
-    eventDate: '10月11日 — 12日',
-    eventDay: '22日後',
-    description:
-      'Gemini APIを使い、地域や暮らしの課題を解くプロトタイプを2日間で開発します。',
-    match: 96,
-    source: '公式サイトで確認済み',
-    urgent: true,
-  },
-  {
-    id: 'cloud-next',
-    title: 'Cloud Builders Kansai',
-    organizer: 'GDG Osaka',
-    category: 'GCP・カンファレンス',
-    location: '梅田スカイビル',
-    format: 'ハイブリッド',
-    deadline: '10月02日 18:00',
-    deadlineDay: 'あと13日',
-    eventDate: '10月18日',
-    eventDay: '29日後',
-    description:
-      'Cloud Run、Vertex AI、データ基盤の実践事例を関西の開発者が共有する1dayイベントです。',
-    match: 91,
-    source: '公式サイトで確認済み',
-  },
-  {
-    id: 'agent-meetup',
-    title: 'AI Agent Product Meetup',
-    organizer: 'Agentic Japan',
-    category: 'AI Agent・ミートアップ',
-    location: 'Google Meet',
-    format: 'オンライン',
-    deadline: '10月08日',
-    deadlineDay: 'あと19日',
-    eventDate: '10月09日 19:00',
-    eventDay: '20日後',
-    description:
-      'プロダクトにAI Agentを組み込む設計、評価、運用の失敗と学びを持ち寄るオンライン勉強会です。',
-    match: 88,
-    source: '主催者ページで確認済み',
-  },
-]
 
 function CalendarIcon() {
   return (
@@ -100,17 +34,23 @@ function App() {
   const [filter, setFilter] = useState<Filter>('all')
   const [synced, setSynced] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
+  const [events, setEvents] = useState<EventCardModel[]>(DEMO_EVENTS)
 
   const visibleEvents = useMemo(() => {
     if (filter === 'soon') return events.filter((event) => event.urgent)
-    if (filter === 'online')
-      return events.filter((event) => event.format !== '会場')
+    if (filter === 'online') return events.filter((event) => event.format !== '会場')
     return events
-  }, [filter])
+  }, [events, filter])
 
-  const refreshEvents = () => {
-    setRefreshing(true)
-    window.setTimeout(() => setRefreshing(false), 1100)
+  const nearestDeadline = useMemo(() => {
+    return [...events]
+      .filter((event) => event.urgent || event.deadlineDay.startsWith('あと'))
+      .sort((a, b) => a.deadlineDay.localeCompare(b.deadlineDay, 'ja'))[0]
+  }, [events])
+
+  const onEventsUpdated = (apiEvents: ApiEvent[]) => {
+    if (!apiEvents.length) return
+    setEvents(apiEvents.map(toEventCard))
   }
 
   const toggleCalendar = (eventId: string) => {
@@ -155,8 +95,11 @@ function App() {
           <button
             className={`refresh-button ${refreshing ? 'refreshing' : ''}`}
             type="button"
-            onClick={refreshEvents}
             disabled={refreshing}
+            onClick={() => {
+              const chatRefresh = document.querySelector('.chat-refresh') as HTMLButtonElement | null
+              chatRefresh?.click()
+            }}
           >
             <SparkIcon />
             {refreshing ? '探索しています…' : 'イベントを更新'}
@@ -167,11 +110,13 @@ function App() {
           <div className="deadline-copy">
             <p className="deadline-eyebrow">次の申込締切まで</p>
             <div className="countdown">
-              <strong>03</strong>
+              <strong>
+                {nearestDeadline?.deadlineDay.match(/\d+/)?.[0]?.padStart(2, '0') || '—'}
+              </strong>
               <span>日</span>
             </div>
             <p className="deadline-title" id="deadline-heading">
-              Gemini API ハッカソン 2026
+              {nearestDeadline?.title || 'イベントを探索中'}
             </p>
           </div>
 
@@ -188,9 +133,11 @@ function App() {
                 10/11 <small>日</small>
               </time>
             </div>
-            <span className="days-between">19日間の準備期間</span>
+            <span className="days-between">下のエージェントから探索できます</span>
           </div>
         </section>
+
+        <AgentChat onEventsUpdated={onEventsUpdated} onRunStateChange={setRefreshing} />
 
         <section className="event-section" aria-labelledby="event-heading">
           <div className="section-header">
