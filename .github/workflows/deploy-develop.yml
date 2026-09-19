@@ -1,0 +1,65 @@
+name: Deploy develop
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/web/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/deploy-develop.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  web:
+    name: Build and deploy web demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: develop
+      url: https://${{ vars.FIREBASE_SITE_ID }}.web.app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Type-check
+        working-directory: apps/web
+        run: npm run check
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Firebase Hosting
+        run: >
+          npx --yes firebase-tools@14.16.0 deploy
+          --only hosting
+          --project ${{ vars.GCP_PROJECT_ID }}
+          --non-interactive
