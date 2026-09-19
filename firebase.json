@@ -9,13 +9,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "run": {
-          "serviceId": "event-agent",
-          "region": "asia-northeast1"
-        }
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

@@ -1,10 +1,78 @@
 import { useMemo, useState } from 'react'
-import { AgentChat } from './components/AgentChat'
-import { RoutePanel } from './components/RoutePanel'
-import { DEMO_EVENTS, toEventCard, type EventCardModel } from './data/events'
-import type { ApiEvent } from './types/api'
+import { ProfileDialog } from './ProfileDialog'
+import { loadProfile, profileStorageKey } from './profile'
+import type { Profile } from './profile'
 
 type Filter = 'all' | 'soon' | 'online'
+
+type EventItem = {
+  id: string
+  title: string
+  organizer: string
+  category: string
+  location: string
+  format: '会場' | 'オンライン' | 'ハイブリッド'
+  deadline: string
+  deadlineDay: string
+  eventDate: string
+  eventDay: string
+  description: string
+  match: number
+  source: string
+  urgent?: boolean
+}
+
+const events: EventItem[] = [
+  {
+    id: 'gemini-hack',
+    title: 'Gemini API ハッカソン 2026',
+    organizer: 'Google for Developers',
+    category: '生成AI・ハッカソン',
+    location: 'グランフロント大阪',
+    format: '会場',
+    deadline: '9月22日 23:59',
+    deadlineDay: 'あと3日',
+    eventDate: '10月11日 — 12日',
+    eventDay: '22日後',
+    description:
+      'Gemini APIを使い、地域や暮らしの課題を解くプロトタイプを2日間で開発します。',
+    match: 96,
+    source: '公式サイトで確認済み',
+    urgent: true,
+  },
+  {
+    id: 'cloud-next',
+    title: 'Cloud Builders Kansai',
+    organizer: 'GDG Osaka',
+    category: 'GCP・カンファレンス',
+    location: '梅田スカイビル',
+    format: 'ハイブリッド',
+    deadline: '10月02日 18:00',
+    deadlineDay: 'あと13日',
+    eventDate: '10月18日',
+    eventDay: '29日後',
+    description:
+      'Cloud Run、Vertex AI、データ基盤の実践事例を関西の開発者が共有する1dayイベントです。',
+    match: 91,
+    source: '公式サイトで確認済み',
+  },
+  {
+    id: 'agent-meetup',
+    title: 'AI Agent Product Meetup',
+    organizer: 'Agentic Japan',
+    category: 'AI Agent・ミートアップ',
+    location: 'Google Meet',
+    format: 'オンライン',
+    deadline: '10月08日',
+    deadlineDay: 'あと19日',
+    eventDate: '10月09日 19:00',
+    eventDay: '20日後',
+    description:
+      'プロダクトにAI Agentを組み込む設計、評価、運用の失敗と学びを持ち寄るオンライン勉強会です。',
+    match: 88,
+    source: '主催者ページで確認済み',
+  },
+]
 
 function CalendarIcon() {
   return (
@@ -32,26 +100,40 @@ function PinIcon() {
 }
 
 function App() {
+  const [initialProfile] = useState(loadProfile)
+  const [profile, setProfile] = useState(initialProfile.profile)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [persisted, setPersisted] = useState(initialProfile.profile !== null)
+  const [profileNotice, setProfileNotice] = useState(initialProfile.notice)
+
+  const saveProfile = (value: Profile, remember: boolean): string | null => {
+    try {
+      if (remember) localStorage.setItem(profileStorageKey, JSON.stringify(value))
+      else localStorage.removeItem(profileStorageKey)
+    } catch {
+      // 既存の保存内容が残る場合は、保存解除に成功したと表示しない。
+      if (remember || persisted) return 'ブラウザの保存設定を変更できませんでした。設定を確認して再度お試しください。'
+    }
+    setProfile(value)
+    setPersisted(remember)
+    setProfileNotice(remember ? 'プロフィールをこのブラウザに保存しました。' : 'プロフィールを登録しました。再読み込みすると内容は消えます。')
+    setProfileOpen(false)
+    return null
+  }
   const [filter, setFilter] = useState<Filter>('all')
   const [synced, setSynced] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
-  const [events, setEvents] = useState<EventCardModel[]>(DEMO_EVENTS)
 
   const visibleEvents = useMemo(() => {
     if (filter === 'soon') return events.filter((event) => event.urgent)
-    if (filter === 'online') return events.filter((event) => event.format !== '会場')
+    if (filter === 'online')
+      return events.filter((event) => event.format !== '会場')
     return events
-  }, [events, filter])
+  }, [filter])
 
-  const nearestDeadline = useMemo(() => {
-    return [...events]
-      .filter((event) => event.urgent || event.deadlineDay.startsWith('あと'))
-      .sort((a, b) => a.deadlineDay.localeCompare(b.deadlineDay, 'ja'))[0]
-  }, [events])
-
-  const onEventsUpdated = (apiEvents: ApiEvent[]) => {
-    if (!apiEvents.length) return
-    setEvents(apiEvents.map(toEventCard))
+  const refreshEvents = () => {
+    setRefreshing(true)
+    window.setTimeout(() => setRefreshing(false), 1100)
   }
 
   const toggleCalendar = (eventId: string) => {
@@ -65,7 +147,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="site-header">
+      <aside className="sidebar">
         <a className="brand" href="#" aria-label="超イベント管理 ホーム">
           <span className="brand-mark">〆</span>
           <span>
@@ -76,16 +158,33 @@ function App() {
 
         <nav className="primary-nav" aria-label="メインナビゲーション">
           <a className="nav-item active" href="#">
-            今日のイベント
+            <span>⌂</span>今日のイベント
           </a>
           <a className="nav-item" href="#">
-            カレンダー
+            <span>▦</span>カレンダー
           </a>
           <a className="nav-item" href="#">
-            保存したイベント
+            <span>♡</span>保存したイベント
           </a>
         </nav>
-      </header>
+
+        <div className="agent-note">
+          <SparkIcon />
+          <p>
+            次回の自動探索
+            <strong>明日 7:00</strong>
+          </p>
+        </div>
+
+        <button className="profile" type="button" aria-label="プロフィールを登録・編集" aria-haspopup="dialog" onClick={() => setProfileOpen(true)}>
+          <span className="avatar">YK</span>
+          <span>
+            Yuya Kaneko
+            <small>{profile ? [profile.prefecture, ...profile.genres].join('・') : 'プロフィール未登録'}</small>
+          </span>
+          <span aria-hidden="true">•••</span>
+        </button>
+      </aside>
 
       <main>
         <header className="topbar">
@@ -96,55 +195,53 @@ function App() {
           <button
             className={`refresh-button ${refreshing ? 'refreshing' : ''}`}
             type="button"
+            onClick={refreshEvents}
             disabled={refreshing}
-            onClick={() => {
-              const chatRefresh = document.querySelector('.chat-refresh') as HTMLButtonElement | null
-              chatRefresh?.click()
-            }}
           >
             <SparkIcon />
             {refreshing ? '探索しています…' : 'イベントを更新'}
           </button>
         </header>
 
+        {!profile && <div className="profile-registration"><span>参加しやすい場所と興味を登録しましょう。</span><button type="button" onClick={() => setProfileOpen(true)}>プロフィール新規登録</button></div>}
+        <p className="profile-notice" role="status">{profileNotice}</p>
+
         <section className="deadline-board" aria-labelledby="deadline-heading">
           <div className="deadline-copy">
-            <p className="deadline-eyebrow">次の申込締切まで</p>
+            <p>次の申込締切まで</p>
             <div className="countdown">
-              <strong>
-                {nearestDeadline?.deadlineDay.match(/\d+/)?.[0]?.padStart(2, '0') || '—'}
-              </strong>
+              <strong>03</strong>
               <span>日</span>
             </div>
             <p className="deadline-title" id="deadline-heading">
-              {nearestDeadline?.title || 'イベントを探索中'}
+              Gemini API ハッカソン 2026
             </p>
           </div>
 
           <div className="date-rails" aria-label="締切日と開催日の時間差">
             <div className="rail deadline-rail">
               <span className="rail-label">申込締切</span>
+              <span className="rail-line" />
               <time dateTime="2026-09-22T23:59:00+09:00">
                 9/22 <small>火</small>
               </time>
             </div>
             <div className="rail event-rail">
               <span className="rail-label">イベント開催</span>
+              <span className="rail-line" />
               <time dateTime="2026-10-11">
                 10/11 <small>日</small>
               </time>
             </div>
-            <span className="days-between">下のエージェントから探索できます</span>
+            <span className="days-between">19日間の準備期間</span>
           </div>
         </section>
-
-        <AgentChat onEventsUpdated={onEventsUpdated} onRunStateChange={setRefreshing} />
 
         <section className="event-section" aria-labelledby="event-heading">
           <div className="section-header">
             <div>
               <h2 id="event-heading">あなた向けのイベント</h2>
-              <p>公式情報を確認済み · 関心に近い順</p>
+              <p>AIが公式情報を確認し、関心との近さで並べています。</p>
             </div>
             <div className="filters" role="group" aria-label="イベント絞り込み">
               {[
@@ -156,7 +253,6 @@ function App() {
                   key={value}
                   className={filter === value ? 'selected' : ''}
                   type="button"
-                  aria-pressed={filter === value}
                   onClick={() => setFilter(value as Filter)}
                 >
                   {label}
@@ -231,10 +327,6 @@ function App() {
                         {isSynced ? '登録済み' : '両方をカレンダーへ'}
                       </button>
                     </div>
-
-                    {event.format !== 'オンライン' && event.nearestStation && (
-                      <RoutePanel eventId={event.id} nearestStation={event.nearestStation} />
-                    )}
                   </div>
                 </article>
               )
@@ -242,6 +334,7 @@ function App() {
           </div>
         </section>
       </main>
+      {profileOpen && <ProfileDialog profile={profile} persisted={persisted} onClose={() => setProfileOpen(false)} onSave={saveProfile} />}
     </div>
   )
 }
