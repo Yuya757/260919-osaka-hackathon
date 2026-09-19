@@ -2,6 +2,11 @@
 
 ユーザーの関心に合うイベントをGeminiで探索・検証し、「申込締切」と「開催日」を分けて提示するイベント管理アプリケーションです。
 
+## デモ
+
+- [Firebase Hosting](https://osaka-hackathon-260919.web.app)
+- `develop` ブランチへのpushでGitHub Actionsが自動デプロイします。
+
 ## 技術構成
 
 - Frontend: React + Vite + TypeScript
@@ -47,4 +52,15 @@
 
 ## セットアップ
 
-実装開始時に、各ディレクトリへ個別のセットアップ手順を追加します。
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+GCP環境の再構成には、WSLから以下を実行します。
+
+```bash
+./scripts/bootstrap-gcp.sh
+./scripts/setup-firebase.sh
+```
