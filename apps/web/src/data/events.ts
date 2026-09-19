@@ -15,6 +15,8 @@ export type EventCardModel = {
   match: number
   source: string
   urgent?: boolean
+  /** 最寄駅。会場開催かつ駅が分かる場合のみ経路検索を出す */
+  nearestStation?: string | null
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -59,6 +61,7 @@ export const DEMO_EVENTS: EventCardModel[] = [
     match: 96,
     source: '公式サイトで確認済み',
     urgent: true,
+    nearestStation: '大阪',
   },
   {
     id: 'cloud-next',
@@ -75,6 +78,7 @@ export const DEMO_EVENTS: EventCardModel[] = [
       'Cloud Run、Vertex AI、データ基盤の実践事例を関西の開発者が共有する1dayイベントです。',
     match: 91,
     source: '公式サイトで確認済み',
+    nearestStation: '大阪',
   },
   {
     id: 'agent-meetup',
@@ -120,5 +124,6 @@ export function toEventCard(event: ApiEvent): EventCardModel {
     match: event.recommendation?.score ?? 70,
     source: event.officialUrl || '根拠付きで確認済み',
     urgent: daysLeft <= 5,
+    nearestStation: event.location.nearestStation ?? null,
   }
 }

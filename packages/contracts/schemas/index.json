@@ -35,6 +35,16 @@
         "EventRecommendation",
         "EventListResponse"
       ]
+    },
+    {
+      "id": "route",
+      "path": "route.json",
+      "definitions": [
+        "Station",
+        "RouteLeg",
+        "RouteSummary",
+        "EventRouteResponse"
+      ]
     }
   ]
 }

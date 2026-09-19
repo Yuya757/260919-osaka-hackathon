@@ -14,7 +14,11 @@
       "properties": {
         "type": { "$ref": "#/$defs/EventLocationType" },
         "venue": { "type": ["string", "null"] },
-        "region": { "type": ["string", "null"] }
+        "region": { "type": ["string", "null"] },
+        "nearestStation": {
+          "type": ["string", "null"],
+          "description": "会場の最寄駅名（駅すぱあと経路検索の到着駅として使用）"
+        }
       }
     },
     "DatePrecision": {

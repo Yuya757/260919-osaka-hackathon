@@ -70,6 +70,8 @@ export type EventLocation = {
   type: EventLocationType
   venue?: string | null
   region?: string | null
+  /** 会場の最寄駅名（経路検索の到着駅） */
+  nearestStation?: string | null
 }
 
 export type DatePrecision = 'datetime' | 'date' | 'unknown'
@@ -122,3 +124,36 @@ export type EventListResponse = {
 
 /** API list view; same shape as Event (§8.3) */
 export type ApiEvent = Event
+
+/** packages/contracts/schemas/route.json — GET /api/events/{eventId}/route?from= */
+export type Station = {
+  code: string
+  name: string
+  prefecture?: string | null
+}
+
+export type RouteLeg = {
+  line: string
+  fromStation: string
+  toStation: string
+  departure?: string | null
+  arrival?: string | null
+  minutes?: number | null
+}
+
+export type RouteSummary = {
+  fromStation: Station
+  toStation: Station
+  departure: string
+  arrival: string
+  totalMinutes: number
+  transferCount: number
+  fareYen?: number | null
+  legs: RouteLeg[]
+}
+
+export type EventRouteResponse = {
+  eventId: string
+  arriveBy: string
+  route: RouteSummary
+}

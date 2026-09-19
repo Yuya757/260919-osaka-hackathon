@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     verified_confidence_threshold: float = 0.8
     prompt_version: str = "chat-1.0.0"
     validation_rule_version: str = "1.0.0"
+    ekispert_api_key: str | None = None
 
     @property
     def use_vertex(self) -> bool:

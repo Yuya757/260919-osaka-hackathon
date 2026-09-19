@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AgentChat } from './components/AgentChat'
+import { RoutePanel } from './components/RoutePanel'
 import { DEMO_EVENTS, toEventCard, type EventCardModel } from './data/events'
 import type { ApiEvent } from './types/api'
 
@@ -236,6 +237,10 @@ function App() {
                         {isSynced ? '登録済み' : '両方をカレンダーへ'}
                       </button>
                     </div>
+
+                    {event.format !== 'オンライン' && event.nearestStation && (
+                      <RoutePanel eventId={event.id} nearestStation={event.nearestStation} />
+                    )}
                   </div>
                 </article>
               )
