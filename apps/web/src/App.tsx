@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ProfileDialog } from './ProfileDialog'
+import { EventCalendarCard } from './EventCalendarCard'
 import { loadProfile, profileStorageKey } from './profile'
 import type { Profile } from './profile'
 
@@ -100,6 +101,7 @@ function PinIcon() {
 }
 
 function App() {
+  const [activePage, setActivePage] = useState<'today' | 'calendar'>('today')
   const [initialProfile] = useState(loadProfile)
   const [profile, setProfile] = useState(initialProfile.profile)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -148,7 +150,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#" aria-label="超イベント管理 ホーム">
+        <a className="brand" href="#" aria-label="超イベント管理 ホーム" onClick={(event) => { event.preventDefault(); setActivePage('today') }}>
           <span className="brand-mark">〆</span>
           <span>
             超イベント
@@ -157,12 +159,24 @@ function App() {
         </a>
 
         <nav className="primary-nav" aria-label="メインナビゲーション">
-          <a className="nav-item active" href="#">
+          <button
+            className={`nav-item${activePage === 'today' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'today' ? 'page' : undefined}
+            aria-controls="today-page"
+            onClick={() => setActivePage('today')}
+          >
             <span>⌂</span>今日のイベント
-          </a>
-          <a className="nav-item" href="#">
+          </button>
+          <button
+            className={`nav-item${activePage === 'calendar' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'calendar' ? 'page' : undefined}
+            aria-controls="calendar-page"
+            onClick={() => setActivePage('calendar')}
+          >
             <span>▦</span>カレンダー
-          </a>
+          </button>
           <a className="nav-item" href="#">
             <span>♡</span>保存したイベント
           </a>
@@ -190,7 +204,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="today">2026年9月19日 土曜日</p>
-            <h1>見逃したくない予定</h1>
+            <h1>{activePage === 'calendar' ? 'カレンダー' : '見逃したくない予定'}</h1>
           </div>
           <button
             className={`refresh-button ${refreshing ? 'refreshing' : ''}`}
@@ -206,6 +220,7 @@ function App() {
         {!profile && <div className="profile-registration"><span>参加しやすい場所と興味を登録しましょう。</span><button type="button" onClick={() => setProfileOpen(true)}>プロフィール新規登録</button></div>}
         <p className="profile-notice" role="status">{profileNotice}</p>
 
+        <div id="today-page" hidden={activePage !== 'today'}>
         <section className="deadline-board" aria-labelledby="deadline-heading">
           <div className="deadline-copy">
             <p>次の申込締切まで</p>
@@ -331,6 +346,20 @@ function App() {
                 </article>
               )
             })}
+          </div>
+        </section>
+        </div>
+
+        {/* 非表示でも保持し、メニューの往復でデモの登録状態が消えないようにする。 */}
+        <section id="calendar-page" hidden={activePage !== 'calendar'} aria-labelledby="calendar-heading">
+          <div className="section-header">
+            <div>
+              <h2 id="calendar-heading">イベントのカレンダー登録</h2>
+              <p>申込締切と本番日程を選んで登録できます。現在はデモ表示です。</p>
+            </div>
+          </div>
+          <div className="event-list">
+            {events.map(event => <EventCalendarCard key={event.id} event={event} />)}
           </div>
         </section>
       </main>
