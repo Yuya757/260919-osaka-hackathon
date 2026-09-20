@@ -132,6 +132,13 @@ svg {
   font-size: 17px;
 }
 
+button.nav-item {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
 .nav-item.active {
   color: #ffffff;
   background: #203d57;
