@@ -1,0 +1,91 @@
+.calendar-card {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d7e1e8;
+  border-radius: 12px;
+  color: #102a43;
+  background: #fff;
+}
+
+.calendar-card--urgent { border-left: 4px solid #d34b3f; }
+.calendar-card__score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #d7e1e8;
+  background: #f3f7fa;
+  color: #15766d;
+}
+.calendar-card__score strong { font-size: 24px; }
+.calendar-card__score small { color: #66788a; font-size: 10px; }
+.calendar-card__body { padding: clamp(14px, 1.8vw, 24px); container: calendar-card-body / inline-size; }
+.calendar-card__tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #2a5bd7; font-size: 12px; }
+.calendar-card__title { margin: 8px 0 4px; font-size: 21px; line-height: 1.5; }
+.calendar-card__venue-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 10px;
+}
+.calendar-card__venue { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; line-height: 1.5; }
+.calendar-card__venue > span { flex-shrink: 0; color: #66788a; font-size: 12px; }
+.calendar-card__venue strong { font-size: 21px; overflow-wrap: anywhere; }
+.calendar-card__travel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d7e1e8;
+  border-radius: 8px;
+  background: #f3f7fa;
+}
+.calendar-card__travel-label { grid-column: 1 / -1; font-size: 11px; color: #66788a; }
+.calendar-card__travel-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.calendar-card .calendar-card__route { max-width: 100%; padding: 5px 7px; border: 1px solid #d7e1e8; border-radius: 7px; font: inherit; font-size: 10px; color: #66788a; background: #fff; }
+.calendar-card__note { margin: 8px 0; color: #66788a; font-size: 13px; line-height: 1.8; }
+.calendar-card__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; margin: 14px 0; }
+.calendar-card__date { min-width: 0; padding: 10px 12px; border-radius: 8px; overflow-wrap: anywhere; }
+.calendar-card__date span { display: block; margin-bottom: 5px; font-size: 12px; }
+.calendar-card__date strong { font-size: 16px; }
+.calendar-card__date--deadline { color: #d34b3f; background: #fff0ed; }
+.calendar-card__date--event { color: #2a5bd7; background: #eaf0ff; }
+.calendar-card__source { padding-top: 12px; border-top: 1px solid #d7e1e8; color: #15766d; font-size: 12px; overflow-wrap: anywhere; }
+.calendar-card__status { margin: 7px 0 0; text-align: center; }
+.calendar-card__badge { display: inline-block; max-width: 100%; padding: 5px 9px; border-radius: 6px; color: #66788a; background: #edf3f7; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.calendar-card__badge--urgent { color: #d34b3f; background: #fff0ed; }
+.calendar-card__badge--saved { color: #15766d; background: #e8f5f1; }
+.calendar-card__actions {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: safe center;
+  align-items: start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 4px;
+  overflow-x: auto;
+}
+.calendar-card__actions button { padding: 7px 9px; border: 1px solid #102a43; border-radius: 7px; color: #102a43; background: #fff; font: inherit; font-size: 11px; font-weight: 700; line-height: 1.4; white-space: nowrap; cursor: pointer; }
+.calendar-card__actions button:hover:not(:disabled) { color: #102a43; background: #eaf0ff; }
+.calendar-card__actions button:focus-visible { outline: 3px solid #f4b942; outline-offset: 2px; }
+.calendar-card__actions .calendar-card__register-both { color: #fff; background: #102a43; }
+.calendar-card__actions button:disabled { border-color: #15766d; color: #fff; background: #15766d; cursor: default; }
+.calendar-card__actions .calendar-card__reset { grid-column: 2; grid-row: 2; justify-self: center; padding: 5px 7px; border-color: #d7e1e8; color: #66788a; font-size: 10px; font-weight: 400; }
+.calendar-card__message { margin: 8px 0 0; color: #15766d; font-size: 13px; }
+.calendar-card__message:empty { display: none; }
+.calendar-card__demo { margin: 8px 0 0; color: #66788a; font-size: 11px; text-align: center; }
+
+@container calendar-card-body (max-width: 600px) {
+  .calendar-card__travel { grid-template-columns: minmax(0, 1fr); }
+  .calendar-card__route { justify-self: start; }
+  .calendar-card__dates { grid-template-columns: minmax(0, 1fr); }
+}
+
+@container calendar-card-body (max-width: 340px) {
+  .calendar-card__actions button { padding: 7px 6px; font-size: 10px; }
+}
