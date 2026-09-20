@@ -87,10 +87,10 @@ function EventCalendarCardContent({ event }: { event: EventCalendarCardEvent }) 
         <p className="calendar-card__note">{event.description}</p>
         <div className="calendar-card__dates">
           <div className="calendar-card__date calendar-card__date--deadline">
-            <span>申込締切</span><strong>{event.deadline}</strong>
+            <span><span aria-hidden="true">🚨</span> 申込期限</span><strong>{event.deadline}</strong>
           </div>
           <div className="calendar-card__date calendar-card__date--event">
-            <span>本番日程</span><strong>{event.eventDate}</strong>
+            <span><span aria-hidden="true">📅</span> 実施日</span><strong>{event.eventDate}</strong>
           </div>
         </div>
         <div className="calendar-card__source">{event.source}</div>
