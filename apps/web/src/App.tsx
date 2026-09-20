@@ -312,13 +312,13 @@ function App() {
 
                     <div className="event-dates">
                       <div className="date-block deadline-date">
-                        <span>申込締切</span>
+                        <span><span aria-hidden="true">🚨</span> 申込期限</span>
                         <strong>{event.deadline}</strong>
                         <small>{event.deadlineDay}</small>
                       </div>
                       <span className="date-connector" aria-hidden="true" />
                       <div className="date-block event-date">
-                        <span>イベント開催</span>
+                        <span><span aria-hidden="true">📅</span> 実施日</span>
                         <strong>{event.eventDate}</strong>
                         <small>{event.eventDay}</small>
                       </div>
