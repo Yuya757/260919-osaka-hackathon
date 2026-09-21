@@ -1,0 +1,64 @@
+{
+  "caseId": "07-duplicates-002",
+  "categories": [
+    "duplicates"
+  ],
+  "note": "同一イベントが公式と集約サイトの2URLに出る。併合されること。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://dup2-official.example.jp/e/2026",
+      "query": "イベント 2026"
+    },
+    {
+      "url": "https://dup2-aggregator.example.com/event/2",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://dup2-official.example.jp/e/2026",
+      "body": "<html><head><title>重複テスト 2 2026</title></head><body><h1>重複テスト 2 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月11日 10:00</div><div>申込締切: 2026年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    },
+    {
+      "url": "https://dup2-aggregator.example.com/event/2",
+      "body": "<html><head><title>重複テスト 2 2026</title></head><body><h1>重複テスト 2 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月11日 10:00</div><div>申込締切: 2026年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "aggregator"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://dup2-official.example.jp/e/2026",
+        "eventStart": "2026-10-11T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-09-28T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "重複テスト 2 2026"
+      }
+    ],
+    "duplicateGroups": [
+      [
+        "https://dup2-official.example.jp/e/2026",
+        "https://dup2-aggregator.example.com/event/2"
+      ]
+    ]
+  }
+}

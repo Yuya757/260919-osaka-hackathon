@@ -28,7 +28,7 @@
 │   └── agent/                  # FastAPI + Google ADKバックエンド
 ├── packages/
 │   └── contracts/              # Web・Agent間の共有Schema
-├── evals/                      # Agent評価データと評価ケース
+├── evals/                      # Agent評価データセット（59ケース、§13）
 ├── infra/                      # GCP・Firebase構成
 ├── docs/                       # 補足設計資料
 ├── scripts/                    # WSLで実行する開発・デプロイスクリプト
@@ -69,6 +69,13 @@ npm run dev
 ```
 
 ### Agent API
+
+テストと評価データセット:
+
+```bash
+cd services/agent && pytest      # 93件
+./scripts/run-evals.sh           # 59ケース、§13.2 の受入基準で判定
+```
 
 ```bash
 cd services/agent

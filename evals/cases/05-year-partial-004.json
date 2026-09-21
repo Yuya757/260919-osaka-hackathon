@@ -1,0 +1,37 @@
+{
+  "caseId": "05-year-partial-004",
+  "categories": [
+    "year_partial"
+  ],
+  "note": "2025年と2026年が混在するため年を確定できない。推測せず候補にしない。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://yearmany4.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://yearmany4.example.jp/e",
+      "body": "<html><head><title>年あいまいテスト 4</title></head><body><h1>年あいまいテスト 4</h1><p>2025年に続き2026年も開催予定。昨年の記録はこちら。</p><div>開催日: 11月4日 14:00</div><div>会場: グランフロント大阪</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [],
+    "notProduced": [
+      "https://yearmany4.example.jp/e"
+    ]
+  }
+}

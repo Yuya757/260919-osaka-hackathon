@@ -1,0 +1,49 @@
+{
+  "caseId": "01-deadline-clear-003",
+  "categories": [
+    "deadline_clear"
+  ],
+  "note": "申込締切と開催日が両方明記されている基本ケース。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://official3.example.jp/e/2026",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://official3.example.jp/e/2026",
+      "body": "<html><head><title>東京AIミートアップ 2026</title></head><body><h1>東京AIミートアップ 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年11月7日 19:00</div><div>申込締切: 2026年11月1日 12:00</div><div>会場: 渋谷ヒカリエ</div><div>主催: 主催3</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://official3.example.jp/e/2026",
+        "eventStart": "2026-11-07T19:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-11-01T12:00:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "東京AIミートアップ 2026"
+      }
+    ]
+  }
+}

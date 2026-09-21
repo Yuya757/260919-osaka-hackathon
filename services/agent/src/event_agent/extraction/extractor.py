@@ -79,7 +79,7 @@ def _title_of(page: FetchedPage, hit: SearchHit | None) -> tuple[str, str] | Non
 
 
 def _labelled_value(text: str, labels: tuple[str, ...]) -> str | None:
-    for _label, rest in d.find_labelled(text, labels):
+    for _label, rest, _line in d.find_labelled(text, labels):
         value = rest.strip()
         if value:
             return value

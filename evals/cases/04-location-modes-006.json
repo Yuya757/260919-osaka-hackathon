@@ -1,0 +1,49 @@
+{
+  "caseId": "04-location-modes-006",
+  "categories": [
+    "location_modes"
+  ],
+  "note": "開催形式が hybrid と判定されること。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://mode6.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://mode6.example.jp/e",
+      "body": "<html><head><title>開催形式テスト 6 2026</title></head><body><h1>開催形式テスト 6 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月10日 19:00</div><div>申込締切: 2026年10月1日 23:59</div><div>会場: 東京国際フォーラム</div><div>主催: Example</div><p>現地とオンラインのハイブリッド開催</p></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://mode6.example.jp/e",
+        "eventStart": "2026-10-10T19:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-10-01T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "hybrid",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "開催形式テスト 6 2026"
+      }
+    ]
+  }
+}

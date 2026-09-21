@@ -304,6 +304,12 @@ def score_event(
     )
 
 
+def _pairs(items: list):
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            yield items[i], items[j]
+
+
 def _root(parent: dict[str, str], key: str) -> str:
     while parent[key] != key:
         parent[key] = parent[parent[key]]
@@ -317,7 +323,9 @@ def _union(parent: dict[str, str], a: str, b: str) -> None:
         parent[rb] = ra
 
 
-def group_duplicates(events: list, *, similarity_threshold: float) -> list[list]:
+def group_duplicates(
+    events: list, *, similarity_threshold: float, date_window_days: int = 7
+) -> list[list]:
     """Group duplicate events using the §6.7 priority order.
 
     1. normalized official URL
@@ -325,11 +333,13 @@ def group_duplicates(events: list, *, similarity_threshold: float) -> list[list]
     3. (normalized title, start date, organizer)
     4. title similarity above the threshold AND same start date AND same region
 
-    Priority 4 only compares within a same-start-date bucket, which keeps it
-    cheap (candidates are capped at 30 per run) and, more importantly, is what
-    makes a low similarity threshold safe: the same-date and same-region
-    conjuncts block the high-scoring pairs that are genuinely different events,
-    such as the 2026 and 2027 editions of one series.
+    A fifth rule handles sources that disagree about the date. §6.7's「重複時」
+    block requires that「開催日変更は履歴を残し、無条件で上書きしない」, which
+    only has meaning if two records of one event can carry different dates — so
+    the priority-4 comparison is also run over a small date window when the
+    title, region and organizer all agree. The window keeps it conservative:
+    the 2026 and 2027 editions of a series are a year apart, and a spring and
+    autumn edition are months apart, so both stay separate.
     """
     if not events:
         return []
@@ -363,19 +373,42 @@ def group_duplicates(events: list, *, similarity_threshold: float) -> list[list]
 
         buckets.setdefault(start, []).append(event)
 
+    def _same_region(left, right) -> bool:
+        return (left.location.region or "").casefold() == (
+            right.location.region or ""
+        ).casefold()
+
+    def _compatible_organizer(left, right) -> bool:
+        lorg = normalize_title(left.organizer or "")
+        rorg = normalize_title(right.organizer or "")
+        return not lorg or not rorg or lorg == rorg
+
+    # 優先度4: 同一開催日・同一地域
     for bucket in buckets.values():
-        for i in range(len(bucket)):
-            for j in range(i + 1, len(bucket)):
-                left, right = bucket[i], bucket[j]
-                lregion = (left.location.region or "").casefold()
-                rregion = (right.location.region or "").casefold()
-                if lregion != rregion:
-                    continue
-                if (
-                    title_similarity(left.normalized_title, right.normalized_title)
-                    >= similarity_threshold
-                ):
-                    _union(parent, left.event_id, right.event_id)
+        for left, right in _pairs(bucket):
+            if not _same_region(left, right):
+                continue
+            if (
+                title_similarity(left.normalized_title, right.normalized_title)
+                >= similarity_threshold
+            ):
+                _union(parent, left.event_id, right.event_id)
+
+    # 日付が食い違うソース同士。主催者まで一致し、日付差が窓内のときだけ併合する。
+    if date_window_days > 0:
+        for left, right in _pairs(events):
+            if _root(parent, left.event_id) == _root(parent, right.event_id):
+                continue
+            if not _same_region(left, right) or not _compatible_organizer(left, right):
+                continue
+            gap = abs(
+                (left.dates.event_start.date() - right.dates.event_start.date()).days
+            )
+            if 0 < gap <= date_window_days and (
+                title_similarity(left.normalized_title, right.normalized_title)
+                >= similarity_threshold
+            ):
+                _union(parent, left.event_id, right.event_id)
 
     grouped: dict[str, list] = {}
     for event in events:

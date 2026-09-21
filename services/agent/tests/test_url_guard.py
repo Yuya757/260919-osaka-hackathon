@@ -76,3 +76,18 @@ def test_classify_address() -> None:
     assert classify_address("127.0.0.1") == "loopback"
     assert classify_address("169.254.169.254") == "link-local"
     assert classify_address("not-a-host") == "not-an-ip"
+
+
+@pytest.mark.asyncio
+async def test_fixture_source_enforces_the_guard() -> None:
+    """オフライン経路でもURL検査を通す。
+
+    ここを素通りさせると、評価がSSRF防御の有無を区別できなくなる。
+    """
+    from event_agent.page_fetcher import FetchRejected, FixturePage, FixturePageSource
+
+    bad = "http://169.254.169.254/latest/meta-data/"
+    source = FixturePageSource({bad: FixturePage(body="<html><body>secret</body></html>")})
+    result = await source.load(bad)
+    assert isinstance(result, FetchRejected)
+    assert result.reason == "link-local"

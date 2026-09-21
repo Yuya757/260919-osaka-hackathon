@@ -1,0 +1,49 @@
+{
+  "caseId": "01-deadline-clear-008",
+  "categories": [
+    "deadline_clear"
+  ],
+  "note": "申込締切と開催日が両方明記されている基本ケース。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://official8.example.jp/e/2026",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://official8.example.jp/e/2026",
+      "body": "<html><head><title>名古屋クラウドネイティブ 2026</title></head><body><h1>名古屋クラウドネイティブ 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年12月10日 10:00</div><div>申込締切: 2026年11月30日 23:59</div><div>会場: 名古屋国際会議場</div><div>主催: 主催8</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://official8.example.jp/e/2026",
+        "eventStart": "2026-12-10T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-11-30T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "名古屋クラウドネイティブ 2026"
+      }
+    ]
+  }
+}

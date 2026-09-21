@@ -265,3 +265,45 @@ def test_unknown_deadline_scores_between_urgent_and_distant() -> None:
         make_event(event_id="d", deadline=datetime(2026, 10, 20, tzinfo=JST), **base), ev, prefs, now=NOW
     )
     assert unknown < distant
+
+
+def test_conflicting_sources_merge_within_the_date_window() -> None:
+    """日付が食い違う2ソースは、タイトル・地域・主催者が揃えば併合する。
+
+    §6.7「開催日変更は履歴を残し、無条件で上書きしない」は、日付の異なる重複が
+    起こりうることを前提にしている。
+    """
+    a = make_event(
+        event_id="a", title="矛盾テスト 2026", start=datetime(2026, 10, 18, tzinfo=JST),
+        official="https://official.example.jp/e", region="大阪",
+    )
+    b = make_event(
+        event_id="b", title="矛盾テスト 2026", start=datetime(2026, 10, 19, tzinfo=JST),
+        official="https://agg.example.com/e", region="大阪",
+    )
+    assert len(group_duplicates([a, b], similarity_threshold=0.80)) == 1
+
+
+def test_date_window_does_not_merge_distant_editions() -> None:
+    """窓の外（春と秋、別年度）は併合しない。"""
+    spring = make_event(
+        event_id="a", title="AI Meetup 2026", start=datetime(2026, 4, 1, tzinfo=JST),
+        official="https://e.example.jp/spring", region="大阪",
+    )
+    autumn = make_event(
+        event_id="b", title="AI Meetup 2026", start=datetime(2026, 10, 1, tzinfo=JST),
+        official="https://e.example.jp/autumn", region="大阪",
+    )
+    assert len(group_duplicates([spring, autumn], similarity_threshold=0.80)) == 2
+
+
+def test_date_window_requires_compatible_organizer() -> None:
+    a = make_event(
+        event_id="a", title="別主催テスト 2026", start=datetime(2026, 10, 18, tzinfo=JST),
+        official="https://a.example.jp/e", region="大阪", organizer="A社",
+    )
+    b = make_event(
+        event_id="b", title="別主催テスト 2026", start=datetime(2026, 10, 19, tzinfo=JST),
+        official="https://b.example.jp/e", region="大阪", organizer="B社",
+    )
+    assert len(group_duplicates([a, b], similarity_threshold=0.80)) == 2

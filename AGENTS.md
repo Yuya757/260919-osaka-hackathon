@@ -29,7 +29,9 @@ This repository builds an event discovery application that separates application
 - Use English for identifiers and Japanese for user-facing copy and project documentation.
 - Add type hints to Python and use strict TypeScript.
 - Keep domain logic independent from Cloud Run entrypoints.
-- Add or update evaluation cases when prompts, schemas, validation rules, or models change.
+- Add or update evaluation cases under `evals/cases/` when prompts, schemas, validation
+  rules, or models change, and re-run `./scripts/run-evals.sh`. A release is blocked when
+  the §13.2 criteria are not met.
 - Put repeatable development and deployment commands in POSIX shell scripts under `scripts/` for WSL.
 - Do not commit secrets, OAuth tokens, generated credentials, or local environment files.
 

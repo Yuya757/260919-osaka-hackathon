@@ -113,12 +113,17 @@ def parse_range(fragment: str, *, fallback_year: int | None) -> tuple[ParsedDate
     return parse_date(text, fallback_year=fallback_year), None
 
 
-def find_labelled(text: str, labels: tuple[str, ...]) -> list[tuple[str, str]]:
-    """Return ``(label, rest-of-line)`` for lines carrying one of ``labels``.
+def find_labelled(text: str, labels: tuple[str, ...]) -> list[tuple[str, str, str]]:
+    """Return ``(label, rest-of-line, whole-line)`` for lines carrying a label.
 
     Lines are the unit because these pages render as ``ラベル: 値`` rows.
+
+    The whole line is returned as well, and callers must use it for exclusion
+    checks: labels nest, so 「早期申込締切」 contains 「申込締切」 and
+    「スポンサー申込締切」 does too. Reconstructing the line from label+rest
+    drops the prefix and makes those look like a plain 申込締切.
     """
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str, str, str]] = []
     for raw_line in normalize(text).splitlines():
         line = raw_line.strip()
         if not line:
@@ -126,16 +131,16 @@ def find_labelled(text: str, labels: tuple[str, ...]) -> list[tuple[str, str]]:
         for label in labels:
             index = line.find(label)
             if index >= 0:
-                found.append((label, line[index + len(label) :].lstrip(" :：　-ー")))
+                found.append((label, line[index + len(label) :].lstrip(" :：　-ー"), line))
                 break
     return found
 
 
 def find_application_deadline(text: str, *, fallback_year: int | None) -> ParsedDate | None:
     """Pick the 申込締切 only, ignoring 早割 / 作品提出 and friends (§6.5)."""
-    for label, rest in find_labelled(text, APPLICATION_LABELS):
-        # 「早割申込締切」のように非申込ラベルが同じ行にあるものは採らない
-        line = label + rest
+    for _label, rest, line in find_labelled(text, APPLICATION_LABELS):
+        # 行全体で判定する。「早期申込締切」「スポンサー申込締切」は
+        # 「申込締切」を含むので、接頭辞まで見ないと除外できない。
         if any(bad in line for bad in NON_APPLICATION_DEADLINE_LABELS):
             continue
         parsed = parse_date(rest, fallback_year=fallback_year)
@@ -147,7 +152,7 @@ def find_application_deadline(text: str, *, fallback_year: int | None) -> Parsed
 def find_event_dates(
     text: str, *, fallback_year: int | None
 ) -> tuple[ParsedDate | None, ParsedDate | None]:
-    for _label, rest in find_labelled(text, EVENT_DATE_LABELS):
+    for _label, rest, _line in find_labelled(text, EVENT_DATE_LABELS):
         start, end = parse_range(rest, fallback_year=fallback_year)
         if start is not None:
             return start, end

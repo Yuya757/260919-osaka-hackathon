@@ -27,3 +27,6 @@ artifacts/
 # Editors and operating systems
 .DS_Store
 *.swp
+
+# 評価結果は実行のたびに変わるのでコミットしない
+evals/results/*.json

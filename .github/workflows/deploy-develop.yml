@@ -7,9 +7,12 @@ on:
     paths:
       - 'apps/web/**'
       - 'services/agent/**'
+      - 'packages/contracts/**'
+      - 'evals/**'
       - 'firebase.json'
       - '.firebaserc'
       - '.github/workflows/deploy-develop.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +24,16 @@ permissions:
   id-token: write
 
 jobs:
+  # テストと評価データセットが通らない限りデプロイしない（§13.3）。
+  # 別ファイルのジョブは needs で繋げないので、再利用可能ワークフローとして呼ぶ。
+  tests:
+    name: Tests and evaluation
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   agent:
+    needs: tests
     name: Build and deploy agent API
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -68,7 +80,7 @@ jobs:
 
   web:
     name: Build and deploy web demo
-    needs: agent
+    needs: [tests, agent]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:

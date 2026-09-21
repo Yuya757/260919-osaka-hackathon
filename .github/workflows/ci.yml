@@ -1,0 +1,87 @@
+name: CI
+
+# workflow_call で deploy-develop.yml から呼ぶ。別ファイルのジョブは needs で
+# 繋げないため、再利用可能ワークフローにするのがデプロイを止める唯一の方法。
+on:
+  pull_request:
+    branches: [develop, main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    name: Agent tests and evaluation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/agent
+    env:
+      # Vertex に繋がずフィクスチャ経路で動かす。抽出とURL検査は本番と同じコード。
+      AGENT_DEMO_MODE: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Dockerfile の python:3.12-slim に合わせる
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/agent/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Run the evaluation dataset
+        # §13.3「基準未達ならリリースしない」。exit 1 でこのジョブが落ちる。
+        run: |
+          python -m event_agent.evaluation.cli \
+            --report "$GITHUB_WORKSPACE/evals/results/ci.json" \
+            --fail-under-gates
+        env:
+          PYTHONPATH: src
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/results/ci.json
+          if-no-files-found: ignore
+
+  web:
+    name: Web type-check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Build
+        run: npm run build

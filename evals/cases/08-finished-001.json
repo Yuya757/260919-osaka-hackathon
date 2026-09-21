@@ -1,0 +1,52 @@
+{
+  "caseId": "08-finished-001",
+  "categories": [
+    "finished"
+  ],
+  "note": "基準時刻より過去。rejected になり、一覧に出ないこと。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://finished1.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://finished1.example.jp/e",
+      "body": "<html><head><title>終了済みイベント 1</title></head><body><h1>終了済みイベント 1</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年8月11日 10:00</div><div>申込締切: 2026年6月1日 23:59</div><div>会場: グランフロント大阪</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://finished1.example.jp/e",
+        "eventStart": "2026-08-11T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-06-01T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "rejected",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "終了済みイベント 1"
+      }
+    ],
+    "notProduced": [
+      "https://finished1.example.jp/e"
+    ]
+  }
+}

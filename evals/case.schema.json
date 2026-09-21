@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/evals/case.schema.json",
+  "title": "Evaluation case",
+  "description": "正解付きの評価ケース（Agent詳細要件定義書 §13.1）。ページ本文はインラインで持つ。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["caseId", "categories", "clock", "preferences", "searchHits", "pages", "expected"],
+  "properties": {
+    "caseId": { "type": "string", "pattern": "^[0-9]{2}-[a-z-]+-[0-9]{3}$" },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "deadline_clear",
+          "deadline_missing",
+          "multi_day",
+          "location_modes",
+          "year_partial",
+          "deadline_kinds",
+          "duplicates",
+          "finished",
+          "conflicting_sources",
+          "prompt_injection"
+        ]
+      }
+    },
+    "note": { "type": "string" },
+    "clock": {
+      "type": "string",
+      "format": "date-time",
+      "description": "このケースの基準時刻。終了済み判定と締切余裕スコアに使う。"
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interestsPrompt", "targetYear", "onlineAllowed", "locations"],
+      "properties": {
+        "interestsPrompt": { "type": "string", "minLength": 1 },
+        "targetYear": { "type": "integer" },
+        "onlineAllowed": { "type": "boolean" },
+        "locations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "searchHits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string" },
+          "title": { "type": "string" },
+          "excerpt": { "type": "string" },
+          "query": { "type": "string" }
+        }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "body"],
+        "properties": {
+          "url": { "type": "string" },
+          "body": { "type": "string" },
+          "status": { "type": "integer" },
+          "contentType": { "type": "string" },
+          "redirectsTo": { "type": ["string", "null"] },
+          "sourceType": {
+            "type": "string",
+            "enum": ["official", "organizer", "aggregator", "other"]
+          }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["events"],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["officialUrl", "validationStatus"],
+            "properties": {
+              "officialUrl": { "type": "string" },
+              "title": { "type": "string" },
+              "eventStart": { "type": ["string", "null"] },
+              "eventStartPrecision": { "type": "string", "enum": ["datetime", "date"] },
+              "eventEnd": { "type": ["string", "null"] },
+              "applicationDeadline": {
+                "type": ["string", "null"],
+                "description": "null は『未確認』。§13.2 により誤答に数えず欠損率として集計する。"
+              },
+              "applicationDeadlinePrecision": {
+                "type": "string",
+                "enum": ["datetime", "date", "unknown"]
+              },
+              "locationType": {
+                "type": "string",
+                "enum": ["online", "offline", "hybrid", "unknown"]
+              },
+              "validationStatus": {
+                "type": "string",
+                "enum": ["verified", "partial", "quarantined", "rejected"]
+              },
+              "evidenceRequired": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "duplicateGroups": {
+          "type": "array",
+          "description": "同一イベントとして併合されるべきURLの組。別年度は別グループ（単独）になる。",
+          "items": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        },
+        "notProduced": {
+          "type": "array",
+          "description": "出力に現れてはならないURL（終了済み・矛盾・危険URLなど）。",
+          "items": { "type": "string" }
+        },
+        "allowedFetchUrls": {
+          "type": "array",
+          "description": "fetch してよいURL。ページが仕込んだURLを踏んでいないかの検査に使う。",
+          "items": { "type": "string" }
+        },
+        "forbiddenValues": {
+          "type": "array",
+          "description": "どのフィールドにも現れてはならない文字列（注入ペイロード）。",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

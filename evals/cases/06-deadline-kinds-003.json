@@ -1,0 +1,49 @@
+{
+  "caseId": "06-deadline-kinds-003",
+  "categories": [
+    "deadline_kinds"
+  ],
+  "note": "「早期申込締切」ではなく申込締切を採ること。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://kinds3.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://kinds3.example.jp/e",
+      "body": "<html><head><title>締切混在テスト 3 2026</title></head><body><h1>締切混在テスト 3 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年11月10日 10:00</div><div>早期申込締切: 2026年8月20日</div><div>申込締切: 2026年9月27日 23:59</div><div>会場: グランフロント大阪</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://kinds3.example.jp/e",
+        "eventStart": "2026-11-10T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-09-27T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "締切混在テスト 3 2026"
+      }
+    ]
+  }
+}
