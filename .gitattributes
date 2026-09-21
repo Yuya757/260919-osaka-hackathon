@@ -1,0 +1,6 @@
+# WSLから実行するシェルスクリプトは必ずLFで取り出す。CRLFが混ざると
+# `/usr/bin/env: 'bash\r': No such file or directory` で実行できなくなる。
+*.sh text eol=lf
+
+# Emulatorやツールが生成する設定も行末をLFに固定する。
+*.rules text eol=lf
