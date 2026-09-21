@@ -91,33 +91,30 @@ WebはFirestoreへ直接アクセスせず、Cloud Run の `/api` を通す。Cl
 | --- | --- |
 | Firestore Native データベースの作成（`(default)` / `asia-northeast1`） | 完了 |
 | Cloud Run 環境変数に `FIRESTORE_ENABLED=true` を追加 | 本ADR時点のPRで実施 |
-| `firestore.rules` / `firestore.indexes.json` の反映 | **未実施**（下記） |
+| `firestore.rules` の反映 | `deploy-develop.yml` の `firestore_rules` ジョブで実施 |
+| `firestore.indexes.json` の反映 | 不要（空。下記） |
 
 ランタイムサービスアカウント `event-agent-runtime` には `roles/datastore.user` が
 既に付いており、追加のIAM作業なしで動く。
 
-### Security Rules がまだ未反映である理由と、その間の安全性
+### Rules は防御の追加ではなく、意図の固定である
 
-`firebaserules.googleapis.com` にルールのリリースが1件も存在しない状態だが、
-クライアント経路は既に塞がっている。認証なしでのREST読み取りを実測した結果は
-`403 PERMISSION_DENIED`（Missing or insufficient permissions）である。
+有効化した時点では `firebaserules.googleapis.com` にルールのリリースが1件も存在
+しなかったが、クライアント経路は既に塞がっていた。認証なしでのREST読み取りを実測
+した結果は `403 PERMISSION_DENIED`（Missing or insufficient permissions）である。
 ルール未公開のFirestoreはクライアントアクセスを拒否する。
 
-したがって `firestore.rules` の反映は、防御の追加ではなく**意図をコードで固定する**
-ための作業になる。反映は `deploy-develop.yml` から行いたいが、デプロイ用サービス
-アカウント `github-deployer` に権限が無いため、先に次を実行する必要がある。
+したがって `firestore.rules` の反映は、塞がっていないものを塞ぐ作業ではなく、
+**全拒否という意図をバージョン管理に固定する**作業である。デプロイは
+`deploy-develop.yml` の `firestore_rules` ジョブが行う。
 
-```bash
-SA="github-deployer@osaka-hackathon-260919.iam.gserviceaccount.com"
-gcloud projects add-iam-policy-binding osaka-hackathon-260919 \
-  --member="serviceAccount:$SA" --role="roles/firebaserules.admin" --condition=None
-gcloud projects add-iam-policy-binding osaka-hackathon-260919 \
-  --member="serviceAccount:$SA" --role="roles/datastore.indexAdmin" --condition=None
-```
+### インデックスを反映しない理由
 
-`scripts/bootstrap-gcp.sh` の `deployer_roles` には両方を追加済みなので、
-新規プロジェクトを作り直す場合は自動で付く。権限が付いたら、デプロイワークフローに
-`npx firebase-tools deploy --only firestore` のステップを足す。
+デプロイは `--only firestore:rules` に絞っている。`firestore.indexes.json` は空で、
+`list_events` も `get_event` も単一フィールドの等価クエリしか使わない（Firestoreが
+自動でインデックスする）。複合インデックスを足す日が来たら、`--only firestore` に
+広げたうえでデプロイ用サービスアカウントに `roles/datastore.indexAdmin` が要る。
+それまで持たせる理由はない。
 
 ## 残件
 
