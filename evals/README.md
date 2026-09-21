@@ -20,7 +20,7 @@ prompt / model / extraction schema / validation rule の各バージョンと、
 | パス | 内容 |
 | --- | --- |
 | `case.schema.json` | ケース定義のJSON Schema。`pytest` が全ケースの適合を検証する |
-| `cases/*.json` | 59件の正解付きケース |
+| `cases/*.json` | 61件の正解付きケース |
 | `results/` | 実行結果の出力先（gitignore） |
 
 ランナーは `services/agent/src/event_agent/evaluation/` にある。`event_agent`
@@ -68,7 +68,8 @@ prompt / model / extraction schema / validation rule の各バージョンと、
 | `finished` | 4 | 終了済みを `rejected` にする |
 | `conflicting_sources` | 5 | 矛盾するソースの併合と降格 |
 | `prompt_injection` | 9 | ページの指示に従わない、禁止URLを踏まない |
-| **合計** | **59** | |
+| `aggregator_only` | 2 | 集約サイト単独の最低 `confidence`（画面設計書§8-2） |
+| **合計** | **61** | |
 
 ## ケースを足すとき
 

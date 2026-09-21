@@ -12,6 +12,7 @@ from event_agent.enrichment import (
     merge_group,
     normalize_title,
     normalize_url,
+    score_event,
     score_recommendation,
     title_similarity,
 )
@@ -112,6 +113,80 @@ def test_defaults_keep_previous_behaviour() -> None:
         )
         == "verified"
     )
+
+
+# ---- 画面設計書§8-2 集約サイト単独の下限 ----
+
+def test_aggregator_only_below_the_floor_is_held_back() -> None:
+    assert (
+        derive_validation_status(
+            confidence=0.55, threshold=0.8, deadline_known=True,
+            has_conflict=False, has_required_evidence=True,
+            aggregator_only=True, aggregator_min_confidence=0.60,
+        )
+        == "quarantined"
+    )
+
+
+def test_aggregator_only_at_the_floor_is_shown() -> None:
+    """0.60 ちょうどは表示する。閾値は「未満を落とす」。"""
+    assert (
+        derive_validation_status(
+            confidence=0.60, threshold=0.8, deadline_known=True,
+            has_conflict=False, has_required_evidence=True,
+            aggregator_only=True, aggregator_min_confidence=0.60,
+        )
+        == "partial"
+    )
+
+
+def test_official_source_ignores_the_aggregator_floor() -> None:
+    """公式・主催者の根拠があれば、低い信頼度でも partial として出す。"""
+    assert (
+        derive_validation_status(
+            confidence=0.40, threshold=0.8, deadline_known=True,
+            has_conflict=False, has_required_evidence=True,
+            aggregator_only=False, aggregator_min_confidence=0.60,
+        )
+        == "partial"
+    )
+
+
+def test_aggregator_floor_is_off_by_default() -> None:
+    """既定値 0.0 のとき、この規則は何も変えない。"""
+    assert (
+        derive_validation_status(
+            confidence=0.10, threshold=0.8, deadline_known=True,
+            has_conflict=False, has_required_evidence=True,
+            aggregator_only=True,
+        )
+        == "partial"
+    )
+
+
+def test_score_event_holds_back_an_aggregator_only_candidate() -> None:
+    """集約サイト1件だけが根拠で、締切も無い候補は表示しない。"""
+    event = make_event(
+        event_id="agg", title="集約サイト掲載イベント 2026", start=NOW,
+        official="https://matome.example.jp/e",
+    )
+    evidence = [
+        Evidence(
+            evidenceId="ev-agg-1",
+            sourceUrl="https://matome.example.jp/e",
+            sourceType="aggregator",
+            supports=["title", "dates.eventStart"],
+            retrievedAt=NOW,
+        )
+    ]
+
+    scored = score_event(
+        event, evidence, threshold=0.8, target_year=NOW.year,
+        aggregator_min_confidence=0.60,
+    )
+
+    assert scored.confidence < 0.60
+    assert scored.validation_status == "quarantined"
 
 
 # ---- §6.7 dedup ----
