@@ -81,6 +81,37 @@ jobs:
           URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
+  firestore_rules:
+    needs: tests
+    name: Deploy Firestore rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Deploy Firestore rules
+        # `firestore:rules` に絞る。firestore.indexes.json は空で、複合
+        # インデックスを足すまでは roles/datastore.indexAdmin を持たせる理由が
+        # ない（ADR-002）。
+        run: >
+          npx --yes firebase-tools@14.16.0 deploy
+          --only firestore:rules
+          --project ${{ vars.GCP_PROJECT_ID }}
+          --non-interactive
+
   collection_job:
     needs: [tests, agent]
     name: Deploy daily collection job
