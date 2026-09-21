@@ -1,16 +1,21 @@
+/**
+ * S-06 エージェントチャットの本体。
+ *
+ * Runの開始と進捗は AppState が持つ。ここで独自にポーリングすると、
+ * 全タブ共通の進捗バナーと二重にポーリングして状態がずれるため。
+ */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { pollAgentRun, listEvents, sendChat, startAgentRun } from '../api/client'
-import type { ApiEvent, ChatAction } from '../types/api'
+import { sendChat } from '../api/client'
+import { useAppState } from '../state/AppState'
+import { isRunning, RUN_STEPS } from '../lib/runSteps'
+import type { ChatAction } from '../types/api'
 
 type ChatMessage = {
   id: string
   role: 'user' | 'agent' | 'system'
   text: string
-}
-
-type AgentChatProps = {
-  onEventsUpdated: (events: ApiEvent[]) => void
-  onRunStateChange?: (busy: boolean) => void
+  /** Grounding由来の応答に付く、Googleが返す表示用HTML（§6.4） */
+  searchSuggestionsHtml?: string | null
 }
 
 const SUGGESTIONS = [
@@ -19,7 +24,14 @@ const SUGGESTIONS = [
   'イベントを更新して',
 ]
 
-export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps) {
+function newId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : String(Math.random())
+}
+
+export function AgentChat() {
+  const { run, startRun, refresh } = useAppState()
   const [sessionId, setSessionId] = useState<string | undefined>()
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
@@ -34,50 +46,25 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, pending])
+  }, [messages, pending, run?.currentStep])
 
-  const append = (message: ChatMessage) => {
-    setMessages((current) => [...current, message])
-  }
+  const append = (message: ChatMessage) => setMessages((current) => [...current, message])
 
   const handleActions = async (actions: ChatAction[] | undefined) => {
     if (!actions?.length) return
-
     for (const action of actions) {
       if (action.type === 'agent_run_started') {
-        onRunStateChange?.(true)
+        append({ id: newId(), role: 'system', text: 'イベント探索を開始しました。' })
+        await startRun()
         append({
-          id: crypto.randomUUID(),
-          role: 'system',
-          text: 'イベント探索を開始しました…',
-        })
-        let lastStep = ''
-        const run = await pollAgentRun(action.runId, (progress) => {
-          if (progress.currentStep && progress.currentStep !== lastStep) {
-            lastStep = progress.currentStep
-            append({
-              id: crypto.randomUUID(),
-              role: 'system',
-              text: `進行中: ${progress.currentStep}`,
-            })
-          }
-        })
-        const result = await listEvents(run.runId)
-        onEventsUpdated(result.events)
-        onRunStateChange?.(false)
-        append({
-          id: crypto.randomUUID(),
+          id: newId(),
           role: 'agent',
-          text:
-            run.status === 'failed'
-              ? run.errorMessage || '探索に失敗しました。もう一度試してください。'
-              : `${result.events.length}件のイベントを更新しました。下の一覧を確認してください。`,
+          // スマホには「右側の一覧」は存在しない
+          text: 'ホームのタブで結果を確認できます。',
         })
       }
-
       if (action.type === 'events_ready') {
-        const result = await listEvents()
-        onEventsUpdated(result.events)
+        await refresh()
       }
     }
   }
@@ -85,23 +72,22 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
   const submitMessage = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || pending) return
-
     setPending(true)
-    append({ id: crypto.randomUUID(), role: 'user', text: trimmed })
+    append({ id: newId(), role: 'user', text: trimmed })
     setInput('')
-
     try {
       const response = await sendChat({ sessionId, message: trimmed })
       setSessionId(response.sessionId)
       append({
-        id: crypto.randomUUID(),
+        id: newId(),
         role: 'agent',
         text: response.reply,
+        searchSuggestionsHtml: response.searchSuggestionsHtml,
       })
       await handleActions(response.actions)
     } catch (error) {
       append({
-        id: crypto.randomUUID(),
+        id: newId(),
         role: 'agent',
         text:
           error instanceof Error
@@ -110,7 +96,6 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
       })
     } finally {
       setPending(false)
-      onRunStateChange?.(false)
     }
   }
 
@@ -119,39 +104,60 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
     void submitMessage(input)
   }
 
-  const triggerRefresh = async () => {
-    if (pending) return
-    setPending(true)
-    onRunStateChange?.(true)
-    try {
-      const run = await startAgentRun(true)
-      await handleActions([{ type: 'agent_run_started', runId: run.runId }])
-    } catch (error) {
-      append({
-        id: crypto.randomUUID(),
-        role: 'agent',
-        text:
-          error instanceof Error
-            ? `更新に失敗しました: ${error.message}`
-            : '更新に失敗しました。',
-      })
-    } finally {
-      setPending(false)
-      onRunStateChange?.(false)
-    }
-  }
+  const running = isRunning(run?.status)
+  const currentIndex = RUN_STEPS.findIndex((step) => step.id === run?.currentStep)
 
   return (
-    <section className="agent-chat" aria-label="エージェントチャット">
-      <header className="agent-chat-header">
-        <div>
-          <p>エージェント</p>
-          <strong>関心を伝えて探索</strong>
-        </div>
-        <button type="button" className="chat-refresh" onClick={() => void triggerRefresh()} disabled={pending}>
-          更新
-        </button>
-      </header>
+    <div className="chat">
+      {running && (
+        <ol className="step-list" aria-label="探索の進捗">
+          {RUN_STEPS.map((step, index) => {
+            const state =
+              currentIndex < 0
+                ? 'todo'
+                : index < currentIndex
+                  ? 'done'
+                  : index === currentIndex
+                    ? 'now'
+                    : 'todo'
+            return (
+              <li key={step.id} className={`step is-${state}`}>
+                <span aria-hidden="true">{state === 'done' ? '✓' : state === 'now' ? '◍' : '○'}</span>
+                {step.label}
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      <div className="chat-messages" ref={listRef}>
+        {messages.map((message) => (
+          <div key={message.id}>
+            <div className={`bubble is-${message.role}`}>{message.text}</div>
+            {message.role === 'agent' && (
+              /*
+               * Search Suggestions の表示位置（§3.7 / §6.4）。
+               * Googleが返すHTMLは無改変で描画する義務がある。再スタイル・
+               * 切り抜き・折りたたみ・非表示は禁止。未提供のあいだは枠だけ
+               * 確保しておき、後から差し込んでもレイアウトが跳ねないようにする。
+               */
+              <div className="search-suggestions">
+                {message.searchSuggestionsHtml ? (
+                  <div
+                    // eslint-disable-next-line react/no-danger
+                    dangerouslySetInnerHTML={{ __html: message.searchSuggestionsHtml }}
+                  />
+                ) : (
+                  <span className="fine">
+                    Search Suggestions 表示位置（Grounding応答時にGoogle提供のHTMLを挿入）
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {pending && <div className="bubble is-system">応答を待っています…</div>}
+      </div>
 
       <div className="chat-suggestions" aria-label="候補プロンプト">
         {SUGGESTIONS.map((suggestion) => (
@@ -166,15 +172,6 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
         ))}
       </div>
 
-      <div className="chat-messages" ref={listRef}>
-        {messages.map((message) => (
-          <div key={message.id} className={`chat-bubble ${message.role}`}>
-            {message.text}
-          </div>
-        ))}
-        {pending && <div className="chat-bubble system">応答を待っています…</div>}
-      </div>
-
       <form className="chat-composer" onSubmit={onSubmit}>
         <label className="sr-only" htmlFor="agent-chat-input">
           エージェントへのメッセージ
@@ -182,7 +179,7 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
         <textarea
           id="agent-chat-input"
           value={input}
-          rows={2}
+          rows={1}
           placeholder="例: 大阪のGCPハッカソンを探して"
           disabled={pending}
           onChange={(event) => setInput(event.target.value)}
@@ -197,6 +194,6 @@ export function AgentChat({ onEventsUpdated, onRunStateChange }: AgentChatProps)
           送信
         </button>
       </form>
-    </section>
+    </div>
   )
 }

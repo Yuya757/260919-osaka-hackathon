@@ -45,6 +45,9 @@
 - Calendarへの書き込みはユーザーの明示操作後にのみ行う
 - 日時情報には根拠URLを保持し、不明な値を推測しない
 - UIはモバイルファーストで実装し、PCでは中央に狭幅で表示する（[画面設計書](docs/画面設計書_スマホ.md)）
+- 画面遷移は react-router で行い、端末の戻る操作が効く状態を保つ
+- 日時は必ずイベントの `dates.timezone` で解釈して表示する
+- API応答は `packages/contracts/schemas/*.json` に適合させる（`services/agent/tests/test_contracts.py` が検証）
 
 ## ドキュメント
 
