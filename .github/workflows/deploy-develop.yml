@@ -78,6 +78,25 @@ jobs:
           URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
+      - name: Deploy the daily collection Cloud Run Job
+        # §14 Phase 2 の定期収集。Cloud Scheduler はまだ作っていないので、この
+        # Job は手動実行（gcloud run jobs execute）でしか動かない。ADR-003 参照。
+        # --max-retries 0 は意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
+        # 落ちた実行の再開はしないため、自動リトライは同じ日を再収集せずに
+        # 成功終了してしまう。失敗は気づけるほうがよい。
+        run: |
+          gcloud run jobs deploy event-agent-daily \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --command python \
+            --args "-m,event_agent.entrypoints.job" \
+            --max-retries 0 \
+            --task-timeout 300s \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.0-flash-001|AGENT_DEMO_MODE=true|FIRESTORE_ENABLED=true" \
+            --quiet
+
   web:
     name: Build and deploy web demo
     needs: [tests, agent]
