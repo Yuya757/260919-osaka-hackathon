@@ -53,11 +53,15 @@ cases under `evals/cases/`, run `./scripts/run-evals.sh`, and report the result 
 
 ## Merging
 
-Squash and merge, then delete the remote branch:
+Squash and merge a working branch, then delete the remote branch:
 
 ```bash
 gh pr merge --squash --delete-branch
 ```
+
+Syncing `develop` into `main` is the one exception: merge it, never squash. A
+squash replaces the commits with a new one, which severs the shared history and
+makes every later sync conflict on every file that changed on both sides.
 
 The merge deploys. Check the run afterwards:
 
