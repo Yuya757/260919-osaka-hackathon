@@ -106,7 +106,11 @@ async def list_events(
 
 
 def _find_event(event_id: str) -> ApiEvent | None:
-    for event in [*store.list_events(), *demo_catalog()]:
+    stored = store.get_event(event_id)
+    if stored:
+        return stored
+    # デモカタログは保存されないことがあるため、最後に見る。
+    for event in demo_catalog():
         if event.event_id == event_id:
             return event
     return None
@@ -125,7 +129,7 @@ async def get_event_evidence(event_id: str) -> EvidenceListResponse:
         raise HTTPException(status_code=404, detail="Event not found")
     return EvidenceListResponse(
         eventId=event.event_id,
-        evidence=store.get_evidence(event.evidence_ids),
+        evidence=store.get_evidence(event.source_run_id, event.evidence_ids),
     )
 
 
