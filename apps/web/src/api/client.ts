@@ -1,0 +1,126 @@
+import type {
+  AgentRun,
+  ApiEvent,
+  ChatRequest,
+  ChatResponse,
+  EventRouteResponse,
+  EvidenceListResponse,
+} from '../types/api'
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response))
+  }
+
+  return response.json() as Promise<T>
+}
+
+/** FastAPI returns `{ detail }` for HTTPException; fall back to the raw body. */
+async function readErrorDetail(response: Response): Promise<string> {
+  const text = await response.text()
+  try {
+    const parsed = JSON.parse(text) as { detail?: unknown }
+    if (typeof parsed.detail === 'string') return parsed.detail
+  } catch {
+    // not JSON
+  }
+  return text || `API error ${response.status}`
+}
+
+export function sendChat(body: ChatRequest): Promise<ChatResponse> {
+  return request<ChatResponse>('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function startAgentRun(
+  forceRefresh = false,
+  idempotencyKey?: string,
+): Promise<AgentRun> {
+  return request<AgentRun>('/api/agent-runs', {
+    method: 'POST',
+    // 同一操作の二重実行を防ぐ（§9.3）。未指定ならサーバが発行する。
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    body: JSON.stringify({ forceRefresh }),
+  })
+}
+
+export function getAgentRun(runId: string): Promise<AgentRun> {
+  return request<AgentRun>(`/api/agent-runs/${runId}`)
+}
+
+export function listEvents(sourceRunId?: string): Promise<{ events: ApiEvent[] }> {
+  const query = sourceRunId ? `?sourceRunId=${encodeURIComponent(sourceRunId)}` : ''
+  return request<{ events: ApiEvent[] }>(`/api/events${query}`)
+}
+
+/** 根拠（§7.2）。S-08 の根拠シートが使う。 */
+export function listEvidence(eventId: string): Promise<EvidenceListResponse> {
+  return request<EvidenceListResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/evidence`,
+  )
+}
+
+export function getEventRoute(eventId: string, from: string): Promise<EventRouteResponse> {
+  const query = `?from=${encodeURIComponent(from)}`
+  return request<EventRouteResponse>(`/api/events/${encodeURIComponent(eventId)}/route${query}`)
+}
+
+/** Runが時間内に終わらなかったことを表す。失敗とは区別して扱う。 */
+export class AgentRunPendingError extends Error {
+  constructor(readonly runId: string) {
+    super('まだ実行中です。しばらくしてから状態を再確認してください。')
+    this.name = 'AgentRunPendingError'
+  }
+}
+
+/**
+ * ポーリング間隔。最初は短く、その後伸ばす。
+ * 1.2秒固定だと120秒で約100リクエストになる。
+ */
+function pollDelay(attempt: number): number {
+  if (attempt < 10) return 1_000
+  if (attempt < 25) return 2_000
+  return 5_000
+}
+
+/**
+ * Runが終端状態になるまでポーリングする。
+ *
+ * 既定の180秒は、§11.1 のp95目標120秒と §16 の RUN_TIMEOUT_SECONDS=300 の
+ * あいだを取ったもの。120秒はp95目標であって上限ではないため、そこで
+ * 打ち切るとサーバがまだ実行中なのにクライアントだけが諦めることになる。
+ * 時間切れは失敗ではないので、専用の AgentRunPendingError を投げる。
+ */
+export async function pollAgentRun(
+  runId: string,
+  onUpdate?: (run: AgentRun) => void,
+  timeoutMs = 180_000,
+): Promise<AgentRun> {
+  const started = Date.now()
+  let attempt = 0
+  while (Date.now() - started < timeoutMs) {
+    const run = await getAgentRun(runId)
+    onUpdate?.(run)
+    if (
+      run.status === 'succeeded' ||
+      run.status === 'partial_success' ||
+      run.status === 'failed' ||
+      run.status === 'cancelled'
+    ) {
+      return run
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, pollDelay(attempt)))
+    attempt += 1
+  }
+  throw new AgentRunPendingError(runId)
+}

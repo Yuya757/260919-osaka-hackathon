@@ -11,6 +11,7 @@ WIF_POOL="${WIF_POOL:-github-pool}"
 WIF_PROVIDER="${WIF_PROVIDER:-github-provider}"
 DEPLOYER_SA="${DEPLOYER_SA:-github-deployer}"
 RUNTIME_SA="${RUNTIME_SA:-event-agent-runtime}"
+FIRESTORE_DATABASE="${FIRESTORE_DATABASE:-(default)}"
 
 active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
 if [[ -z "${active_account}" ]]; then
@@ -53,6 +54,17 @@ apis=(
 )
 
 gcloud services enable "${apis[@]}" --project="${PROJECT_ID}"
+
+# Firestore Native データベース（§7）。作成済みなら何もしない。
+# ロケーションは一度決めると変更できないため、Cloud Run と同じ REGION に置く。
+if ! gcloud firestore databases describe --database="${FIRESTORE_DATABASE}" \
+  --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud firestore databases create \
+    --database="${FIRESTORE_DATABASE}" \
+    --location="${REGION}" \
+    --type=firestore-native \
+    --project="${PROJECT_ID}"
+fi
 
 if ! gcloud artifacts repositories describe "${AR_REPOSITORY}" \
   --location="${REGION}" --project="${PROJECT_ID}" >/dev/null 2>&1; then

@@ -1,0 +1,64 @@
+{
+  "caseId": "09-conflicting-003",
+  "categories": [
+    "conflicting_sources"
+  ],
+  "note": "公式と集約サイトで開催日が食い違う。公式を採り、併合結果を verified にしない。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://conflict3-official.example.jp/e",
+      "query": "イベント 2026"
+    },
+    {
+      "url": "https://conflict3-agg.example.com/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://conflict3-official.example.jp/e",
+      "body": "<html><head><title>矛盾ソーステスト 3 2026</title></head><body><h1>矛盾ソーステスト 3 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月12日 10:00</div><div>申込締切: 2026年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    },
+    {
+      "url": "https://conflict3-agg.example.com/e",
+      "body": "<html><head><title>矛盾ソーステスト 3 2026</title></head><body><h1>矛盾ソーステスト 3 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月13日 10:00</div><div>申込締切: 2026年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "aggregator"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://conflict3-official.example.jp/e",
+        "eventStart": "2026-10-12T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-09-28T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "partial",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "矛盾ソーステスト 3 2026"
+      }
+    ],
+    "duplicateGroups": [
+      [
+        "https://conflict3-official.example.jp/e",
+        "https://conflict3-agg.example.com/e"
+      ]
+    ]
+  }
+}

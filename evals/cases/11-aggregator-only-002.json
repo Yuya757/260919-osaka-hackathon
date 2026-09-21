@@ -1,0 +1,49 @@
+{
+  "caseId": "11-aggregator-only-002",
+  "categories": [
+    "aggregator_only"
+  ],
+  "note": "集約サイトのみだが締切も開催日時も揃う。confidence 0.65 で下限を超えるため partial として表示すること（画面設計書§8-2）。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://matome2.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://matome2.example.jp/e",
+      "body": "<html><head><title>集約サイト掲載イベント 2 2026</title></head><body><h1>集約サイト掲載イベント 2 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年11月21日 13:00</div><div>申込締切: 2026年11月7日 23:59</div><div>会場: グランフロント大阪</div><div>主催: Example</div></body></html>",
+      "sourceType": "aggregator"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://matome2.example.jp/e",
+        "eventStart": "2026-11-21T13:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-11-07T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "partial",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "集約サイト掲載イベント 2 2026"
+      }
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/event.json",
+  "title": "Event",
+  "$defs": {
+    "EventLocationType": {
+      "type": "string",
+      "enum": ["online", "offline", "hybrid", "unknown"]
+    },
+    "EventLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "$ref": "#/$defs/EventLocationType" },
+        "venue": { "type": ["string", "null"] },
+        "region": { "type": ["string", "null"] },
+        "nearestStation": {
+          "type": ["string", "null"],
+          "description": "会場の最寄駅名（駅すぱあと経路検索の到着駅として使用）"
+        }
+      }
+    },
+    "DatePrecision": {
+      "type": "string",
+      "enum": ["datetime", "date", "unknown"]
+    },
+    "EventDates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventStart", "eventStartPrecision", "timezone"],
+      "properties": {
+        "applicationDeadline": { "type": ["string", "null"], "format": "date-time" },
+        "applicationDeadlinePrecision": { "$ref": "#/$defs/DatePrecision" },
+        "eventStart": { "type": "string", "format": "date-time" },
+        "eventStartPrecision": {
+          "type": "string",
+          "enum": ["datetime", "date"]
+        },
+        "eventEnd": { "type": ["string", "null"], "format": "date-time" },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone identifier (e.g. Asia/Tokyo)"
+        }
+      }
+    },
+    "ValidationStatus": {
+      "type": "string",
+      "enum": ["verified", "partial", "quarantined", "rejected"]
+    },
+    "EventRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "reason"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "reason": { "type": "string" }
+      }
+    },
+    "EventLifecycleStatus": {
+      "type": "string",
+      "enum": ["suggested", "bookmarked", "dismissed"],
+      "description": "ユーザーによる選別の状態。上位要件 §6.2 が挙げる added_to_calendar は含めない。カレンダー登録状態は詳細要件 §7.3 に従い googleCalendarEventIds で表現し、選別状態と登録状態を独立に保持する。"
+    },
+    "GoogleCalendarEventIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "登録済みGoogleカレンダー予定のID。申込締切と本番日程を別々に保持する（要件定義書 §6.2）。未登録は null。",
+      "properties": {
+        "deadlineEventId": { "type": ["string", "null"] },
+        "mainEventId": { "type": ["string", "null"] }
+      }
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "userId",
+        "title",
+        "normalizedTitle",
+        "summary",
+        "category",
+        "location",
+        "dates",
+        "officialUrl",
+        "validationStatus",
+        "confidence",
+        "evidenceIds",
+        "dedupKey",
+        "firstSeenAt",
+        "lastSeenAt",
+        "sourceRunId",
+        "status"
+      ],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "normalizedTitle": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" },
+        "category": { "type": "string", "minLength": 1 },
+        "organizer": { "type": ["string", "null"] },
+        "location": { "$ref": "#/$defs/EventLocation" },
+        "dates": { "$ref": "#/$defs/EventDates" },
+        "officialUrl": { "type": "string", "format": "uri" },
+        "applicationUrl": { "type": ["string", "null"], "format": "uri" },
+        "validationStatus": { "$ref": "#/$defs/ValidationStatus" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidenceIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dedupKey": { "type": "string", "minLength": 1 },
+        "recommendation": {
+          "oneOf": [{ "$ref": "#/$defs/EventRecommendation" }, { "type": "null" }]
+        },
+        "firstSeenAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "sourceRunId": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/EventLifecycleStatus" },
+        "googleCalendarEventIds": { "$ref": "#/$defs/GoogleCalendarEventIds" },
+        "source": {
+          "type": "string",
+          "deprecated": true,
+          "description": "出典の表示用文字列。Phase 1 の暫定項目で、evidence.json の Evidence.sourceType へ統合して廃止する。"
+        }
+      }
+    },
+    "EventListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["events"],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Event" }
+        }
+      }
+    }
+  }
+}

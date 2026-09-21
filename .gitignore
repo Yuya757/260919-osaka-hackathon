@@ -3,6 +3,10 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
 
 # Local environment
 .env
@@ -12,6 +16,8 @@ dist/
 # Firebase
 .firebase/
 firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
 # Google GitHub Actions credentials
 gha-creds-*.json
@@ -20,6 +26,12 @@ gha-creds-*.json
 .playwright-mcp/
 artifacts/
 
+# AI Agentのローカル設定。Skillsは共有するがローカル権限設定は共有しない
+.claude/settings.local.json
+
 # Editors and operating systems
 .DS_Store
 *.swp
+
+# 評価結果は実行のたびに変わるのでコミットしない
+evals/results/*.json

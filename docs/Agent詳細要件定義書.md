@@ -747,6 +747,10 @@ Agent Engine移行時も、Agent CoreのTool契約、Event Schema、Validation R
 | `MAX_MODEL_CALLS` | Runあたりモデル呼び出し数、初期値15 |
 | `RUN_TIMEOUT_SECONDS` | Run上限、初期値300 |
 | `VERIFIED_CONFIDENCE_THRESHOLD` | Verified閾値、初期値0.80 |
+| `AGGREGATOR_ONLY_MIN_CONFIDENCE` | 集約サイト単独出典を表示する下限、初期値0.60 |
+| `RUN_SCHEDULE_VERSION` | 定期Runの冪等キーに混ぜる版番号、初期値`daily-1` |
+| `FIRESTORE_ENABLED` | Firestore永続化の有効化、初期値false |
+| `FIRESTORE_DATABASE` | Firestoreデータベース名、初期値`(default)` |
 | `PROMPT_VERSION` | Prompt版 |
 | `VALIDATION_RULE_VERSION` | 検証ルール版 |
 
@@ -756,11 +760,11 @@ Agent Engine移行時も、Agent CoreのTool契約、Event Schema、Validation R
 
 1. GCPプロジェクトID、リージョン、請求先
 2. 対象リージョンで利用するGemini Flash系モデルID
-3. 定期実行時刻と対象ユーザー上限
+3. 定期実行時刻と対象ユーザー上限 — 時刻は毎日07:00 JST（`0 7 * * *` / `Asia/Tokyo`）に確定（画面設計書§8-4）。ユーザー上限は未確定
 4. 1 Runおよび1日あたりの費用上限
-5. Firestoreのロケーションと保持期間
-6. Quarantine結果を運営者が確認する管理画面の要否
-7. 公式サイト以外の集約サイトを表示可能とする最低信頼度
+5. Firestoreのロケーションと保持期間 — ロケーションは `asia-northeast1` に確定（ADR-002）。保持期間は未確定
+6. Quarantine結果を運営者が確認する管理画面の要否 — MVPでは作らないと決定（画面設計書§8-3）
+7. 公式サイト以外の集約サイトを表示可能とする最低信頼度 — 0.60 に確定（画面設計書§8-2）
 
 ## 18. 参考資料
 

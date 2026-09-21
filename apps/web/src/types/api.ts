@@ -1,0 +1,224 @@
+/** Mirrors packages/contracts/schemas — see docs/Agent詳細要件定義書.md §7–8 */
+
+export type UserPreferences = {
+  interestsPrompt: string
+  targetYear: number
+  onlineAllowed: boolean
+  locations: string[]
+}
+
+export type ChatAction =
+  | { type: 'agent_run_started'; runId: string }
+  | { type: 'preferences_updated'; preferences: UserPreferences }
+  | { type: 'events_ready'; count: number }
+
+export type ChatRequest = {
+  sessionId?: string
+  message: string
+}
+
+export type ChatResponse = {
+  sessionId: string
+  reply: string
+  actions?: ChatAction[]
+  /**
+   * Grounding の searchEntryPoint.renderedContent。Grounding由来の生成文を
+   * 表示する画面は、このHTMLを無改変で描画する義務がある（§6.4）。
+   * 再スタイル・切り抜き・折りたたみ・非表示は禁止。
+   */
+  searchSuggestionsHtml?: string | null
+}
+
+export type AgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'partial_success'
+  | 'failed'
+  | 'cancelled'
+
+export type AgentRunTriggerType = 'manual' | 'scheduled'
+
+export type CreateAgentRunRequest = {
+  forceRefresh?: boolean
+}
+
+export type CreateAgentRunResponse = {
+  runId: string
+  status: 'queued'
+}
+
+/** GET /api/agent-runs/{runId} — subset of Firestore agentRuns/{runId} (§7.1, §8.2) */
+export type AgentRun = {
+  runId: string
+  userId?: string
+  triggerType?: AgentRunTriggerType
+  idempotencyKey?: string
+  status: AgentRunStatus
+  currentStep?: string
+  model?: string
+  queryCount?: number
+  candidateCount?: number
+  verifiedCount?: number
+  partialCount?: number
+  quarantinedCount?: number
+  /** 終了済み・対象外・危険URLで除外された候補数（§6.6 rejected） */
+  rejectedCount?: number
+  duplicateCount?: number
+  errorCount?: number
+  errorMessage?: string | null
+  startedAt?: string
+  completedAt?: string | null
+  expiresAt?: string
+}
+
+export type EventLocationType = 'online' | 'offline' | 'hybrid' | 'unknown'
+
+export type EventLocation = {
+  type: EventLocationType
+  venue?: string | null
+  region?: string | null
+  /** 会場の最寄駅名（経路検索の到着駅） */
+  nearestStation?: string | null
+}
+
+export type DatePrecision = 'datetime' | 'date' | 'unknown'
+
+export type EventDates = {
+  /** null は「未確認」。UIで「締切なし」と表現してはならない（§6.6）。 */
+  applicationDeadline?: string | null
+  /** 'date' のとき時刻を表示してはならない */
+  applicationDeadlinePrecision?: DatePrecision
+  eventStart: string
+  eventStartPrecision?: 'datetime' | 'date'
+  eventEnd?: string | null
+  /** IANA timezone。表示は必ずこのタイムゾーンで解釈する。 */
+  timezone: string
+}
+
+export type ValidationStatus = 'verified' | 'partial' | 'quarantined' | 'rejected'
+
+export type EventRecommendation = {
+  score: number
+  reason: string
+}
+
+/**
+ * 選別の状態。カレンダー登録状態は含めない（上位§6.2 の added_to_calendar は
+ * 採用せず、§7.3 に従い googleCalendarEventIds で表現する）。
+ */
+export type EventLifecycleStatus = 'suggested' | 'bookmarked' | 'dismissed'
+
+/** 登録済みカレンダー予定のID。未登録は null。 */
+export type GoogleCalendarEventIds = {
+  deadlineEventId?: string | null
+  mainEventId?: string | null
+}
+
+export type EvidenceSourceType = 'official' | 'organizer' | 'aggregator' | 'other'
+
+/** この根拠が裏付けている Event のフィールドパス */
+export type SupportedField =
+  | 'title'
+  | 'summary'
+  | 'organizer'
+  | 'category'
+  | 'location'
+  | 'dates.eventStart'
+  | 'dates.eventEnd'
+  | 'dates.applicationDeadline'
+  | 'officialUrl'
+  | 'applicationUrl'
+
+export type GroundingMetadata = {
+  chunkIndex: number
+  supportScore?: number | null
+}
+
+/** 根拠（§7.2）。excerpt は検証に必要な最小限の引用のみ。 */
+export type Evidence = {
+  evidenceId: string
+  query?: string | null
+  sourceUrl: string
+  canonicalUrl?: string | null
+  sourceType: EvidenceSourceType
+  title?: string | null
+  excerpt?: string | null
+  supports: SupportedField[]
+  retrievedAt: string
+  groundingMetadata?: GroundingMetadata | null
+  contentHash?: string | null
+}
+
+export type EvidenceListResponse = {
+  eventId: string
+  evidence: Evidence[]
+}
+
+/** Event candidate / persisted event (§7.3) */
+export type Event = {
+  eventId: string
+  userId: string
+  title: string
+  normalizedTitle: string
+  summary: string
+  category: string
+  organizer?: string | null
+  location: EventLocation
+  dates: EventDates
+  officialUrl: string
+  applicationUrl?: string | null
+  validationStatus: ValidationStatus
+  /** アプリ側算出値。LLMの自己申告値ではない（§7.5） */
+  confidence: number
+  evidenceIds: string[]
+  dedupKey: string
+  recommendation?: EventRecommendation | null
+  firstSeenAt: string
+  lastSeenAt: string
+  sourceRunId: string
+  status: EventLifecycleStatus
+  googleCalendarEventIds?: GoogleCalendarEventIds
+  /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */
+  source?: string
+}
+
+export type EventListResponse = {
+  events: Event[]
+}
+
+/** API list view; same shape as Event (§8.3) */
+export type ApiEvent = Event
+
+/** packages/contracts/schemas/route.json — GET /api/events/{eventId}/route?from= */
+export type Station = {
+  code: string
+  name: string
+  prefecture?: string | null
+}
+
+export type RouteLeg = {
+  line: string
+  fromStation: string
+  toStation: string
+  departure?: string | null
+  arrival?: string | null
+  minutes?: number | null
+}
+
+export type RouteSummary = {
+  fromStation: Station
+  toStation: Station
+  departure: string
+  arrival: string
+  totalMinutes: number
+  transferCount: number
+  fareYen?: number | null
+  legs: RouteLeg[]
+}
+
+export type EventRouteResponse = {
+  eventId: string
+  arriveBy: string
+  route: RouteSummary
+}

@@ -1,0 +1,1215 @@
+<!doctype html>
+<html lang="ja" data-device="ios" data-layout="gallery" data-mono="off">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>超イベント管理 スマホ画面モック</title>
+<style>
+/* ===========================================================
+   デザイントークン
+   docs/画面設計書_スマホ.md §5 の最終形。
+   apps/web/src/styles.css の :root をそのままコピーできる状態で保つ。
+   =========================================================== */
+:root{
+  /* --- 既存（apps/web/src/styles.css から維持） --- */
+  --ink:#102a43; --muted:#66788a; --paper:#ffffff; --mist:#edf3f7; --line:#d7e1e8;
+  --deadline:#d34b3f; --deadline-soft:#fff0ed;
+  --event:#2a5bd7;  --event-soft:#eaf0ff;
+  --verified:#15766d; --focus:#f4b942;
+  /* --- 追加 --- */
+  --partial:#a8621b; --partial-soft:#fff4e2;
+  --muted-strong:#5a6b7c;
+  --overlay:rgba(16,42,67,.45);
+  --paper-sunken:#f7fafc;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px;
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --sh-card:0 1px 2px rgba(16,42,67,.06),0 2px 8px rgba(16,42,67,.05);
+  --sh-sheet:0 -8px 32px rgba(16,42,67,.18);
+  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-15:15px; --fs-16:16px; --fs-20:20px; --fs-34:34px;
+  --lh-tight:1.35; --lh-body:1.7;
+  --tab-h:56px; --header-h:52px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --tab-total:calc(var(--tab-h) + var(--safe-b));
+  --tap:44px; --gutter:16px; --shell-max:420px;
+}
+*{box-sizing:border-box}
+html[data-mono="on"] .gallery{filter:grayscale(1)}
+
+body{
+  margin:0; background:#dde5ec; color:var(--ink);
+  font-family:'Zen Kaku Gothic New',-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+
+/* ============ モック専用ツールバー（電話枠の外） ============ */
+.toolbar{
+  position:sticky; top:0; z-index:50; background:var(--paper);
+  border-bottom:1px solid var(--line); padding:12px 20px;
+  display:flex; flex-wrap:wrap; gap:16px; align-items:center;
+  box-shadow:0 1px 6px rgba(16,42,67,.08);
+}
+html[data-mono="on"] .toolbar{filter:none}
+.toolbar h1{font-size:15px; margin:0; letter-spacing:.02em}
+.toolbar h1 small{display:block; font-size:11px; font-weight:400; color:var(--muted-strong); letter-spacing:.08em}
+.tgroup{display:flex; align-items:center; gap:6px}
+.tgroup > span{font-size:11px; color:var(--muted-strong); letter-spacing:.08em}
+.tgroup button{
+  font:inherit; font-size:12px; padding:7px 11px; border:1px solid var(--line);
+  background:var(--paper); color:var(--ink); border-radius:var(--r-sm); cursor:pointer;
+}
+.tgroup button[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink)}
+.toolbar .note{font-size:11px; color:var(--muted-strong); max-width:34ch; line-height:1.6}
+
+/* ============ ギャラリー & 端末フレーム ============ */
+.gallery{padding:24px 20px 64px; display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start}
+html[data-layout="single"] .gallery{display:block}
+html[data-layout="single"] .frame{display:none}
+html[data-layout="single"] .frame.is-solo{display:block}
+
+.frame{display:flex; flex-direction:column; gap:8px}
+.frame figcaption{font-size:12px; line-height:1.5}
+.frame figcaption b{font-size:13px}
+.frame figcaption span{display:block; color:var(--muted-strong); font-size:11px}
+
+/* 端末サイズ。data-device で切り替える */
+html[data-device="ios"]     .phone{--dev-w:390px; --dev-h:844px; --safe-b:34px}
+html[data-device="android"] .phone{--dev-w:360px; --dev-h:800px; --safe-b:0px}
+
+.phone{
+  width:var(--dev-w); height:var(--dev-h);
+  background:var(--mist); border:1px solid var(--line); border-radius:24px;
+  overflow:hidden; position:relative; box-shadow:0 10px 36px rgba(16,42,67,.16);
+}
+/* .app が実装上のシェル。タブバーは fixed ではなく sticky（設計書 §5.3） */
+.app{
+  max-width:var(--shell-max); margin-inline:auto; position:relative;
+  height:100%; display:flex; flex-direction:column; background:var(--mist);
+}
+.scroll-area{flex:1; overflow-y:auto; overscroll-behavior:contain}
+
+/* ============ ヘッダ ============ */
+.app-header{
+  min-height:var(--header-h); flex:none; background:var(--paper);
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:var(--s3); padding:var(--s2) var(--gutter);
+}
+.app-header .h-main{flex:1; min-width:0}
+.app-header .today{margin:0; font-size:var(--fs-11); color:var(--muted-strong); letter-spacing:.06em}
+.app-header h2{margin:0; font-size:var(--fs-20); line-height:var(--lh-tight); font-weight:700}
+.icon-btn{
+  min-width:var(--tap); min-height:var(--tap); display:grid; place-items:center;
+  border:1px solid var(--line); background:var(--paper); border-radius:var(--r-sm);
+  font:inherit; font-size:var(--fs-12); color:var(--ink); cursor:pointer; padding:0 10px; gap:4px;
+}
+.icon-btn.primary{background:var(--ink); color:#fff; border-color:var(--ink)}
+.back-btn{min-width:var(--tap); min-height:var(--tap); display:grid; place-items:center;
+  border:0; background:transparent; font-size:20px; color:var(--ink); cursor:pointer}
+
+/* ============ 進捗バナー（全タブ共通） ============ */
+.run-banner{
+  flex:none; background:var(--event-soft); border-bottom:1px solid #c9d8f7;
+  padding:var(--s2) var(--gutter); display:grid; gap:6px;
+}
+.run-banner .rb-top{display:flex; align-items:baseline; gap:var(--s2); font-size:var(--fs-12)}
+.run-banner .rb-step{font-weight:700; color:var(--event); flex:1; min-width:0}
+.run-banner .rb-count{font-variant-numeric:tabular-nums; color:var(--muted-strong); font-size:var(--fs-11)}
+.run-banner .rb-bar{height:4px; border-radius:var(--r-pill); background:#cedcf9; overflow:hidden}
+.run-banner .rb-bar i{display:block; height:100%; background:var(--event); transition:width .4s ease}
+.run-banner .rb-hint{font-size:var(--fs-11); color:var(--muted-strong)}
+.run-banner[data-tone="partial"]{background:var(--partial-soft); border-bottom-color:#f0d9b0}
+.run-banner[data-tone="partial"] .rb-step{color:var(--partial)}
+.run-banner[data-tone="partial"] .rb-bar{background:#f0dfc4}
+.run-banner[data-tone="partial"] .rb-bar i{background:var(--partial)}
+.run-banner[data-tone="done"]{background:#e6f4f1; border-bottom-color:#bcdfd8}
+.run-banner[data-tone="done"] .rb-step{color:var(--verified)}
+.run-banner[data-tone="done"] .rb-bar i{background:var(--verified)}
+
+/* ============ 締切カウントダウン ============ */
+.hero{
+  margin:var(--s4) var(--gutter) 0; background:var(--paper); border:1px solid var(--line);
+  border-radius:var(--r-lg); padding:var(--s4); box-shadow:var(--sh-card);
+  display:grid; gap:var(--s1);
+}
+.hero p.lbl{margin:0; font-size:var(--fs-11); color:var(--muted-strong); letter-spacing:.08em}
+.hero .cd{display:flex; align-items:baseline; gap:6px; color:var(--deadline)}
+.hero .cd strong{font-size:var(--fs-34); line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.hero .cd span{font-size:var(--fs-13); font-weight:700}
+.hero .cd-title{margin:0; font-size:var(--fs-13); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+/* ============ フィルタ ============ */
+.filters{
+  display:flex; gap:var(--s2); padding:var(--s3) var(--gutter);
+  overflow-x:auto; scrollbar-width:none;
+}
+.filters::-webkit-scrollbar{display:none}
+.filters button{
+  flex:none; min-height:var(--tap); padding:0 var(--s4); border-radius:var(--r-pill);
+  border:1px solid var(--line); background:var(--paper); color:var(--muted-strong);
+  font:inherit; font-size:var(--fs-13); cursor:pointer; white-space:nowrap;
+}
+.filters button[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink); font-weight:700}
+.count-row{padding:0 var(--gutter) var(--s2); font-size:var(--fs-11); color:var(--muted-strong)}
+
+/* ============ イベントカード ============ */
+.list{display:grid; gap:var(--s3); padding:0 var(--gutter) var(--s4)}
+.ev-card{
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg);
+  padding:var(--s4); box-shadow:var(--sh-card); display:grid; gap:var(--s3);
+  text-align:left; font:inherit; color:inherit; cursor:pointer; width:100%;
+}
+.ev-card[data-validation="partial"]{border-style:dashed; border-color:var(--partial)}
+.ev-top{display:flex; gap:var(--s2); align-items:flex-start}
+.ev-top .chips{flex:1; display:flex; flex-wrap:wrap; gap:6px; min-width:0}
+.bookmark{
+  flex:none; min-width:var(--tap); min-height:var(--tap); display:grid; place-items:center;
+  border:1px solid var(--line); border-radius:var(--r-pill); background:var(--paper);
+  font-size:16px; color:var(--muted-strong); cursor:pointer; line-height:1;
+}
+.bookmark[aria-pressed="true"]{color:var(--deadline); border-color:var(--deadline); background:var(--deadline-soft)}
+.ev-title{margin:0; font-size:var(--fs-16); font-weight:700; line-height:var(--lh-tight);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.ev-meta{margin:0; font-size:var(--fs-12); color:var(--muted-strong); line-height:1.5}
+
+.chip{
+  font-size:var(--fs-11); padding:4px 9px; border-radius:var(--r-pill);
+  background:var(--mist); color:var(--muted-strong); white-space:nowrap; line-height:1.4;
+}
+.chip.cat{background:var(--paper-sunken); border:1px solid var(--line)}
+.chip.urgent{background:var(--deadline); color:#fff; font-weight:700}
+.chip.partial{background:var(--partial-soft); color:var(--partial); border:1px dashed var(--partial); font-weight:700}
+.chip.verified{background:transparent; color:var(--verified); padding-inline:0; font-weight:700}
+.chip.cal-on{background:var(--event-soft); color:var(--event); font-weight:700}
+.chip.cal-off{background:transparent; color:var(--muted-strong); border:1px solid var(--line)}
+
+/* ---- デュアル日付レール（設計書 §3.3）---- */
+.rail{display:grid; gap:0}
+.rail .row{
+  display:flex; align-items:center; gap:var(--s2);
+  padding:var(--s2) var(--s3); border-left:4px solid transparent; border-radius:0 var(--r-sm) var(--r-sm) 0;
+}
+.rail .row .node{flex:none; width:8px; height:8px}
+.rail .row .ico{flex:none; font-size:var(--fs-13); width:1.3em; text-align:center}
+.rail .row .lbl{flex:none; font-size:var(--fs-11); font-weight:700; letter-spacing:.04em; width:5.2em}
+.rail .row .val{flex:1; font-size:var(--fs-13); font-weight:700; font-variant-numeric:tabular-nums; min-width:0}
+.rail .row .rel{flex:none; font-size:var(--fs-12)}
+/* 上段 = 申込締切 : 塗り円・太字・--deadline */
+.rail .row.deadline{background:var(--deadline-soft); border-left-color:var(--deadline)}
+.rail .row.deadline .node{background:var(--deadline); border-radius:var(--r-pill)}
+.rail .row.deadline .lbl{color:var(--deadline)}
+.rail .row.deadline .rel{color:var(--deadline); font-weight:700; font-size:var(--fs-13)}
+.rail .row.deadline.unknown{background:var(--partial-soft); border-left-style:dashed; border-left-color:var(--partial)}
+.rail .row.deadline.unknown .node{background:transparent; border:2px solid var(--partial)}
+.rail .row.deadline.unknown .lbl,.rail .row.deadline.unknown .val{color:var(--partial)}
+/* 下段 = 開催日 : 角丸四角・通常ウェイト・--event */
+.rail .row.held{background:var(--event-soft); border-left-color:var(--event)}
+.rail .row.held .node{background:var(--event); border-radius:2px}
+.rail .row.held .lbl{color:var(--event)}
+.rail .row.held .rel{color:var(--muted-strong); font-weight:400}
+/* 2つの日程の「間隔」 */
+.rail .gap{
+  display:flex; align-items:center; gap:var(--s2); padding:2px var(--s3) 2px calc(var(--s3) + 4px);
+  font-size:var(--fs-11); color:var(--muted-strong);
+}
+.rail .gap i{display:block; width:2px; height:14px; background:var(--line); margin-left:3px}
+
+.ev-foot{display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap}
+.ev-foot .score{font-size:var(--fs-11); color:var(--muted-strong); font-weight:700}
+.ev-foot .spacer{flex:1}
+.cal-btn{
+  min-height:var(--tap); padding:0 var(--s3); border-radius:var(--r-sm);
+  border:1px solid var(--ink); background:var(--ink); color:#fff;
+  font:inherit; font-size:var(--fs-12); font-weight:700; cursor:pointer; white-space:nowrap;
+}
+.cal-btn.done{background:var(--event-soft); color:var(--event); border-color:#bed0f6}
+
+/* ============ 空状態 / スケルトン ============ */
+.empty{margin:var(--s6) var(--gutter); background:var(--paper); border:1px solid var(--line);
+  border-radius:var(--r-lg); padding:var(--s6) var(--s4); text-align:center; display:grid; gap:var(--s3)}
+.empty p{margin:0; font-size:var(--fs-13); color:var(--muted-strong); line-height:var(--lh-body)}
+.empty strong{font-size:var(--fs-15)}
+
+/* ============ 詳細 (S-02) ============ */
+.detail{padding:0 var(--gutter) var(--s6); display:grid; gap:var(--s4)}
+.notice{
+  margin:var(--s4) 0 0; background:var(--partial-soft); border:1px dashed var(--partial);
+  border-radius:var(--r-md); padding:var(--s3); font-size:var(--fs-12); color:var(--partial);
+  line-height:var(--lh-body);
+}
+.notice strong{display:block; font-size:var(--fs-13)}
+.notice ul{margin:6px 0 0; padding-left:1.2em}
+.d-title{display:grid; gap:6px; margin-top:var(--s4)}
+.d-title h3{margin:0; font-size:22px; line-height:var(--lh-tight); font-weight:700}
+.sec{background:var(--paper); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:var(--s4); display:grid; gap:var(--s2)}
+.sec > h4{margin:0; font-size:var(--fs-11); letter-spacing:.08em; color:var(--muted-strong)}
+.sec p{margin:0; font-size:var(--fs-13); line-height:var(--lh-body)}
+.dl{display:grid; grid-template-columns:5.5em 1fr; gap:var(--s2) var(--s3); font-size:var(--fs-13); margin:0}
+.dl dt{color:var(--muted-strong); font-size:var(--fs-12)}
+.dl dd{margin:0}
+.conf{display:grid; gap:6px}
+.conf .bar{height:8px; border-radius:var(--r-pill); background:var(--mist); position:relative; overflow:hidden}
+.conf .bar i{display:block; height:100%; background:var(--verified)}
+.conf .bar u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ink); opacity:.45}
+.conf .cap{font-size:var(--fs-11); color:var(--muted-strong)}
+.linkrow{display:flex; align-items:center; gap:var(--s2); min-height:var(--tap);
+  font-size:var(--fs-13); border-top:1px solid var(--line); padding-top:var(--s2)}
+.linkrow:first-of-type{border-top:0; padding-top:0}
+.linkrow .host{font-weight:700; word-break:break-all}
+.linkrow .kind{flex:none; font-size:var(--fs-11); padding:3px 8px; border-radius:var(--r-pill);
+  background:var(--mist); color:var(--muted-strong)}
+.ghost-btn{min-height:var(--tap); width:100%; border:1px solid var(--line); background:var(--paper);
+  border-radius:var(--r-sm); font:inherit; font-size:var(--fs-13); color:var(--ink); cursor:pointer}
+.action-bar{
+  flex:none; display:flex; gap:var(--s2); padding:var(--s3) var(--gutter);
+  background:var(--paper); border-top:1px solid var(--line);
+}
+.action-bar .cal-btn{flex:1}
+
+/* ============ カレンダー (S-03) ============ */
+.cal-nav{display:flex; align-items:center; justify-content:center; gap:var(--s3); padding:var(--s3) var(--gutter)}
+.cal-nav strong{font-size:var(--fs-16); font-variant-numeric:tabular-nums}
+.seg{display:flex; margin:0 var(--gutter); border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden; background:var(--paper)}
+.seg button{flex:1; min-height:var(--tap); border:0; background:transparent; font:inherit;
+  font-size:var(--fs-12); color:var(--muted-strong); cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink); color:#fff; font-weight:700}
+.dow{display:grid; grid-template-columns:repeat(7,1fr); padding:var(--s3) var(--gutter) var(--s1);
+  font-size:var(--fs-11); text-align:center; color:var(--muted-strong)}
+.dow span:first-child{color:var(--deadline)} .dow span:last-child{color:var(--event)}
+.grid{display:grid; grid-template-columns:repeat(7,1fr); gap:1px; margin:0 var(--gutter);
+  background:var(--line); border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden}
+.cell{
+  position:relative; height:56px; background:var(--paper); border:0; font:inherit; cursor:pointer;
+  display:block; padding:6px 0 0; text-align:center; font-size:var(--fs-12); color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.cell.out{color:var(--muted-strong); opacity:.35}
+.cell[aria-pressed="true"]{background:var(--mist); box-shadow:inset 0 0 0 2px var(--ink)}
+.cell .today-dot{display:block; width:4px; height:4px; border-radius:var(--r-pill);
+  background:var(--ink); margin:2px auto 0}
+/* 締切 = 右上の塗り円 / 開催 = 下端の帯 */
+.cell .mk-dl{position:absolute; top:5px; right:5px; width:6px; height:6px; border-radius:var(--r-pill); background:var(--deadline)}
+.cell .mk-ev{position:absolute; bottom:5px; left:2px; right:2px; height:3px; background:var(--event)}
+.cell .mk-ev.s{border-top-left-radius:2px; border-bottom-left-radius:2px; left:4px}
+.cell .mk-ev.e{border-top-right-radius:2px; border-bottom-right-radius:2px; right:4px}
+.legend{display:flex; gap:var(--s4); padding:var(--s3) var(--gutter); font-size:var(--fs-11); color:var(--muted-strong)}
+.legend b{display:inline-flex; align-items:center; gap:5px; font-weight:400}
+.legend .k-dl{width:7px; height:7px; border-radius:var(--r-pill); background:var(--deadline)}
+.legend .k-ev{width:14px; height:3px; background:var(--event)}
+.agenda{padding:0 var(--gutter) var(--s4); display:grid; gap:var(--s3)}
+.agenda h4{margin:0; font-size:var(--fs-15); font-variant-numeric:tabular-nums}
+.agenda .grp{display:grid; gap:6px}
+.agenda .grp > span{font-size:var(--fs-11); color:var(--muted-strong); letter-spacing:.06em}
+.agenda .row{
+  display:flex; align-items:center; gap:var(--s2); min-height:var(--tap);
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--r-sm);
+  padding:var(--s2) var(--s3); font:inherit; font-size:var(--fs-13); text-align:left;
+  cursor:pointer; color:inherit; width:100%;
+}
+.agenda .row .m{flex:none}
+.agenda .row .t{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.agenda .row .w{flex:none; font-size:var(--fs-11); color:var(--muted-strong); font-variant-numeric:tabular-nums}
+.agenda .row.dl{border-left:4px solid var(--deadline)}
+.agenda .row.ev{border-left:4px solid var(--event)}
+.agenda .row.unk{border-left:4px dashed var(--partial)}
+
+/* ============ 設定 (S-05) ============ */
+.settings{padding:var(--s4) var(--gutter) var(--s6); display:grid; gap:var(--s4)}
+.s-row{display:flex; align-items:center; gap:var(--s3); min-height:var(--tap); font-size:var(--fs-13)}
+.s-row .k{flex:1; min-width:0}
+.s-row .k small{display:block; font-size:var(--fs-11); color:var(--muted-strong); line-height:1.5}
+.s-row .v{flex:none; font-size:var(--fs-12); color:var(--muted-strong)}
+.s-row + .s-row{border-top:1px solid var(--line)}
+.switch{
+  flex:none; width:var(--tap); height:var(--tap); border:0; background:transparent;
+  position:relative; cursor:pointer; padding:0;
+}
+/* 見た目のトラックは 44x26。当たり判定は 44x44 を確保する（§5.2 --tap） */
+.switch::before{content:""; position:absolute; top:9px; left:0; width:44px; height:26px;
+  border-radius:var(--r-pill); border:1px solid var(--line); background:var(--mist)}
+.switch::after{content:""; position:absolute; top:12px; left:3px; width:20px; height:20px;
+  border-radius:var(--r-pill); background:var(--paper); box-shadow:0 1px 3px rgba(16,42,67,.25); transition:left .18s}
+.switch[aria-checked="true"]::before{background:var(--event); border-color:var(--event)}
+.switch[aria-checked="true"]::after{left:21px}
+.switch[disabled]{opacity:.45; cursor:not-allowed}
+.mock-tag{font-size:var(--fs-11); padding:3px 8px; border-radius:var(--r-pill);
+  background:var(--partial-soft); color:var(--partial); font-weight:700}
+.prompt-box{background:var(--paper-sunken); border:1px solid var(--line); border-radius:var(--r-sm);
+  padding:var(--s3); font-size:var(--fs-13); line-height:var(--lh-body); margin:0}
+.chips-wrap{display:flex; flex-wrap:wrap; gap:6px}
+.debug{font-size:var(--fs-12)}
+.debug summary{min-height:var(--tap); display:flex; align-items:center; cursor:pointer; color:var(--muted-strong)}
+.debug dl{grid-template-columns:8em 1fr; font-size:var(--fs-12)}
+.fineprint{font-size:var(--fs-11); color:var(--muted-strong); line-height:var(--lh-body); margin:0}
+
+/* ============ チャット (S-06) ============ */
+.chat{display:flex; flex-direction:column; height:100%}
+.sheet-handle{flex:none; display:grid; place-items:center; padding:var(--s2) 0 0}
+.sheet-handle i{display:block; width:36px; height:4px; border-radius:var(--r-pill); background:var(--line)}
+.steps{flex:none; margin:var(--s3) var(--gutter) 0; background:var(--paper); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:var(--s3); display:grid; gap:4px; font-size:var(--fs-12)}
+.steps .st{display:flex; gap:var(--s2); align-items:center; color:var(--muted-strong)}
+.steps .st .m{flex:none; width:1.2em; text-align:center}
+.steps .st.now{color:var(--event); font-weight:700}
+.steps .st.done{color:var(--verified)}
+.msgs{flex:1; overflow-y:auto; padding:var(--s3) var(--gutter); display:grid; gap:var(--s2); align-content:start}
+.bubble{max-width:82%; padding:var(--s2) var(--s3); border-radius:var(--r-md); font-size:var(--fs-13);
+  line-height:var(--lh-body); white-space:pre-wrap}
+.bubble.agent{background:var(--paper); border:1px solid var(--line); justify-self:start}
+.bubble.user{background:var(--ink); color:#fff; justify-self:end}
+.bubble.system{background:transparent; border:1px dashed var(--line); color:var(--muted-strong);
+  font-size:var(--fs-12); justify-self:start; max-width:100%}
+.ss-slot{
+  justify-self:start; width:100%; min-height:var(--tap); border:1px dashed var(--event);
+  background:var(--event-soft); border-radius:var(--r-sm); padding:var(--s2) var(--s3);
+  font-size:var(--fs-11); color:var(--event); line-height:1.5;
+}
+.suggest{flex:none; display:flex; gap:var(--s2); padding:var(--s2) var(--gutter); overflow-x:auto; scrollbar-width:none}
+.suggest::-webkit-scrollbar{display:none}
+.suggest button{flex:none; min-height:var(--tap); padding:0 var(--s3); border-radius:var(--r-pill);
+  border:1px solid var(--line); background:var(--paper); font:inherit; font-size:var(--fs-12);
+  color:var(--muted-strong); cursor:pointer; white-space:nowrap}
+.composer{
+  flex:none; display:flex; gap:var(--s2); align-items:flex-end;
+  padding:var(--s2) var(--gutter) calc(var(--s2) + var(--safe-b));
+  background:var(--paper); border-top:1px solid var(--line);
+}
+/* iOS の自動ズーム防止のため 16px 未満にしない（設計書 §5.4-3） */
+.composer textarea{
+  flex:1; font:inherit; font-size:var(--fs-16); line-height:1.5; resize:none;
+  border:1px solid var(--line); border-radius:var(--r-md); padding:10px var(--s3); min-height:var(--tap);
+}
+.composer button{min-width:var(--tap); min-height:var(--tap); border-radius:var(--r-sm);
+  border:1px solid var(--ink); background:var(--ink); color:#fff; font:inherit; font-size:var(--fs-12);
+  font-weight:700; cursor:pointer}
+
+/* ============ ボトムシート (S-07) ============ */
+.backdrop{position:absolute; inset:0; background:var(--overlay); z-index:8}
+.sheet{
+  position:absolute; left:0; right:0; bottom:0; z-index:9; max-height:70%;
+  background:var(--paper); border-radius:var(--r-lg) var(--r-lg) 0 0; box-shadow:var(--sh-sheet);
+  display:flex; flex-direction:column; padding-bottom:var(--safe-b);
+}
+.sheet .sh-body{overflow-y:auto; padding:var(--s2) var(--gutter) var(--s4); display:grid; gap:var(--s3)}
+.sheet h3{margin:0; font-size:var(--fs-16)}
+.sheet .sub{margin:0; font-size:var(--fs-12); color:var(--muted-strong)}
+.opt{
+  display:flex; gap:var(--s3); align-items:flex-start; text-align:left; width:100%;
+  border:1px solid var(--line); border-radius:var(--r-md); background:var(--paper);
+  padding:var(--s3); font:inherit; cursor:pointer; color:inherit; min-height:var(--tap);
+}
+.opt .box{flex:none; width:20px; height:20px; border-radius:6px; border:2px solid var(--line);
+  display:grid; place-items:center; font-size:13px; color:#fff; line-height:1; margin-top:2px}
+.opt[aria-checked="true"]{border-color:var(--ink); background:var(--paper-sunken)}
+.opt[aria-checked="true"] .box{background:var(--ink); border-color:var(--ink)}
+.opt .txt{flex:1; min-width:0}
+.opt .txt b{display:block; font-size:var(--fs-13)}
+.opt .txt small{display:block; font-size:var(--fs-11); color:var(--muted-strong); line-height:1.6; margin-top:2px}
+.opt[aria-disabled="true"]{opacity:.55; cursor:not-allowed; border-style:dashed}
+.opt[aria-disabled="true"] .txt small{color:var(--partial)}
+.warn{background:var(--partial-soft); border:1px solid #f0d9b0; border-radius:var(--r-sm);
+  padding:var(--s2) var(--s3); font-size:var(--fs-11); color:var(--partial); line-height:var(--lh-body)}
+.sheet .cta{min-height:48px; border-radius:var(--r-sm); border:1px solid var(--ink);
+  background:var(--ink); color:#fff; font:inherit; font-size:var(--fs-15); font-weight:700; cursor:pointer}
+.sheet .cta[disabled]{background:var(--mist); color:var(--muted-strong); border-color:var(--line); cursor:not-allowed}
+
+/* ============ タブバー ============ */
+.tabbar{
+  flex:none; position:sticky; bottom:0; z-index:5;
+  height:var(--tab-total); padding-bottom:var(--safe-b);
+  background:var(--paper); border-top:1px solid var(--line);
+  display:grid; grid-template-columns:repeat(5,1fr);
+}
+.tabbar button{
+  border:0; background:transparent; font:inherit; cursor:pointer; color:var(--muted-strong);
+  display:grid; place-items:center; gap:2px; font-size:var(--fs-11); min-height:var(--tap); padding:0;
+}
+.tabbar button .g{font-size:17px; line-height:1}
+.tabbar button[aria-current="page"]{color:var(--ink); font-weight:700}
+.tabbar button.raised{position:relative}
+.tabbar button.raised .g{
+  width:46px; height:46px; border-radius:var(--r-pill); background:var(--ink); color:#fff;
+  display:grid; place-items:center; margin-top:-16px; box-shadow:0 4px 12px rgba(16,42,67,.3);
+}
+.tabbar button.raised{color:var(--ink); font-weight:700}
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)}
+</style>
+</head>
+<body>
+
+<header class="toolbar">
+  <h1>超イベント管理 スマホ画面モック<small>docs/画面設計書_スマホ.md 準拠</small></h1>
+  <div class="tgroup"><span>端末</span>
+    <button data-set="device" data-val="ios">iPhone 14 · 390×844</button>
+    <button data-set="device" data-val="android">Android · 360×800</button>
+  </div>
+  <div class="tgroup"><span>表示</span>
+    <button data-set="layout" data-val="gallery">並列</button>
+    <button data-set="layout" data-val="single">単体</button>
+  </div>
+  <div class="tgroup"><span>検証</span>
+    <button data-set="mono" data-val="on" id="monoBtn">白黒で確認</button>
+  </div>
+  <p class="note">白黒表示にしても「申込締切」と「開催日」が判別できることを確認します（設計書 §3.3 / §9-5）。各フレームのタブバーと「探索」ボタンは実際に動きます。</p>
+</header>
+
+<main class="gallery" id="gallery"></main>
+
+<script>
+/* ============================================================
+   モックデータ
+   apps/web/src/types/api.ts の Event 型と同型に保つ。
+   そのまま apps/web/src/data/fixtures.ts に移せる形にしている。
+   ============================================================ */
+var TODAY_ISO = '2026-09-21T09:00:00+09:00';
+var DAY = 86400000;
+
+var EVENTS = [
+  {
+    eventId:'gemini-hack-2026', userId:'demo-user',
+    title:'Gemini API ハッカソン 2026', normalizedTitle:'gemini api hackathon 2026',
+    summary:'Gemini APIを使い、地域や暮らしの課題を解くプロトタイプを2日間で開発します。',
+    category:'ハッカソン', organizer:'Google for Developers',
+    location:{type:'offline', venue:'グランフロント大阪', region:'大阪'},
+    dates:{applicationDeadline:'2026-09-24T23:59:00+09:00', applicationDeadlinePrecision:'datetime',
+           eventStart:'2026-10-11T10:00:00+09:00', eventStartPrecision:'datetime',
+           eventEnd:'2026-10-12T18:00:00+09:00', timezone:'Asia/Tokyo'},
+    officialUrl:'https://developers.example.com/gemini-hack-2026',
+    applicationUrl:'https://connpass.example.com/event/288001/',
+    validationStatus:'verified', confidence:0.94,
+    evidenceIds:['ev-001','ev-002','ev-003'], dedupKey:'a91f3c7d0e2b',
+    recommendation:{score:96, reason:'関西開催で、生成AIを主題とするハッカソンです。'},
+    firstSeenAt:'2026-09-18T08:12:00+09:00', lastSeenAt:'2026-09-21T07:30:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'suggested'
+  },
+  {
+    eventId:'cloud-builders-kansai', userId:'demo-user',
+    title:'Cloud Builders Kansai', normalizedTitle:'cloud builders kansai',
+    summary:'Cloud Run、Vertex AI、データ基盤の実践事例を関西の開発者が共有する1dayイベントです。',
+    category:'カンファレンス', organizer:'GDG Osaka',
+    location:{type:'hybrid', venue:'梅田スカイビル', region:'大阪'},
+    dates:{applicationDeadline:'2026-10-02T18:00:00+09:00', applicationDeadlinePrecision:'datetime',
+           eventStart:'2026-10-18T10:00:00+09:00', eventStartPrecision:'datetime',
+           eventEnd:null, timezone:'Asia/Tokyo'},
+    officialUrl:'https://gdg-osaka.example.org/cloud-builders-2026',
+    validationStatus:'verified', confidence:0.91,
+    evidenceIds:['ev-011','ev-012'], dedupKey:'b7c2d4e8f1a0',
+    recommendation:{score:91, reason:'GCPの実践事例を関西で聞ける1dayイベントです。'},
+    firstSeenAt:'2026-09-19T09:00:00+09:00', lastSeenAt:'2026-09-21T07:30:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'bookmarked'
+  },
+  {
+    eventId:'agent-product-meetup', userId:'demo-user',
+    title:'AI Agent Product Meetup', normalizedTitle:'ai agent product meetup',
+    summary:'プロダクトにAI Agentを組み込む設計、評価、運用の失敗と学びを持ち寄るオンライン勉強会です。',
+    category:'ミートアップ', organizer:'Agentic Japan',
+    location:{type:'online', venue:null, region:null},
+    /* 締切に時刻がないケース。precision='date' なので時刻を出さない */
+    dates:{applicationDeadline:'2026-10-08T00:00:00+09:00', applicationDeadlinePrecision:'date',
+           eventStart:'2026-10-09T19:00:00+09:00', eventStartPrecision:'datetime',
+           eventEnd:null, timezone:'Asia/Tokyo'},
+    officialUrl:'https://agentic.example.jp/meetup/12',
+    validationStatus:'verified', confidence:0.88,
+    evidenceIds:['ev-021'], dedupKey:'c3a9b1f6d2e4',
+    recommendation:{score:88, reason:'AI Agentの運用知見を扱うオンライン勉強会です。'},
+    firstSeenAt:'2026-09-20T11:20:00+09:00', lastSeenAt:'2026-09-21T07:30:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'suggested'
+  },
+  {
+    /* partial: applicationDeadline が null。「締切なし」と書かない検証用 */
+    eventId:'kansai-demoday-2026', userId:'demo-user',
+    title:'関西スタートアップ Demo Day 2026', normalizedTitle:'kansai startup demo day 2026',
+    summary:'関西の起業家が事業構想を発表するデモデイ。登壇枠の募集要項は公開されていますが、締切日が明記されていません。',
+    category:'ピッチ', organizer:'Kansai Startup Network',
+    location:{type:'offline', venue:'大阪イノベーションハブ', region:'大阪'},
+    dates:{applicationDeadline:null, applicationDeadlinePrecision:'unknown',
+           eventStart:'2026-11-05T13:00:00+09:00', eventStartPrecision:'datetime',
+           eventEnd:null, timezone:'Asia/Tokyo'},
+    officialUrl:'https://ksn.example.jp/demoday2026',
+    validationStatus:'partial', confidence:0.64,
+    evidenceIds:['ev-031','ev-032'], dedupKey:'d5e7f9a2b4c6',
+    recommendation:{score:82, reason:'関西で開催される起業関連の発表機会です。'},
+    firstSeenAt:'2026-09-21T07:31:00+09:00', lastSeenAt:'2026-09-21T07:31:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'suggested'
+  },
+  {
+    /* 集約サイトのみが出典。confidence が閾値 0.80 ぎりぎり */
+    eventId:'osaka-data-conf', userId:'demo-user',
+    title:'大阪データ活用カンファレンス', normalizedTitle:'osaka data conference',
+    summary:'自治体・製造・小売のデータ活用事例を扱うカンファレンス。公式ページを確認できず、集約サイトの情報のみです。',
+    category:'カンファレンス', organizer:null,
+    location:{type:'offline', venue:null, region:'大阪'},
+    dates:{applicationDeadline:'2026-10-25T23:59:00+09:00', applicationDeadlinePrecision:'datetime',
+           eventStart:'2026-11-14T10:00:00+09:00', eventStartPrecision:'datetime',
+           eventEnd:null, timezone:'Asia/Tokyo'},
+    officialUrl:'https://event-aggregator.example.com/e/77421',
+    validationStatus:'verified', confidence:0.81,
+    evidenceIds:['ev-041'], dedupKey:'e1f3a5b7c9d2',
+    recommendation:{score:74, reason:'大阪開催でデータ活用を主題とするカンファレンスです。'},
+    firstSeenAt:'2026-09-21T07:32:00+09:00', lastSeenAt:'2026-09-21T07:32:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'suggested'
+  },
+  {
+    /* quarantined: 一覧に現れてはならない（§8.3）。配列には入れて検証する */
+    eventId:'quarantined-sample', userId:'demo-user',
+    title:'【非表示確認用】矛盾した日程のイベント', normalizedTitle:'quarantined sample',
+    summary:'締切が開催日より後になっており、検証で矛盾が出た候補です。通常UIには出しません。',
+    category:'その他', organizer:null,
+    location:{type:'unknown', venue:null, region:null},
+    dates:{applicationDeadline:'2026-12-01T00:00:00+09:00', applicationDeadlinePrecision:'date',
+           eventStart:'2026-10-01T00:00:00+09:00', eventStartPrecision:'date',
+           eventEnd:null, timezone:'Asia/Tokyo'},
+    officialUrl:'https://unknown.example.net/x',
+    validationStatus:'quarantined', confidence:0.31,
+    evidenceIds:[], dedupKey:'f2a4b6c8d0e1',
+    firstSeenAt:'2026-09-21T07:33:00+09:00', lastSeenAt:'2026-09-21T07:33:00+09:00',
+    sourceRunId:'run-20260921-0730', status:'suggested'
+  }
+];
+
+/* 進捗ステップ。services/agent/src/event_agent/workflows/collect.py の実値に対応 */
+var RUN_STEPS = [
+  {id:'normalize',        label:'関心条件を整理しています',      hint:'地域・対象年・オンライン可否を確定'},
+  {id:'plan',             label:'検索計画を作成しています',      hint:'最大8件の検索を組み立て'},
+  {id:'search',           label:'Webを検索しています',           hint:'Google検索で公開情報を収集'},
+  {id:'extract_validate', label:'日程を抽出・検証しています',    hint:'申込締切と開催日を分けて確認'},
+  {id:'dedupe',           label:'重複を整理しています',          hint:''},
+  {id:'rank',             label:'おすすめ順に並べています',      hint:''},
+  {id:'save',             label:'保存しています',                hint:''},
+  {id:'completed',        label:'完了しました',                  hint:''}
+];
+
+/* ============================================================
+   表示ロジック（lib/eventView.ts に移す純関数群の原型）
+   ============================================================ */
+var WD = ['日','月','火','水','木','金','土'];
+
+/* 日時は必ずイベントの dates.timezone で解釈する（設計書 §3.2）。
+   端末やサーバのローカルTZで解釈すると時刻がずれる。このプロダクトでは致命的。 */
+function parts(iso, tz){
+  var f = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz || 'Asia/Tokyo', year:'numeric', month:'numeric', day:'numeric',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  });
+  var o = {};
+  f.formatToParts(new Date(iso)).forEach(function(x){ o[x.type] = x.value; });
+  return { y:+o.year, m:+o.month, d:+o.day, hh:o.hour, mm:o.minute };
+}
+function ymd(dt){ return dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate(); }
+function md(iso, tz){ var p = parts(iso, tz); return p.m+'月'+p.d+'日'; }
+function hm(iso, tz){ var p = parts(iso, tz); return p.hh+':'+p.mm; }
+/* そのタイムゾーンでの「暦日」。カレンダーの索引と日数差の基準にする */
+function dayKey(iso, tz){ var p = parts(iso, tz); return p.y+'-'+p.m+'-'+p.d; }
+function dayDate(iso, tz){ var p = parts(iso, tz); return new Date(p.y, p.m-1, p.d); }
+function dayIndex(iso, tz){ var p = parts(iso, tz); return Date.UTC(p.y, p.m-1, p.d) / DAY; }
+
+/* 締切ラベル。null は必ず「未確認」。「締切なし」とは書かない（§3.2 / §6.6） */
+function deadlineLabel(ev){
+  var iso = ev.dates.applicationDeadline, tz = ev.dates.timezone;
+  if(!iso) return '未確認';
+  /* precision='date' のとき時刻を出さない。「23:59」を捏造しない（§3.2） */
+  return ev.dates.applicationDeadlinePrecision === 'date' ? md(iso, tz) : md(iso, tz)+' '+hm(iso, tz);
+}
+function heldLabel(ev){
+  var tz = ev.dates.timezone, s = ev.dates.eventStart, e = ev.dates.eventEnd;
+  if(e && dayKey(e, tz) !== dayKey(s, tz)) return md(s, tz)+' — '+md(e, tz);
+  return md(s, tz) + (ev.dates.eventStartPrecision === 'datetime' ? ' '+hm(s, tz) : '');
+}
+/* 残り日数は暦日どうしの差で数える。時刻の端数で1日ずれるのを防ぐ */
+function daysLeft(iso, tz){
+  if(!iso) return null;
+  return dayIndex(iso, tz) - dayIndex(TODAY_ISO, tz);
+}
+function relLabel(iso, suffix, tz){
+  var n = daysLeft(iso, tz);
+  if(n === null) return '';
+  if(n < 0) return '終了';
+  if(n === 0) return '今日';
+  return suffix === 'left' ? 'あと'+n+'日' : n+'日後';
+}
+/* 締切が null のイベントは締切間近にしない（§3.4） */
+function isUrgent(ev){
+  var n = daysLeft(ev.dates.applicationDeadline, ev.dates.timezone);
+  return n !== null && n >= 0 && n <= 5;
+}
+function gapDays(ev){
+  var dl = ev.dates.applicationDeadline, tz = ev.dates.timezone;
+  if(!dl) return null;
+  return dayIndex(ev.dates.eventStart, tz) - dayIndex(dl, tz);
+}
+function fmtType(t){
+  return t==='online' ? 'オンライン' : t==='hybrid' ? 'ハイブリッド' : t==='offline' ? '会場' : '形式未確認';
+}
+function place(ev){ return ev.location.venue || ev.location.region || '場所未確認'; }
+/* quarantined / rejected は通常UIへ出さない（§8.3）。UI側でも二重に落とす */
+function visibleEvents(){
+  return EVENTS.filter(function(e){
+    return e.validationStatus === 'verified' || e.validationStatus === 'partial';
+  });
+}
+function host(u){ try{ return u.split('/')[2]; }catch(e){ return u; } }
+function byId(id){ return EVENTS.filter(function(e){ return e.eventId===id; })[0]; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ============================================================
+   共通状態
+   ============================================================ */
+var STATE = {
+  saved:{ 'cloud-builders-kansai':true },
+  calendar:{},                       /* eventId -> {deadlineEventId, mainEventId} */
+  run:{ active:false, index:-1, tone:'run' },
+  calSelected:'2026-10-11'
+};
+
+/* ============================================================
+   部品
+   ============================================================ */
+function railHtml(ev, big){
+  var unknown = !ev.dates.applicationDeadline;
+  var gap = gapDays(ev);
+  return ''
+  + '<div class="rail">'
+  +   '<div class="row deadline'+(unknown?' unknown':'')+'">'
+  +     '<span class="node" aria-hidden="true"></span><span class="ico" aria-hidden="true">🚨</span>'
+  +     '<span class="lbl">申込締切</span>'
+  +     '<span class="val">'+esc(deadlineLabel(ev))+'</span>'
+  +     '<span class="rel">'+esc(relLabel(ev.dates.applicationDeadline,'left',ev.dates.timezone))+'</span>'
+  +   '</div>'
+  +   (gap !== null
+      ? '<div class="gap"><i aria-hidden="true"></i>この間に '+gap+' 日</div>'
+      : '<div class="gap"><i aria-hidden="true"></i>締切が未確認のため間隔を出せません</div>')
+  +   '<div class="row held">'
+  +     '<span class="node" aria-hidden="true"></span><span class="ico" aria-hidden="true">📅</span>'
+  +     '<span class="lbl">開催日</span>'
+  +     '<span class="val">'+esc(heldLabel(ev))+'</span>'
+  +     '<span class="rel">'+esc(relLabel(ev.dates.eventStart,'after',ev.dates.timezone))+'</span>'
+  +   '</div>'
+  + '</div>';
+}
+
+function calChip(ev){
+  var c = STATE.calendar[ev.eventId];
+  if(!c) return '<span class="chip cal-off">未登録</span>';
+  if(c.deadlineEventId && c.mainEventId) return '<span class="chip cal-on">✓ カレンダー登録済み</span>';
+  if(c.deadlineEventId) return '<span class="chip cal-on">✓ 締切のみ登録済み</span>';
+  return '<span class="chip cal-on">✓ 本番のみ登録済み</span>';
+}
+
+function cardHtml(ev){
+  var chips = '<span class="chip cat">'+esc(ev.category)+'</span>';
+  if(isUrgent(ev)) chips += '<span class="chip urgent">締切間近</span>';
+  if(ev.validationStatus === 'partial') chips += '<span class="chip partial">要確認</span>';
+  var saved = STATE.saved[ev.eventId] ? 'true' : 'false';
+  var reg = !!STATE.calendar[ev.eventId];
+  return ''
+  + '<article class="ev-card" data-validation="'+ev.validationStatus+'" data-open="'+ev.eventId+'" role="button" tabindex="0">'
+  +   '<div class="ev-top"><div class="chips">'+chips+'</div>'
+  +     '<button class="bookmark" data-save="'+ev.eventId+'" aria-pressed="'+saved+'" aria-label="保存">'
+  +       (STATE.saved[ev.eventId] ? '♥' : '♡')+'</button></div>'
+  +   '<div><h3 class="ev-title">'+esc(ev.title)+'</h3>'
+  +     '<p class="ev-meta">'+esc(ev.organizer || '主催者未確認')+' · '+esc(place(ev))+' · '+fmtType(ev.location.type)+'</p></div>'
+  +   railHtml(ev)
+  +   '<div class="ev-foot">'
+  +     (ev.recommendation ? '<span class="score">適合 '+ev.recommendation.score+'%</span>' : '')
+  +     calChip(ev)
+  +     '<span class="spacer"></span>'
+  +     '<button class="cal-btn'+(reg?' done':'')+'" data-cal="'+ev.eventId+'">'+(reg?'登録内容を変更':'カレンダーに登録')+'</button>'
+  +   '</div>'
+  + '</article>';
+}
+
+function runBannerHtml(){
+  if(!STATE.run.active) return '';
+  var i = STATE.run.index;
+  var st = RUN_STEPS[i] || RUN_STEPS[0];
+  var done = st.id === 'completed';
+  var tone = done ? (STATE.run.tone === 'partial' ? 'partial' : 'done') : 'run';
+  var pct = Math.round(((i+1) / RUN_STEPS.length) * 100);
+  var msg = done
+    ? (STATE.run.tone === 'partial'
+        ? '4件を更新しました（1件は情報不足のため保留）'
+        : '5件のイベントを更新しました')
+    : st.label;
+  return ''
+  + '<div class="run-banner" data-tone="'+tone+'" role="status">'
+  +   '<div class="rb-top"><span class="rb-step">'+esc(msg)+'</span>'
+  +     '<span class="rb-count">'+(i+1)+' / '+RUN_STEPS.length+'</span></div>'
+  +   '<div class="rb-bar"><i style="width:'+pct+'%"></i></div>'
+  +   (st.hint && !done ? '<p class="rb-hint">'+esc(st.hint)+'</p>' : '')
+  +   (done ? '' : '<p class="rb-hint">閉じても探索は続きます。</p>')
+  + '</div>';
+}
+
+function tabbarHtml(screen){
+  var tabs = [
+    ['home','ホーム','⌂'], ['calendar','カレンダー','▦'],
+    ['chat','エージェント','✦'],
+    ['saved','保存済み','♡'], ['settings','設定','⚙']
+  ];
+  return '<nav class="tabbar" aria-label="メインナビゲーション">' + tabs.map(function(t){
+    var cur = (t[0] === screen) || (t[0]==='home' && screen==='detail');
+    var raised = t[0]==='chat';
+    return '<button data-tab="'+t[0]+'"'+(cur&&!raised?' aria-current="page"':'')+(raised?' class="raised"':'')+'>'
+      + '<span class="g" aria-hidden="true">'+t[2]+'</span><span>'+t[1]+'</span></button>';
+  }).join('') + '</nav>';
+}
+
+/* ---------------- S-01 ホーム ---------------- */
+function homeHtml(){
+  var evs = visibleEvents();
+  var urgent = evs.filter(isUrgent).sort(function(a,b){
+    return daysLeft(a.dates.applicationDeadline, a.dates.timezone)
+         - daysLeft(b.dates.applicationDeadline, b.dates.timezone);
+  })[0];
+  var nVer = evs.filter(function(e){return e.validationStatus==='verified';}).length;
+  var nPar = evs.length - nVer;
+  return ''
+  + '<header class="app-header"><div class="h-main">'
+  +   '<p class="today">2026年9月21日 日曜日</p><h2>見逃したくない予定</h2></div>'
+  +   '<button class="icon-btn primary" data-run="1">✦ 更新</button></header>'
+  + runBannerHtml()
+  + '<div class="scroll-area">'
+  +   (urgent ? '<section class="hero"><p class="lbl">次の申込締切まで</p>'
+  +     '<div class="cd"><strong>'+String(daysLeft(urgent.dates.applicationDeadline, urgent.dates.timezone)).padStart(2,'0')+'</strong><span>日</span></div>'
+  +     '<p class="cd-title">'+esc(urgent.title)+'</p></section>' : '')
+  +   '<div class="filters" role="group" aria-label="絞り込み">'
+  +     '<button aria-pressed="true">すべて</button><button aria-pressed="false">締切間近</button>'
+  +     '<button aria-pressed="false">オンライン可</button><button aria-pressed="false">要確認</button></div>'
+  +   '<p class="count-row">'+evs.length+'件 · 公式確認済み'+nVer+' · 要確認'+nPar+'（保留1件は非表示）</p>'
+  +   '<div class="list">'+evs.map(cardHtml).join('')+'</div>'
+  + '</div>'
+  + tabbarHtml('home');
+}
+
+/* ---------------- S-02 詳細 ---------------- */
+function detailHtml(id){
+  var ev = byId(id) || visibleEvents()[0];
+  var partial = ev.validationStatus === 'partial';
+  var reg = !!STATE.calendar[ev.eventId];
+  var aggregator = ev.officialUrl.indexOf('aggregator') > -1;
+  return ''
+  + '<header class="app-header"><button class="back-btn" data-tab="home" aria-label="戻る">‹</button>'
+  +   '<div class="h-main"><h2 style="font-size:var(--fs-15)">イベント詳細</h2></div>'
+  +   '<button class="bookmark" data-save="'+ev.eventId+'" aria-pressed="'+(STATE.saved[ev.eventId]?'true':'false')+'" aria-label="保存">'
+  +   (STATE.saved[ev.eventId]?'♥':'♡')+'</button></header>'
+  + runBannerHtml()
+  + '<div class="scroll-area"><div class="detail">'
+  +   (partial ? '<div class="notice"><strong>△ 申込締切を確認できていません</strong>'
+  +     '開催日と根拠URLは確認済みです。締切は公式サイトでご確認ください。'
+  +     '<ul><li>不足: 申込締切（applicationDeadline）</li></ul></div>' : '')
+  +   '<div class="d-title">'
+  +     '<div class="chips" style="display:flex;gap:6px;flex-wrap:wrap">'
+  +       '<span class="chip cat">'+esc(ev.category)+'</span>'
+  +       (isUrgent(ev)?'<span class="chip urgent">締切間近</span>':'')
+  +       (partial?'<span class="chip partial">要確認</span>'
+                 :'<span class="chip verified">✓ 公式情報で確認済み</span>')
+  +     '</div>'
+  +     '<h3>'+esc(ev.title)+'</h3>'
+  +     '<p class="ev-meta">'+esc(ev.organizer || '主催者未確認')+'</p></div>'
+  +   '<div class="sec"><h4>日程</h4>'+railHtml(ev,true)
+  +     '<p style="font-size:var(--fs-11);color:var(--muted-strong)">タイムゾーン: '+ev.dates.timezone
+  +     (ev.dates.applicationDeadlinePrecision==='date' ? ' ／ 締切は日付のみ確認（時刻は未確認）' : '')+'</p>'
+  +     '<button class="ghost-btn" data-evidence="'+ev.eventId+'">根拠を見る（'+ev.evidenceIds.length+'件）</button></div>'
+  +   '<div class="sec"><h4>概要</h4><p>'+esc(ev.summary)+'</p></div>'
+  +   (ev.recommendation ? '<div class="sec"><h4>あなたへの適合 '+ev.recommendation.score+'%</h4>'
+  +     '<p>'+esc(ev.recommendation.reason)+'</p></div>' : '')
+  +   '<div class="sec"><h4>開催情報</h4><dl class="dl">'
+  +     '<dt>形式</dt><dd>'+fmtType(ev.location.type)+'</dd>'
+  +     '<dt>会場</dt><dd>'+esc(ev.location.venue || '未確認')+'</dd>'
+  +     '<dt>地域</dt><dd>'+esc(ev.location.region || '未確認')+'</dd></dl></div>'
+  +   '<div class="sec"><h4>リンク</h4>'
+  +     '<div class="linkrow"><span class="kind">'+(aggregator?'集約':'公式')+'</span><span class="host">'+esc(host(ev.officialUrl))+'</span></div>'
+  +     (ev.applicationUrl ? '<div class="linkrow"><span class="kind">申込</span><span class="host">'+esc(host(ev.applicationUrl))+'</span></div>' : '')
+  +     (aggregator ? '<p style="font-size:var(--fs-11);color:var(--partial)">公式ページを確認できていません（集約サイトの情報です）。</p>' : '')
+  +   '</div>'
+  +   '<div class="sec"><h4>信頼度</h4><div class="conf">'
+  +     '<div class="bar"><i style="width:'+Math.round(ev.confidence*100)+'%'
+  +       +(partial?';background:var(--partial)':'')+'"></i><u style="left:80%"></u></div>'
+  +     '<p class="cap">'+Math.round(ev.confidence*100)+'%（縦線は verified の閾値 80%）</p></div></div>'
+  +   '<details class="sec debug"><summary>検証情報</summary><dl class="dl">'
+  +     '<dt>検証状態</dt><dd>'+ev.validationStatus+'</dd>'
+  +     '<dt>初回検出</dt><dd>'+ev.firstSeenAt.slice(0,10)+'</dd>'
+  +     '<dt>最終確認</dt><dd>'+ev.lastSeenAt.slice(0,16).replace('T',' ')+'</dd>'
+  +     '<dt>収集Run</dt><dd>'+ev.sourceRunId+'</dd>'
+  +     '<dt>dedupKey</dt><dd>'+ev.dedupKey.slice(0,8)+'…</dd></dl></details>'
+  + '</div></div>'
+  + '<div class="action-bar">'
+  +   '<button class="ghost-btn" style="flex:none;width:auto;padding:0 var(--s4)">公式サイト</button>'
+  +   '<button class="cal-btn'+(reg?' done':'')+'" data-cal="'+ev.eventId+'">'+(reg?'登録内容を変更':'カレンダーに登録')+'</button>'
+  + '</div>'
+  + tabbarHtml('detail');
+}
+
+/* ---------------- S-03 カレンダー ---------------- */
+function calendarHtml(){
+  var evs = visibleEvents();
+  var dlIdx = {}, evIdx = {}, unknown = [];
+  evs.forEach(function(ev){
+    var tz = ev.dates.timezone, dl = ev.dates.applicationDeadline;
+    /* 締切が null のイベントは締切マーカーを描かない。推測しない（§3.2） */
+    if(dl){ var k = dayKey(dl, tz); (dlIdx[k] = dlIdx[k] || []).push(ev); }
+    else unknown.push(ev);
+    var s = dayDate(ev.dates.eventStart, tz);
+    var e = ev.dates.eventEnd ? dayDate(ev.dates.eventEnd, tz) : s;
+    var sk = ymd(s), ek = ymd(e);
+    for(var t = new Date(s.getTime()); t <= e; t.setDate(t.getDate()+1)){
+      var k2 = ymd(t);
+      (evIdx[k2] = evIdx[k2] || []).push({ ev:ev, first:k2===sk, last:k2===ek });
+    }
+  });
+
+  var Y = 2026, M = 9; /* 2026年10月 */
+  var first = new Date(Y, M, 1);
+  var start = new Date(Y, M, 1 - first.getDay());
+  var cells = '';
+  for(var i = 0; i < 42; i++){
+    var day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    var key = ymd(day), out = day.getMonth() !== M;
+    var hasDl = !!dlIdx[key], spans = evIdx[key] || [];
+    var sel = key === STATE.calSelected;
+    var isToday = key === dayKey(TODAY_ISO, 'Asia/Tokyo');
+    var lbl = (day.getMonth()+1)+'月'+day.getDate()+'日'
+      + (hasDl ? ' 申込締切'+dlIdx[key].length+'件' : '')
+      + (spans.length ? ' 開催'+spans.length+'件' : '');
+    cells += '<button class="cell'+(out?' out':'')+'" data-day="'+key+'"'
+      + ' aria-pressed="'+(sel?'true':'false')+'" aria-label="'+lbl+'">'
+      + day.getDate()
+      + (isToday ? '<span class="today-dot" aria-hidden="true"></span>' : '')
+      + (hasDl ? '<span class="mk-dl" aria-hidden="true"></span>' : '')
+      + (spans.length ? '<span class="mk-ev'+(spans[0].first?' s':'')+(spans[0].last?' e':'')+'" aria-hidden="true"></span>' : '')
+      + '</button>';
+  }
+
+  var sk = STATE.calSelected, sd = new Date(sk.split('-')[0], sk.split('-')[1]-1, sk.split('-')[2]);
+  var dls = dlIdx[sk] || [], sps = evIdx[sk] || [];
+  var agenda = '<h4>'+(sd.getMonth()+1)+'月'+sd.getDate()+'日('+WD[sd.getDay()]+')</h4>';
+  if(dls.length) agenda += '<div class="grp"><span>申込締切 ('+dls.length+')</span>' + dls.map(function(ev){
+    var t = ev.dates.applicationDeadlinePrecision === 'date' ? '時刻未確認' : hm(ev.dates.applicationDeadline, ev.dates.timezone);
+    return '<button class="row dl" data-open="'+ev.eventId+'"><span class="m" aria-hidden="true">🚨</span>'
+      + '<span class="t">'+esc(ev.title)+'</span><span class="w">'+t+'</span></button>';
+  }).join('') + '</div>';
+  if(sps.length) agenda += '<div class="grp"><span>開催 ('+sps.length+')</span>' + sps.map(function(x){
+    var ev = x.ev, tz = ev.dates.timezone;
+    var multi = ev.dates.eventEnd && dayKey(ev.dates.eventEnd, tz) !== dayKey(ev.dates.eventStart, tz);
+    return '<button class="row ev" data-open="'+ev.eventId+'"><span class="m" aria-hidden="true">📅</span>'
+      + '<span class="t">'+esc(ev.title)+'</span><span class="w">'+(multi?'2日間':hm(ev.dates.eventStart, tz))+'</span></button>';
+  }).join('') + '</div>';
+  if(!dls.length && !sps.length) agenda += '<p class="ev-meta">この日に予定はありません。</p>';
+  /* 締切未確認を黙って落とさない（§3.1 / S-03の制約） */
+  if(unknown.length) agenda += '<div class="grp"><span>締切未確認 ('+unknown.length+')</span>' + unknown.map(function(ev){
+    return '<button class="row unk" data-open="'+ev.eventId+'"><span class="m" aria-hidden="true">○</span>'
+      + '<span class="t">'+esc(ev.title)+'</span><span class="w">—</span></button>';
+  }).join('') + '</div>';
+
+  return ''
+  + '<header class="app-header"><div class="h-main"><h2 style="font-size:var(--fs-16)">カレンダー</h2></div>'
+  +   '<button class="icon-btn">今日</button></header>'
+  + runBannerHtml()
+  + '<div class="scroll-area">'
+  +   '<div class="cal-nav"><button class="back-btn" aria-label="前の月">‹</button>'
+  +     '<strong>2026年10月</strong><button class="back-btn" aria-label="次の月">›</button></div>'
+  +   '<div class="seg" role="group" aria-label="表示する軸">'
+  +     '<button aria-pressed="true">両方</button><button aria-pressed="false">締切のみ</button>'
+  +     '<button aria-pressed="false">開催のみ</button></div>'
+  +   '<div class="dow">'+WD.map(function(w){return '<span>'+w+'</span>';}).join('')+'</div>'
+  +   '<div class="grid">'+cells+'</div>'
+  +   '<div class="legend"><b><i class="k-dl"></i>申込締切（点）</b><b><i class="k-ev"></i>開催日（帯）</b></div>'
+  +   '<div class="agenda">'+agenda+'</div>'
+  + '</div>'
+  + tabbarHtml('calendar');
+}
+
+/* ---------------- S-04 保存済み ---------------- */
+function savedHtml(){
+  var all = visibleEvents().filter(function(e){ return STATE.saved[e.eventId]; });
+  var open = all.filter(function(e){ var n=daysLeft(e.dates.applicationDeadline, e.dates.timezone); return n!==null && n>=0; })
+                .sort(function(a,b){ return daysLeft(a.dates.applicationDeadline, a.dates.timezone)
+                                          - daysLeft(b.dates.applicationDeadline, b.dates.timezone); });
+  var unk = all.filter(function(e){ return !e.dates.applicationDeadline; });
+  var past = all.filter(function(e){ var n=daysLeft(e.dates.applicationDeadline, e.dates.timezone); return n!==null && n<0; });
+  var body = '';
+  if(!all.length){
+    body = '<div class="empty"><strong>保存したイベントはありません</strong>'
+         + '<p>一覧の ♡ で保存すると、ここに締切が近い順で並びます。</p></div>';
+  } else {
+    if(open.length) body += '<p class="count-row" style="padding-top:var(--s4)">申込受付中 ('+open.length+')</p>'
+                          + '<div class="list">'+open.map(cardHtml).join('')+'</div>';
+    if(unk.length)  body += '<p class="count-row">締切未確認 ('+unk.length+')</p>'
+                          + '<div class="list">'+unk.map(cardHtml).join('')+'</div>';
+    body += '<details style="margin:0 var(--gutter) var(--s4)"><summary style="min-height:var(--tap);'
+          + 'display:flex;align-items:center;font-size:var(--fs-13);color:var(--muted-strong);cursor:pointer">'
+          + '終了 ('+past.length+')</summary>'
+          + (past.length ? '<div class="list" style="padding-inline:0">'+past.map(cardHtml).join('')+'</div>'
+                         : '<p class="ev-meta" style="padding:var(--s2) 0">終了したイベントはありません。</p>')
+          + '</details>';
+  }
+  return ''
+  + '<header class="app-header"><div class="h-main"><h2 style="font-size:var(--fs-16)">保存済み</h2>'
+  +   '<p class="today">'+all.length+'件</p></div></header>'
+  + runBannerHtml()
+  + '<div class="scroll-area">'+body+'</div>'
+  + tabbarHtml('saved');
+}
+
+/* ---------------- S-05 設定 ---------------- */
+function settingsHtml(){
+  return ''
+  + '<header class="app-header"><div class="h-main"><h2 style="font-size:var(--fs-16)">設定</h2></div></header>'
+  + runBannerHtml()
+  + '<div class="scroll-area"><div class="settings">'
+  +   '<div class="sec"><h4>アカウント</h4>'
+  +     '<div class="s-row"><span class="k">Yuya Kaneko<small>yuya@example.com</small></span>'
+  +     '<span class="mock-tag">モック</span></div>'
+  +     '<button class="ghost-btn">Googleでログイン（モック）</button></div>'
+  +   '<div class="sec"><h4>関心条件</h4>'
+  +     '<p class="prompt-box">ハッカソン、生成AI、GCP、関西エリア。オンライン参加も可。</p>'
+  +     '<div class="s-row"><span class="k">対象年</span><span class="v">2026年</span></div>'
+  +     '<div class="s-row"><span class="k">オンラインも含める</span>'
+  +       '<button class="switch" role="switch" aria-checked="true" aria-label="オンラインも含める"></button></div>'
+  +     '<div class="s-row"><span class="k">地域</span></div>'
+  +     '<div class="chips-wrap"><span class="chip">関西</span><span class="chip">大阪</span>'
+  +       '<span class="chip">京都</span><span class="chip cal-off">+ 追加</span></div>'
+  +     '<button class="ghost-btn" data-tab="chat">エージェントに相談して調整する</button></div>'
+  +   '<div class="sec"><h4>連携</h4>'
+  +     '<div class="s-row"><span class="k">Googleカレンダー<small>モック接続（デモ）。実際には書き込みません</small></span>'
+  +       '<span class="mock-tag">モック</span></div>'
+  +     '<div class="s-row"><span class="k">締切リマインダー<small>1日前と3時間前</small></span>'
+  +       '<span class="v">変更</span></div></div>'
+  +   '<div class="sec"><h4>通知</h4>'
+  +     '<div class="s-row"><span class="k">毎朝の自動更新<small>Phase 2 で対応予定</small></span>'
+  +       '<button class="switch" role="switch" aria-checked="false" disabled aria-label="毎朝の自動更新"></button></div></div>'
+  +   '<div class="sec"><h4>表示</h4>'
+  +     '<div class="s-row"><span class="k">「締切間近」のしきい値</span><span class="v">5日</span></div></div>'
+  +   '<details class="sec debug"><summary>最新の探索結果（デバッグ）</summary><dl class="dl">'
+  +     '<dt>runId</dt><dd>run-20260921-0730</dd><dt>status</dt><dd>partial_success</dd>'
+  +     '<dt>検索クエリ</dt><dd>6 件</dd><dt>候補</dt><dd>14 件</dd>'
+  +     '<dt>verified</dt><dd>4 件</dd><dt>partial</dt><dd>1 件</dd>'
+  +     '<dt>保留</dt><dd>1 件</dd><dt>重複</dt><dd>8 件</dd></dl>'
+  +     '<p class="fineprint">保留（quarantined）の件数のみ表示し、内容は表示しません（§8.3）。</p></details>'
+  +   '<p class="fineprint">イベント情報は公開Web情報をもとにAIが整理したものです。申込前に必ず公式サイトをご確認ください。</p>'
+  + '</div></div>'
+  + tabbarHtml('settings');
+}
+
+/* ---------------- S-06 チャット ---------------- */
+function chatHtml(){
+  var i = STATE.run.index, active = STATE.run.active;
+  var steps = active ? '<div class="steps">' + RUN_STEPS.map(function(s, k){
+    var cls = k < i ? 'done' : k === i ? 'now' : '';
+    var m = k < i ? '✓' : k === i ? '◍' : '○';
+    return '<div class="st '+cls+'"><span class="m" aria-hidden="true">'+m+'</span>'
+      + '<span>'+esc(s.label)+'</span></div>';
+  }).join('') + '</div>' : '';
+
+  return ''
+  + '<div class="chat">'
+  +   '<div class="sheet-handle"><i></i></div>'
+  +   '<header class="app-header" style="border-bottom:1px solid var(--line)">'
+  +     '<div class="h-main"><p class="today">エージェント</p>'
+  +     '<h2 style="font-size:var(--fs-16)">関心を伝えて探索</h2></div>'
+  +     '<button class="icon-btn" data-tab="home">閉じる</button></header>'
+  +   steps
+  +   '<div class="msgs">'
+  +     '<div class="bubble agent">関心分野や地域を教えてください。申込締切と開催日を分けて探します。</div>'
+  +     '<div class="bubble user">大阪の生成AIハッカソンを探して</div>'
+  +     '<div class="bubble agent">大阪で開催される生成AI関連のハッカソンを探します。対象年は2026年、オンライン併催も含めます。</div>'
+  +     '<div class="ss-slot">Search Suggestions 表示位置<br>Google提供のHTMLを無改変で挿入する（§3.7 / §6.4）。折りたたみ・再スタイル・非表示は禁止。</div>'
+  +     (active && RUN_STEPS[i] && RUN_STEPS[i].id === 'completed'
+        ? '<div class="bubble agent">5件のイベントを更新しました。ホームで確認できます。</div>'
+        : active ? '<div class="bubble system">'+esc(RUN_STEPS[i] ? RUN_STEPS[i].label : '探索を開始しました')+'</div>' : '')
+  +   '</div>'
+  +   '<div class="suggest">'
+  +     '<button>関西の生成AIハッカソンを探して</button>'
+  +     '<button>オンラインのミートアップも入れて</button>'
+  +     '<button data-run="1">イベントを更新して</button></div>'
+  +   '<form class="composer" onsubmit="return false">'
+  +     '<label class="sr-only" for="ci">エージェントへのメッセージ</label>'
+  +     '<textarea id="ci" rows="1" placeholder="例: 大阪のGCPハッカソンを探して"></textarea>'
+  +     '<button type="submit">送信</button></form>'
+  + '</div>';
+}
+
+/* ---------------- S-07 カレンダー登録シート ---------------- */
+function sheetHtml(id){
+  var ev = byId(id);
+  var canDl = !!ev.dates.applicationDeadline;
+  var sel = SHEET.sel;
+  var label = (sel.dl && sel.main) ? '両方まとめて登録'
+            : sel.dl ? '申込締切を登録'
+            : sel.main ? '本番日程を登録' : '登録する項目を選択してください';
+  var disabled = (!sel.dl && !sel.main);
+  return ''
+  + '<div class="backdrop" data-close="1"></div>'
+  + '<section class="sheet" role="dialog" aria-modal="true" aria-label="カレンダーに登録">'
+  +   '<div class="sheet-handle"><i></i></div>'
+  +   '<div class="sh-body">'
+  +     '<h3>カレンダーに登録</h3><p class="sub">'+esc(ev.title)+'</p>'
+  +     '<div class="opt" role="checkbox" aria-checked="'+(canDl && sel.dl)+'"'
+  +       (canDl?' data-toggle="dl"':' aria-disabled="true"')+' tabindex="0">'
+  +       '<span class="box" aria-hidden="true">'+(canDl && sel.dl?'✓':'')+'</span><span class="txt">'
+  +       '<b>申込締切をリマインダーとして登録</b><small>'
+  +       (canDl ? esc(deadlineLabel(ev))+' · 1日前と3時間前に通知'
+                 : '申込締切が未確認のため登録できません')+'</small></span></div>'
+  +     '<div class="opt" role="checkbox" aria-checked="'+sel.main+'" data-toggle="main" tabindex="0">'
+  +       '<span class="box" aria-hidden="true">'+(sel.main?'✓':'')+'</span><span class="txt">'
+  +       '<b>本番日程を登録</b><small>'+esc(heldLabel(ev))+'</small></span></div>'
+  +     '<div class="s-row"><span class="k">登録先</span><span class="v">yuya@example.com（モック）</span></div>'
+  +     '<p class="warn">⚠ デモ版です。実際のGoogleカレンダーには書き込みません。</p>'
+  +     '<button class="cta" data-confirm="'+ev.eventId+'"'+(disabled?' disabled':'')+'>'+esc(label)+'</button>'
+  +     '<button class="ghost-btn" data-close="1">キャンセル</button>'
+  +   '</div>'
+  + '</section>';
+}
+
+/* ============================================================
+   フレーム描画
+   ============================================================ */
+var SHEET = { open:false, id:null, sel:{dl:true, main:true} };
+
+var FRAMES = [
+  {id:'S-01', name:'ホーム / イベント一覧', feat:'F-02, F-03, F-05', screen:'home'},
+  {id:'S-02', name:'イベント詳細（verified）', feat:'F-03, F-04, F-05', screen:'detail', ev:'gemini-hack-2026'},
+  {id:'S-02', name:'イベント詳細（partial・締切未確認）', feat:'§3.1 / §6.6', screen:'detail', ev:'kansai-demoday-2026'},
+  {id:'S-07', name:'カレンダー登録シート', feat:'F-04 / §10.4', screen:'detail', ev:'gemini-hack-2026', sheet:'gemini-hack-2026'},
+  {id:'S-07', name:'カレンダー登録シート（締切未確認 → 無効化）', feat:'§3.2', screen:'detail', ev:'kansai-demoday-2026', sheet:'kansai-demoday-2026'},
+  {id:'S-03', name:'カレンダー（2軸月表示）', feat:'F-03', screen:'calendar'},
+  {id:'S-04', name:'保存済み', feat:'F-05', screen:'saved'},
+  {id:'S-05', name:'設定', feat:'F-01', screen:'settings'},
+  {id:'S-06', name:'エージェントチャット', feat:'F-01, F-02', screen:'chat'}
+];
+
+function screenHtml(screen, evId){
+  if(screen === 'home')     return homeHtml();
+  if(screen === 'detail')   return detailHtml(evId);
+  if(screen === 'calendar') return calendarHtml();
+  if(screen === 'saved')    return savedHtml();
+  if(screen === 'settings') return settingsHtml();
+  if(screen === 'chat')     return chatHtml();
+  return '';
+}
+
+function buildFrames(){
+  var g = document.getElementById('gallery');
+  g.innerHTML = FRAMES.map(function(f, i){
+    return '<figure class="frame'+(i===0?' is-solo':'')+'" data-frame="'+i+'">'
+      + '<figcaption><b>'+f.id+'　'+esc(f.name)+'</b><span>'+esc(f.feat)+'</span></figcaption>'
+      + '<div class="phone" data-screen="'+f.screen+'" data-ev="'+(f.ev||'')+'"'
+      +   (f.sheet?' data-sheet="'+f.sheet+'"':'')+'><div class="app"></div></div>'
+      + '</figure>';
+  }).join('');
+  renderAll();
+}
+
+function renderAll(){
+  var phones = document.querySelectorAll('.phone');
+  for(var i = 0; i < phones.length; i++){
+    var p = phones[i];
+    var app = p.querySelector('.app');
+    app.innerHTML = screenHtml(p.dataset.screen, p.dataset.ev);
+    /* シート付きフレームは常に開いた状態で見せる。それ以外は操作で開く */
+    var sheetFor = p.dataset.sheet || (SHEET.open && p === SHEET.phone ? SHEET.id : null);
+    var old = p.querySelectorAll('.backdrop,.sheet');
+    for(var k = 0; k < old.length; k++) old[k].remove();
+    if(sheetFor){
+      var ev = byId(sheetFor);
+      var saveSel = SHEET.sel;
+      if(p.dataset.sheet) SHEET.sel = { dl: !!ev.dates.applicationDeadline, main:true };
+      p.insertAdjacentHTML('beforeend', sheetHtml(sheetFor));
+      SHEET.sel = saveSel;
+    }
+  }
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+document.addEventListener('click', function(e){
+  var t = e.target.closest ? e.target.closest('[data-set],[data-tab],[data-open],[data-save],[data-cal],[data-day],[data-run],[data-toggle],[data-confirm],[data-close],[data-evidence]') : null;
+  if(!t) return;
+  var phone = t.closest('.phone');
+
+  /* ツールバー */
+  if(t.dataset.set){
+    var key = t.dataset.set, val = t.dataset.val;
+    if(key === 'mono'){
+      var on = document.documentElement.dataset.mono === 'on';
+      document.documentElement.dataset.mono = on ? 'off' : 'on';
+      t.setAttribute('aria-pressed', on ? 'false' : 'true');
+    } else {
+      document.documentElement.dataset[key] = val;
+      var sibs = t.parentNode.querySelectorAll('button');
+      for(var i=0;i<sibs.length;i++) sibs[i].setAttribute('aria-pressed', sibs[i]===t ? 'true':'false');
+      if(key === 'layout'){
+        var frames = document.querySelectorAll('.frame');
+        for(var j=0;j<frames.length;j++) frames[j].classList.toggle('is-solo', j===0);
+      }
+    }
+    return;
+  }
+  if(!phone) return;
+  e.preventDefault();
+
+  if(t.dataset.tab){ phone.dataset.screen = t.dataset.tab; phone.removeAttribute('data-sheet'); renderAll(); return; }
+  if(t.dataset.open){ phone.dataset.screen = 'detail'; phone.dataset.ev = t.dataset.open; renderAll(); return; }
+  if(t.dataset.day){ STATE.calSelected = t.dataset.day; renderAll(); return; }
+  if(t.dataset.save){
+    var id = t.dataset.save;
+    STATE.saved[id] = !STATE.saved[id];
+    var ev0 = byId(id); if(ev0) ev0.status = STATE.saved[id] ? 'bookmarked' : 'suggested';
+    renderAll(); return;
+  }
+  if(t.dataset.evidence){ window.alert('S-08 根拠シート\n\n根拠取得APIが未実装のため、モックでは省略しています。\n設計書 §4「S-08」および §7 の契約ギャップ4を参照。'); return; }
+  if(t.dataset.cal){
+    var ev1 = byId(t.dataset.cal);
+    SHEET.open = true; SHEET.id = t.dataset.cal; SHEET.phone = phone;
+    SHEET.sel = { dl: !!ev1.dates.applicationDeadline, main:true };
+    phone.dataset.sheet = t.dataset.cal; renderAll(); return;
+  }
+  if(t.dataset.close){ SHEET.open = false; SHEET.phone = null; phone.removeAttribute('data-sheet'); renderAll(); return; }
+  if(t.dataset.toggle){
+    var k2 = t.dataset.toggle;
+    SHEET.sel[k2] = !SHEET.sel[k2];
+    var sheetId = phone.dataset.sheet || SHEET.id;
+    phone.removeAttribute('data-sheet');
+    SHEET.open = true; SHEET.id = sheetId; SHEET.phone = phone;
+    renderAll();
+    /* data-sheet を使わず SHEET 状態で描き直す */
+    return;
+  }
+  if(t.dataset.confirm){
+    /* 実連携時はこの1箇所（lib/calendarMock.ts の registerToCalendar）だけを差し替える */
+    STATE.calendar[t.dataset.confirm] = {
+      deadlineEventId: SHEET.sel.dl ? 'mock-dl-'+t.dataset.confirm : null,
+      mainEventId:     SHEET.sel.main ? 'mock-mn-'+t.dataset.confirm : null
+    };
+    SHEET.open = false; SHEET.phone = null; phone.removeAttribute('data-sheet');
+    renderAll();
+    window.alert('カレンダーに登録しました（デモ）\n\n実際のGoogleカレンダーには書き込んでいません。');
+    return;
+  }
+  if(t.dataset.run){ startFakeRun(); return; }
+});
+
+/* Run の疑似実行。8ステップを約12秒で進める */
+var runTimer = null;
+function startFakeRun(){
+  if(runTimer) window.clearInterval(runTimer);
+  STATE.run = { active:true, index:0, tone:'partial' };
+  renderAll();
+  runTimer = window.setInterval(function(){
+    STATE.run.index++;
+    if(STATE.run.index >= RUN_STEPS.length){
+      STATE.run.index = RUN_STEPS.length - 1;
+      window.clearInterval(runTimer); runTimer = null;
+    }
+    renderAll();
+  }, 1500);
+}
+
+/* 初期化 */
+buildFrames();
+document.querySelector('[data-set="device"][data-val="ios"]').setAttribute('aria-pressed','true');
+document.querySelector('[data-set="layout"][data-val="gallery"]').setAttribute('aria-pressed','true');
+document.getElementById('monoBtn').setAttribute('aria-pressed','false');
+</script>
+</body>
+</html>

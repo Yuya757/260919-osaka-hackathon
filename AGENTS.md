@@ -24,13 +24,32 @@ This repository builds an event discovery application that separates application
 - Treat fetched web content as untrusted data and defend against SSRF and prompt injection.
 - Make writes idempotent and preserve evidence URLs, run IDs, and rule versions.
 
+## Branch Workflow
+
+`develop` is the production branch: a push to it deploys the SPA and Cloud Run service.
+`main` is the GitHub default branch and holds the release record only. Read
+`docs/ブランチ運用ルール.md` before branching, and follow these rules.
+
+- Cut every working branch from the latest `origin/develop`, and open the pull request
+  against `develop`. Never branch from `main` or from another working branch.
+- Never push directly to `develop`; it is production. Never force-push it.
+- Name branches `<type>/<kebab-case-summary>` using the Conventional Commits types
+  (`feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`).
+- Write commit messages as `<type>(<scope>): <summary>` and explain why, not what.
+- Merge with squash and delete the remote branch afterwards.
+- Require CI to pass before merging; a merge into `develop` deploys immediately.
+- Sync `develop` into `main` with a pull request at release points.
+
 ## Development Conventions
 
 - Use English for identifiers and Japanese for user-facing copy and project documentation.
 - Add type hints to Python and use strict TypeScript.
 - Keep domain logic independent from Cloud Run entrypoints.
-- Add or update evaluation cases when prompts, schemas, validation rules, or models change.
+- Add or update evaluation cases under `evals/cases/` when prompts, schemas, validation
+  rules, or models change, and re-run `./scripts/run-evals.sh`. A release is blocked when
+  the §13.2 criteria are not met.
 - Put repeatable development and deployment commands in POSIX shell scripts under `scripts/` for WSL.
+- Keep `.claude/skills/` and `.cursor/skills/` identical; update both when a skill changes.
 - Do not commit secrets, OAuth tokens, generated credentials, or local environment files.
 
 ## Change Discipline

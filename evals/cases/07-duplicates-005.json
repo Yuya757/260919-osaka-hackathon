@@ -1,0 +1,81 @@
+{
+  "caseId": "07-duplicates-005",
+  "categories": [
+    "duplicates"
+  ],
+  "note": "同名だが別年度。§6.7「別年度は別イベント」により併合しないこと。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://year5.example.jp/e/2026",
+      "query": "イベント 2026"
+    },
+    {
+      "url": "https://year5.example.jp/e/2027",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://year5.example.jp/e/2026",
+      "body": "<html><head><title>年次イベント 5</title></head><body><h1>年次イベント 5</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年10月11日 10:00</div><div>申込締切: 2026年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    },
+    {
+      "url": "https://year5.example.jp/e/2027",
+      "body": "<html><head><title>年次イベント 5</title></head><body><h1>年次イベント 5</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2027年10月11日 10:00</div><div>申込締切: 2027年9月28日 23:59</div><div>会場: 大阪城ホール</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://year5.example.jp/e/2026",
+        "eventStart": "2026-10-11T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-09-28T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ]
+      },
+      {
+        "officialUrl": "https://year5.example.jp/e/2027",
+        "eventStart": "2027-10-11T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2027-09-28T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "locationType": "offline",
+        "validationStatus": "rejected",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ]
+      }
+    ],
+    "duplicateGroups": [
+      [
+        "https://year5.example.jp/e/2026"
+      ],
+      [
+        "https://year5.example.jp/e/2027"
+      ]
+    ],
+    "notProduced": [
+      "https://year5.example.jp/e/2027"
+    ]
+  }
+}

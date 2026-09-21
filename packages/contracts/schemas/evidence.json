@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/evidence.json",
+  "title": "Evidence",
+  "description": "イベントの各フィールドを裏付ける根拠（Agent詳細要件定義書 §7.2）。ページ全文は保持せず、検証に必要な最小限の引用・ハッシュ・URLのみを保存する。",
+  "$defs": {
+    "EvidenceSourceType": {
+      "type": "string",
+      "enum": ["official", "organizer", "aggregator", "other"],
+      "description": "official=主催者の公式ページ, organizer=主催者の別ページ, aggregator=イベント集約サイト, other=それ以外"
+    },
+    "SupportedField": {
+      "type": "string",
+      "enum": [
+        "title",
+        "summary",
+        "organizer",
+        "category",
+        "location",
+        "dates.eventStart",
+        "dates.eventEnd",
+        "dates.applicationDeadline",
+        "officialUrl",
+        "applicationUrl"
+      ],
+      "description": "この根拠が裏付けているEventのフィールドパス。§13.2 の受入基準では title と dates.eventStart の被覆率100%を求める。"
+    },
+    "GroundingMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chunkIndex"],
+      "properties": {
+        "chunkIndex": { "type": "integer", "minimum": 0 },
+        "supportScore": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "sourceUrl",
+        "sourceType",
+        "supports",
+        "retrievedAt"
+      ],
+      "properties": {
+        "evidenceId": { "type": "string", "minLength": 1 },
+        "query": {
+          "type": ["string", "null"],
+          "description": "この根拠を得た検索クエリ"
+        },
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "canonicalUrl": { "type": ["string", "null"], "format": "uri" },
+        "sourceType": { "$ref": "#/$defs/EvidenceSourceType" },
+        "title": { "type": ["string", "null"] },
+        "excerpt": {
+          "type": ["string", "null"],
+          "maxLength": 500,
+          "description": "検証に必要な最小限の引用。ページ全文を入れてはならない（§7.2）。"
+        },
+        "supports": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/SupportedField" }
+        },
+        "retrievedAt": { "type": "string", "format": "date-time" },
+        "groundingMetadata": {
+          "oneOf": [
+            { "$ref": "#/$defs/GroundingMetadata" },
+            { "type": "null" }
+          ]
+        },
+        "contentHash": {
+          "type": ["string", "null"],
+          "description": "取得ページ本文のSHA-256。再取得時の変更検知に使う。"
+        }
+      }
+    },
+    "EvidenceListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "evidence"],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Evidence" }
+        }
+      }
+    }
+  }
+}

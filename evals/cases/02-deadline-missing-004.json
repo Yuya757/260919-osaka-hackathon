@@ -1,0 +1,49 @@
+{
+  "caseId": "02-deadline-missing-004",
+  "categories": [
+    "deadline_missing"
+  ],
+  "note": "申込締切がページに無い。推測せず null のままにし、partial になること。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン 生成AI カンファレンス ミートアップ ピッチ",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://nodeadline4.example.jp/e",
+      "query": "イベント 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://nodeadline4.example.jp/e",
+      "body": "<html><head><title>締切未掲載イベント 4 2026</title></head><body><h1>締切未掲載イベント 4 2026</h1><p>地域の課題を解くイベントです。参加者を募集しています。</p><div>開催日: 2026年11月13日 13:00</div><div>会場: 大阪イノベーションハブ</div><div>主催: Example</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://nodeadline4.example.jp/e",
+        "eventStart": "2026-11-13T13:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": null,
+        "applicationDeadlinePrecision": "unknown",
+        "locationType": "offline",
+        "validationStatus": "partial",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ],
+        "title": "締切未掲載イベント 4 2026"
+      }
+    ]
+  }
+}
