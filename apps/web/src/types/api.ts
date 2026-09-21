@@ -62,6 +62,8 @@ export type AgentRun = {
   verifiedCount?: number
   partialCount?: number
   quarantinedCount?: number
+  /** 終了済み・対象外・危険URLで除外された候補数（§6.6 rejected） */
+  rejectedCount?: number
   duplicateCount?: number
   errorCount?: number
   errorMessage?: string | null

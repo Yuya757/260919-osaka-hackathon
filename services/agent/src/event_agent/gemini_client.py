@@ -39,6 +39,15 @@ class GeminiClient:
     def demo_mode(self) -> bool:
         return self._client is None
 
+    def reset_call_budget(self) -> None:
+        """Reset the per-run model-call counter (§9.2「1 Run最大15回」).
+
+        The counter is instance state on a module singleton, so without this a
+        long-lived process silently stops calling the model after 15 calls in
+        total rather than 15 per run.
+        """
+        self._model_calls = 0
+
     async def generate_text(self, prompt: str, system: str | None = None) -> str | None:
         if not self._client or self._model_calls >= settings.max_model_calls:
             return None

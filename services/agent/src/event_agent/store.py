@@ -25,6 +25,15 @@ class MemoryStore:
         self._latest_events: list[ApiEvent] = []
         self._evidence: dict[str, Evidence] = {}
 
+    def reset(self) -> None:
+        """Drop all state. Used between evaluation cases so they cannot leak."""
+        with self._lock:
+            self._sessions.clear()
+            self._runs.clear()
+            self._events_by_run.clear()
+            self._latest_events = []
+            self._evidence.clear()
+
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
             if session_id and session_id in self._sessions:

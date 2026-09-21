@@ -111,6 +111,7 @@ class AgentRun(BaseModel):
     verified_count: int = Field(default=0, ge=0, alias="verifiedCount")
     partial_count: int = Field(default=0, ge=0, alias="partialCount")
     quarantined_count: int = Field(default=0, ge=0, alias="quarantinedCount")
+    rejected_count: int = Field(default=0, ge=0, alias="rejectedCount")
     duplicate_count: int = Field(default=0, ge=0, alias="duplicateCount")
     error_count: int = Field(default=0, ge=0, alias="errorCount")
     # ユーザー向けの要約のみ。内部情報を入れてはならない（§8.2）
