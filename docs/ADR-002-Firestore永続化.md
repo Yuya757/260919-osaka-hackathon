@@ -85,23 +85,39 @@ WebはFirestoreへ直接アクセスせず、Cloud Run の `/api` を通す。Cl
 - Emulator が無い環境では Firestore のテストが自動でスキップされるため、`pytest` 単体は
   Javaもネットワークも要らないままになっている。
 
-## 本番での有効化手順
+## 本番での有効化（2026-09-21 実施）
 
-このADRの変更では本番を切り替えていない。`develop` へのpushは本番デプロイであり、
-Firestoreデータベースもまだ存在しないため、実装とEmulator検証だけを入れている。
-有効にするときは次の順で行う。
+| 手順 | 状態 |
+| --- | --- |
+| Firestore Native データベースの作成（`(default)` / `asia-northeast1`） | 完了 |
+| Cloud Run 環境変数に `FIRESTORE_ENABLED=true` を追加 | 本ADR時点のPRで実施 |
+| `firestore.rules` / `firestore.indexes.json` の反映 | **未実施**（下記） |
 
-1. `./scripts/bootstrap-gcp.sh` を実行してFirestore Nativeデータベースを作る
-   （ロケーションは一度決めると変更できない。Cloud Runと同じ `asia-northeast1`）。
-2. `npx firebase-tools deploy --only firestore --project osaka-hackathon-260919` で
-   `firestore.rules` と `firestore.indexes.json` を反映する。
-3. `.github/workflows/deploy-develop.yml` の Cloud Run 環境変数に
-   `FIRESTORE_ENABLED=true` を足す。
-4. デプロイ後、`GET /api/health` とデモRunを1回流し、`agentRuns` と `events` に
-   ドキュメントが入ることを確認する。
+ランタイムサービスアカウント `event-agent-runtime` には `roles/datastore.user` が
+既に付いており、追加のIAM作業なしで動く。
 
-Cloud Run のランタイムサービスアカウント（`event-agent-runtime`）には
-`roles/datastore.user` が既に付いているため、追加のIAM作業は要らない。
+### Security Rules がまだ未反映である理由と、その間の安全性
+
+`firebaserules.googleapis.com` にルールのリリースが1件も存在しない状態だが、
+クライアント経路は既に塞がっている。認証なしでのREST読み取りを実測した結果は
+`403 PERMISSION_DENIED`（Missing or insufficient permissions）である。
+ルール未公開のFirestoreはクライアントアクセスを拒否する。
+
+したがって `firestore.rules` の反映は、防御の追加ではなく**意図をコードで固定する**
+ための作業になる。反映は `deploy-develop.yml` から行いたいが、デプロイ用サービス
+アカウント `github-deployer` に権限が無いため、先に次を実行する必要がある。
+
+```bash
+SA="github-deployer@osaka-hackathon-260919.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding osaka-hackathon-260919 \
+  --member="serviceAccount:$SA" --role="roles/firebaserules.admin" --condition=None
+gcloud projects add-iam-policy-binding osaka-hackathon-260919 \
+  --member="serviceAccount:$SA" --role="roles/datastore.indexAdmin" --condition=None
+```
+
+`scripts/bootstrap-gcp.sh` の `deployer_roles` には両方を追加済みなので、
+新規プロジェクトを作り直す場合は自動で付く。権限が付いたら、デプロイワークフローに
+`npx firebase-tools deploy --only firestore` のステップを足す。
 
 ## 残件
 
