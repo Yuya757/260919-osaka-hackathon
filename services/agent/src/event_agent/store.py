@@ -1,8 +1,25 @@
+"""Persistence for sessions, runs, events and evidence.
+
+Two backends implement :class:`Store`. ``MemoryStore`` keeps everything in the
+process and is what the demo, the unit tests and the evaluation harness use.
+``FirestoreStore`` (``event_agent.firestore_store``) writes the collections
+described in §7 and is selected when ``FIRESTORE_ENABLED`` is set.
+
+Both backends share the idempotency rules of §9.3, which live here as free
+functions so the two implementations cannot drift:
+
+- a run is identified by its ``idempotencyKey``; creating a run twice with the
+  same key returns the first run instead of starting a second one;
+- an event is identified by its ``dedupKey``; re-saving one keeps the identity
+  and the user's own state, and only moves ``lastSeenAt`` forward.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
+from typing import Protocol
 from uuid import uuid4
 
 from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
@@ -16,22 +33,100 @@ class SessionState:
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+def merge_saved_event(incoming: ApiEvent, existing: ApiEvent | None) -> ApiEvent:
+    """Fold a freshly collected event into what is already stored (§9.3).
+
+    The incoming event carries the newer facts, so it wins on dates, evidence
+    and ranking. What it must not do is reset identity or overwrite the user:
+    ``eventId`` and ``firstSeenAt`` are what the UI and Calendar entries point
+    at, and ``status``/``googleCalendarEventIds`` record decisions the user
+    made. A re-run that clobbered those would un-bookmark saved events.
+    """
+    if existing is None:
+        return incoming
+    return incoming.model_copy(
+        update={
+            "event_id": existing.event_id,
+            "first_seen_at": existing.first_seen_at,
+            "status": existing.status,
+            "google_calendar_event_ids": existing.google_calendar_event_ids,
+        }
+    )
+
+
+def display_order(events: list[ApiEvent]) -> list[ApiEvent]:
+    """Rank order (§6.8) with a stable tiebreak.
+
+    ``MemoryStore`` could return insertion order, but Firestore queries come
+    back in document-id order, so both backends sort explicitly here. Without
+    the ``eventId`` tiebreak the two would disagree whenever two events score
+    the same, and the store contract test could not compare them.
+    """
+    return sorted(
+        events,
+        key=lambda e: (
+            -(e.recommendation.score if e.recommendation else 0),
+            e.event_id,
+        ),
+    )
+
+
+class Store(Protocol):
+    """The persistence surface the workflow and the API depend on."""
+
+    def reset(self) -> None:
+        """Drop all state. Only for tests and between evaluation cases."""
+
+    def get_or_create_session(self, session_id: str | None) -> SessionState: ...
+
+    def save_session(self, session: SessionState) -> None: ...
+
+    def create_run(self, run: AgentRun) -> AgentRun:
+        """Persist a queued run, or return the run that already holds its key.
+
+        Callers must compare ``run_id`` on the result: a different id means the
+        run already existed and no new workflow should be started (§9.3).
+        """
+
+    def update_run(self, run: AgentRun) -> AgentRun: ...
+
+    def get_run(self, run_id: str) -> AgentRun | None: ...
+
+    def save_events(self, run_id: str, events: list[ApiEvent]) -> list[ApiEvent]:
+        """Upsert by ``dedupKey`` and return what is now stored, in order."""
+
+    def save_evidence(self, run_id: str, evidence: list[Evidence]) -> None: ...
+
+    def get_evidence(self, run_id: str, evidence_ids: list[str]) -> list[Evidence]:
+        """Evidence lives under the run that collected it (§7.2), so the run id
+        is required; an event's ``evidenceIds`` always belong to its
+        ``sourceRunId`` because deduplication only merges within one run."""
+
+    def get_event(self, event_id: str) -> ApiEvent | None: ...
+
+    def list_events(self, source_run_id: str | None = None) -> list[ApiEvent]:
+        """Events of one run, or of the most recent run when no id is given."""
+
+
 class MemoryStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._sessions: dict[str, SessionState] = {}
         self._runs: dict[str, AgentRun] = {}
-        self._events_by_run: dict[str, list[ApiEvent]] = {}
-        self._latest_events: list[ApiEvent] = []
-        self._evidence: dict[str, Evidence] = {}
+        self._runs_by_key: dict[str, str] = {}
+        self._events_by_run: dict[str, list[str]] = {}
+        self._events_by_dedup_key: dict[str, ApiEvent] = {}
+        self._latest_run_id: str | None = None
+        self._evidence: dict[tuple[str, str], Evidence] = {}
 
     def reset(self) -> None:
-        """Drop all state. Used between evaluation cases so they cannot leak."""
         with self._lock:
             self._sessions.clear()
             self._runs.clear()
+            self._runs_by_key.clear()
             self._events_by_run.clear()
-            self._latest_events = []
+            self._events_by_dedup_key.clear()
+            self._latest_run_id = None
             self._evidence.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
@@ -49,7 +144,11 @@ class MemoryStore:
 
     def create_run(self, run: AgentRun) -> AgentRun:
         with self._lock:
+            existing_id = self._runs_by_key.get(run.idempotency_key)
+            if existing_id and existing_id in self._runs:
+                return self._runs[existing_id]
             self._runs[run.run_id] = run
+            self._runs_by_key[run.idempotency_key] = run.run_id
             return run
 
     def update_run(self, run: AgentRun) -> AgentRun:
@@ -61,27 +160,66 @@ class MemoryStore:
         with self._lock:
             return self._runs.get(run_id)
 
-    def save_events(self, run_id: str, events: list[ApiEvent]) -> None:
+    def save_events(self, run_id: str, events: list[ApiEvent]) -> list[ApiEvent]:
         with self._lock:
-            self._events_by_run[run_id] = events
-            self._latest_events = events
+            stored: list[ApiEvent] = []
+            for event in events:
+                merged = merge_saved_event(
+                    event, self._events_by_dedup_key.get(event.dedup_key)
+                )
+                self._events_by_dedup_key[merged.dedup_key] = merged
+                stored.append(merged)
+            self._events_by_run[run_id] = [e.dedup_key for e in stored]
+            self._latest_run_id = run_id
+            return stored
 
-    def save_evidence(self, evidence: list[Evidence]) -> None:
+    def save_evidence(self, run_id: str, evidence: list[Evidence]) -> None:
         with self._lock:
             for item in evidence:
-                self._evidence[item.evidence_id] = item
+                self._evidence[(run_id, item.evidence_id)] = item
 
-    def get_evidence(self, evidence_ids: list[str]) -> list[Evidence]:
+    def get_evidence(self, run_id: str, evidence_ids: list[str]) -> list[Evidence]:
         with self._lock:
             return [
-                self._evidence[eid] for eid in evidence_ids if eid in self._evidence
+                self._evidence[(run_id, eid)]
+                for eid in evidence_ids
+                if (run_id, eid) in self._evidence
             ]
+
+    def get_event(self, event_id: str) -> ApiEvent | None:
+        with self._lock:
+            for event in self._events_by_dedup_key.values():
+                if event.event_id == event_id:
+                    return event
+            return None
 
     def list_events(self, source_run_id: str | None = None) -> list[ApiEvent]:
         with self._lock:
-            if source_run_id:
-                return list(self._events_by_run.get(source_run_id, []))
-            return list(self._latest_events)
+            run_id = source_run_id or self._latest_run_id
+            if run_id is None:
+                return []
+            return display_order(
+                [
+                    self._events_by_dedup_key[key]
+                    for key in self._events_by_run.get(run_id, [])
+                    if key in self._events_by_dedup_key
+                ]
+            )
 
 
-store = MemoryStore()
+def create_store() -> Store:
+    """Pick the backend from configuration.
+
+    Imported lazily so that a demo or test run never needs the Firestore
+    client library installed or a project configured.
+    """
+    from event_agent.config import get_settings
+
+    if get_settings().firestore_enabled:
+        from event_agent.firestore_store import FirestoreStore
+
+        return FirestoreStore()
+    return MemoryStore()
+
+
+store: Store = create_store()

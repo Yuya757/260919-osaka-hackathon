@@ -88,7 +88,9 @@ async def run_case(case: EvalCase) -> CaseResult:
             case.preferences, True, now=case.clock, trajectory=trajectory
         )
     events = store.list_events(run.run_id)
-    evidence = {e.event_id: store.get_evidence(e.evidence_ids) for e in events}
+    evidence = {
+        e.event_id: store.get_evidence(run.run_id, e.evidence_ids) for e in events
+    }
     return CaseResult(
         case=case, run=run, events=events, trajectory=trajectory,
         evidence_by_event=evidence,

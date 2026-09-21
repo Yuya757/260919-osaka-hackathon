@@ -69,12 +69,16 @@ def _filter_catalog(preferences: UserPreferences) -> list[ApiEvent]:
 
 
 def _rank(
-    events: list[ApiEvent], preferences: UserPreferences, *, now: datetime
+    events: list[ApiEvent],
+    preferences: UserPreferences,
+    *,
+    run_id: str,
+    now: datetime,
 ) -> list[ApiEvent]:
     """Apply the §6.8 deterministic score and sort by it."""
     ranked: list[ApiEvent] = []
     for event in events:
-        evidence = store.get_evidence(event.evidence_ids)
+        evidence = store.get_evidence(run_id, event.evidence_ids)
         score = score_recommendation(event, evidence, preferences, now=now)
         reason = event.recommendation.reason if event.recommendation else ""
         ranked.append(
@@ -189,7 +193,7 @@ def _validate(
             now=now,
             target_year=target_year,
         )
-        store.save_evidence(evidence)
+        store.save_evidence(run_id, evidence)
         scored = scored.model_copy(
             update={"evidence_ids": [e.evidence_id for e in evidence]}
         )
@@ -278,7 +282,7 @@ async def execute_collect_workflow(
         events, duplicate_count = _dedupe(buckets.displayable())
 
         await _set_step(run, "rank")
-        events = _rank(events, normalized, now=now)
+        events = _rank(events, normalized, run_id=run.run_id, now=now)
 
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
@@ -329,7 +333,11 @@ def schedule_collect_run(
     idempotency_key: str | None = None,
 ) -> AgentRun:
     run = _new_run(idempotency_key)
-    store.create_run(run)
+    stored = store.create_run(run)
+    if stored.run_id != run.run_id:
+        # The key was already claimed. Return that run rather than collecting
+        # the same thing twice (§9.3).
+        return stored
     asyncio.create_task(execute_collect_workflow(run.run_id, preferences, force_refresh))
     return run
 
@@ -343,7 +351,7 @@ async def run_collect_workflow(
 ) -> AgentRun:
     """Run workflow to completion (used from chat and from the evaluation)."""
     run = _new_run(None)
-    store.create_run(run)
+    run = store.create_run(run)
     await execute_collect_workflow(
         run.run_id, preferences, force_refresh, now=now, trajectory=trajectory
     )

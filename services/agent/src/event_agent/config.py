@@ -19,6 +19,10 @@ class Settings(BaseSettings):
         "https://osaka-hackathon-260919.web.app"
     )
     port: int = 8080
+    # Firestore永続化（§7）。既定はOFFで、デモと評価はインメモリのまま動く。
+    # Emulatorに繋ぐときは FIRESTORE_EMULATOR_HOST をクライアント側が読む。
+    firestore_enabled: bool = False
+    firestore_database: str = "(default)"
     max_search_queries: int = 8
     max_candidates: int = 30
     max_model_calls: int = 15
