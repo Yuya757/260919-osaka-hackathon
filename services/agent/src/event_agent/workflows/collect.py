@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from event_agent.config import settings
@@ -19,7 +20,13 @@ from event_agent.enrichment import (
 from event_agent.extraction import extract_candidates
 from event_agent.gemini_client import gemini_client
 from event_agent.page_fetcher import FetchedPage, SearchHit, page_fetcher
-from event_agent.schemas import AgentRun, ApiEvent, Recommendation, UserPreferences
+from event_agent.schemas import (
+    DEMO_USER_ID,
+    AgentRun,
+    ApiEvent,
+    Recommendation,
+    UserPreferences,
+)
 from event_agent.store import store
 from event_agent.trajectory import ToolTrajectory
 
@@ -316,16 +323,39 @@ async def execute_collect_workflow(
         raise exc
 
 
-def _new_run(idempotency_key: str | None) -> AgentRun:
+JST = timezone(timedelta(hours=9))
+
+
+def _new_run(
+    idempotency_key: str | None,
+    *,
+    trigger_type: str = "manual",
+    user_id: str = DEMO_USER_ID,
+) -> AgentRun:
     """Create a queued run. Manual runs take the client key, else server-issued (§9.3)."""
     return AgentRun(
         runId=str(uuid4()),
+        userId=user_id,
         idempotencyKey=idempotency_key or str(uuid4()),
-        triggerType="manual",
+        triggerType=trigger_type,
         status="queued",
         currentStep="queued",
         model=settings.gemini_model,
     )
+
+
+def scheduled_idempotency_key(
+    user_id: str, *, now: datetime, schedule_version: str
+) -> str:
+    """§9.3 の定期Runキー: ``userId + JST日付 + scheduleVersion``.
+
+    The date is taken in JST because the schedule is "毎朝7時" in Japan; using
+    UTC would give two different keys to a single Japanese morning whenever the
+    job runs before 09:00 JST, which is exactly when it is meant to run.
+    """
+    jst_date = now.astimezone(JST).date().isoformat()
+    material = f"{user_id}|{jst_date}|{schedule_version}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def schedule_collect_run(
@@ -358,3 +388,28 @@ async def run_collect_workflow(
     )
     updated = store.get_run(run.run_id)
     return updated or run
+
+
+async def run_daily_collection(
+    preferences: UserPreferences,
+    *,
+    user_id: str = DEMO_USER_ID,
+    now: datetime | None = None,
+) -> tuple[AgentRun, bool]:
+    """定期収集（§14 Phase 2 の Cloud Run Job が呼ぶ想定）。
+
+    Returns the run and whether this call is the one that started it. The key
+    is derived, not random, so a retried Job execution, an overlapping schedule
+    and a duplicate trigger all land on the same document and only the first
+    one collects (§9.3).
+    """
+    now = now or datetime.now(timezone.utc)
+    key = scheduled_idempotency_key(
+        user_id, now=now, schedule_version=settings.run_schedule_version
+    )
+    run = _new_run(key, trigger_type="scheduled", user_id=user_id)
+    stored = store.create_run(run)
+    if stored.run_id != run.run_id:
+        return stored, False
+    await execute_collect_workflow(run.run_id, preferences, False, now=now)
+    return store.get_run(run.run_id) or run, True
