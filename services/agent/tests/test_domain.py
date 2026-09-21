@@ -6,16 +6,14 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from event_agent.enrichment import (
-    derive_validation_status,
-    group_duplicates,
-    merge_group,
+from event_agent.domain.dedup import group_duplicates, merge_group
+from event_agent.domain.normalize import (
     normalize_title,
     normalize_url,
-    score_event,
-    score_recommendation,
     title_similarity,
 )
+from event_agent.domain.ranking import score_recommendation
+from event_agent.domain.validation import derive_validation_status, score_event
 from event_agent.schemas import (
     ApiEvent,
     EventDates,

@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from event_agent.enrichment import compute_dedup_key, normalize_title
+from event_agent.domain.normalize import compute_dedup_key, normalize_title
 
 DEMO_USER_ID = "demo-user"
 
