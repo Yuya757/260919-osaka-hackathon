@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from event_agent.page_fetcher import FixturePage, SearchHit
+from event_agent.clients.page_fetcher import FixturePage, SearchHit
 from event_agent.schemas import UserPreferences
 
 

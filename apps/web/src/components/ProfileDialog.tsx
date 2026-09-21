@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { emptyProfile, genres, isProfile, prefectures } from './profile'
-import type { Profile } from './profile'
+import { emptyProfile, genres, isProfile, prefectures } from '../lib/profile'
+import type { Profile } from '../lib/profile'
 
 type Props = {
   profile: Profile | null

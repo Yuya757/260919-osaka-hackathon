@@ -8,8 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from event_agent.agents.chat import handle_chat
 from event_agent.config import get_settings
-from event_agent.demo_catalog import demo_catalog
-from event_agent.ekispert import (
+from event_agent.demo.catalog import demo_catalog
+from event_agent.clients.ekispert import (
     EkispertError,
     EkispertNotConfigured,
     RouteNotFound,
@@ -28,7 +28,7 @@ from event_agent.schemas import (
     EvidenceListResponse,
     HealthResponse,
 )
-from event_agent.store import store
+from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 
 logging.basicConfig(level=logging.INFO)

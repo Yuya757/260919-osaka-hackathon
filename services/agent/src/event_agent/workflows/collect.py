@@ -8,15 +8,15 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from event_agent.config import settings
-from event_agent.demo_catalog import demo_catalog
-from event_agent.demo_evidence import demo_evidence
-from event_agent.demo_pages import DEMO_PAGE_SOURCES, demo_search_hits
+from event_agent.demo.catalog import demo_catalog
+from event_agent.demo.evidence import demo_evidence
+from event_agent.demo.pages import DEMO_PAGE_SOURCES, demo_search_hits
 from event_agent.domain.dedup import group_duplicates, merge_group
 from event_agent.domain.ranking import score_recommendation
 from event_agent.domain.validation import score_event
 from event_agent.extraction import extract_candidates
-from event_agent.gemini_client import gemini_client
-from event_agent.page_fetcher import FetchedPage, SearchHit, page_fetcher
+from event_agent.clients.gemini import gemini_client
+from event_agent.clients.page_fetcher import FetchedPage, SearchHit, page_fetcher
 from event_agent.schemas import (
     DEMO_USER_ID,
     AgentRun,
@@ -25,7 +25,7 @@ from event_agent.schemas import (
     UserPreferences,
 )
 from event_agent.security import prompt_guard
-from event_agent.store import store
+from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
 
 logger = logging.getLogger(__name__)

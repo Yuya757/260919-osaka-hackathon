@@ -13,9 +13,9 @@ from typing import Iterator
 
 from event_agent.config import settings
 from event_agent.evaluation.cases import EvalCase
-from event_agent.page_fetcher import FixturePageSource, PageFetcher, SearchHit
+from event_agent.clients.page_fetcher import FixturePageSource, PageFetcher, SearchHit
 from event_agent.schemas import AgentRun, ApiEvent
-from event_agent.store import store
+from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
 
 

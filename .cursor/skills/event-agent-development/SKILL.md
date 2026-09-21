@@ -29,6 +29,9 @@ Do not combine Google Search Grounding with non-search tools in one Gemini reque
 ## Implementation rules
 
 - Keep orchestration and domain logic independent from FastAPI and Cloud Run entrypoints.
+- Put modules in the package that matches their layer: `domain/` for deterministic rules,
+  `storage/` for persistence, `clients/` for outbound I/O, `security/` for input defences,
+  `demo/` for fixtures. Only `config`, `schemas` and `trajectory` sit at the package root.
 - Define external data with Pydantic models and publish shared JSON Schema under `packages/contracts/`.
 - Make model ID, limits, confidence thresholds, prompt versions, and rule versions configurable.
 - Store unknown values as `null`; never invent missing years, deadlines, venues, or URLs.

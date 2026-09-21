@@ -2,7 +2,7 @@
 
 Two backends implement :class:`Store`. ``MemoryStore`` keeps everything in the
 process and is what the demo, the unit tests and the evaluation harness use.
-``FirestoreStore`` (``event_agent.firestore_store``) writes the collections
+``FirestoreStore`` (``event_agent.storage.firestore_store``) writes the collections
 described in §7 and is selected when ``FIRESTORE_ENABLED`` is set.
 
 Both backends share the idempotency rules of §9.3, which live here as free
@@ -216,7 +216,7 @@ def create_store() -> Store:
     from event_agent.config import get_settings
 
     if get_settings().firestore_enabled:
-        from event_agent.firestore_store import FirestoreStore
+        from event_agent.storage.firestore_store import FirestoreStore
 
         return FirestoreStore()
     return MemoryStore()
