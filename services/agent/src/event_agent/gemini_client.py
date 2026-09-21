@@ -9,6 +9,7 @@ from typing import Any
 
 from event_agent.config import settings
 from event_agent.schemas import UserPreferences
+from event_agent.security import prompt_guard
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,9 @@ async def extract_preferences_from_message(
         interests = msg
         for noise in ("探して", "更新して", "ください", "お願い", "見つけて"):
             interests = interests.replace(noise, "")
-        interests = interests.strip(" 、。") or current.interests_prompt
+        interests = prompt_guard.sanitize_free_text(
+            interests.strip(" 、。"), fallback=current.interests_prompt
+        )
         return UserPreferences(
             interestsPrompt=interests,
             targetYear=target_year,
@@ -174,20 +177,32 @@ async def extract_preferences_from_message(
             locations=locations or current.locations,
         )
 
-    system = (
-        "Extract event search preferences from Japanese text. "
-        "Return JSON: interestsPrompt, targetYear, onlineAllowed, locations (array)."
+    system = prompt_guard.defended_system_prompt(
+        "Extract event search preferences from the delimited Japanese text. "
+        "Return JSON only: interestsPrompt, targetYear, onlineAllowed, locations (array)."
+    )
+    message_block, _ = prompt_guard.wrap_untrusted(
+        msg, label="UNTRUSTED_USER_MESSAGE", source="chat"
     )
     raw = await gemini_client.generate_text(
-        json.dumps({"current": current.model_dump(by_alias=True), "message": msg}, ensure_ascii=False),
+        json.dumps({"current": current.model_dump(by_alias=True)}, ensure_ascii=False)
+        + "\n"
+        + message_block,
         system=system,
     )
+    if prompt_guard.leaked_canary(raw):
+        logger.warning("CANARY_LEAKED in preference extraction")
+        raw = None
     if raw:
         try:
             cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
             data = json.loads(cleaned)
             return UserPreferences(
-                interestsPrompt=str(data.get("interestsPrompt", current.interests_prompt)),
+                # モデルの出力もそのままは信用しない（§7.5と同じ姿勢）
+                interestsPrompt=prompt_guard.sanitize_free_text(
+                    str(data.get("interestsPrompt", "")),
+                    fallback=current.interests_prompt,
+                ),
                 targetYear=int(data.get("targetYear", target_year)),
                 onlineAllowed=bool(data.get("onlineAllowed", online_allowed)),
                 locations=list(data.get("locations", locations or current.locations)),
@@ -196,7 +211,9 @@ async def extract_preferences_from_message(
             pass
 
     return UserPreferences(
-        interestsPrompt=msg or current.interests_prompt,
+        interestsPrompt=prompt_guard.sanitize_free_text(
+            msg, fallback=current.interests_prompt
+        ),
         targetYear=target_year,
         onlineAllowed=online_allowed,
         locations=locations or current.locations,

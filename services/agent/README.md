@@ -55,6 +55,18 @@ and scheduled runs, the §9.2 per-run quotas, and the §11.1 acceptance latency.
 It runs against both store backends. See
 [ADR-003](../../docs/ADR-003-定期Runのロックと負荷試験.md).
 
+## Untrusted input
+
+`security/prompt_guard.py` holds the §10.1 defences. External text reaches the
+model only inside a nonced delimiter, system prompts are sandwiched between two
+copies of the defence and carry a canary, and text is scanned deterministically
+first.
+
+Detection is asymmetric on purpose: a chat message that trips a `block` rule is
+refused without a model call, while a fetched page is only recorded. Dropping
+the page would let anyone hide a legitimate event by injecting one line into it.
+See [ADR-004](../../docs/ADR-004-プロンプトインジェクション対策.md).
+
 ## Scheduled collection
 
 `entrypoints/job.py` is the Cloud Run Job entry point for the daily run

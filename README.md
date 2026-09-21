@@ -48,6 +48,7 @@
 - 手動収集はCloud Tasks経由、定期収集はCloud SchedulerとCloud Run Jobで実行する
 - Calendarへの書き込みはユーザーの明示操作後にのみ行う
 - 日時情報には根拠URLを保持し、不明な値を推測しない
+- 取得ページとユーザー発話はモデルへの入力として信頼しない（[ADR-004](docs/ADR-004-プロンプトインジェクション対策.md)）
 - UIはモバイルファーストで実装し、PCでは中央に狭幅で表示する（[画面設計書](docs/画面設計書_スマホ.md)）
 - 画面遷移は react-router で行い、端末の戻る操作が効く状態を保つ
 - 日時は必ずイベントの `dates.timezone` で解釈して表示する
@@ -62,6 +63,7 @@
 - [ADR-001 駅すぱあと経路検索](docs/ADR-001-駅すぱあと経路検索.md)
 - [ADR-002 Firestore永続化](docs/ADR-002-Firestore永続化.md) — コレクション構成と §9.3 の冪等性
 - [ADR-003 定期Runのロックと負荷試験](docs/ADR-003-定期Runのロックと負荷試験.md) — §13.3 Load と §9.2 のRun単位クォータ
+- [ADR-004 プロンプトインジェクション対策](docs/ADR-004-プロンプトインジェクション対策.md) — 検出・デリミタ・カナリアの3層と、ページと発話で扱いを分ける理由
 - [ブランチ運用ルール](docs/ブランチ運用ルール.md) — `develop` が本番。作業ブランチは `develop` から切る
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
@@ -81,9 +83,9 @@ npm run dev
 テストと評価データセット:
 
 ```bash
-cd services/agent && pytest         # 133件（Firestoreの36件は自動スキップ）
+cd services/agent && pytest         # 184件（Firestoreの44件は自動スキップ）
 ./scripts/run-evals.sh              # 61ケース、§13.2 の受入基準で判定
-./scripts/run-integration-tests.sh  # Firestore Emulator上で169件（Java必須、§13.3）
+./scripts/run-integration-tests.sh  # Firestore Emulator上で228件（Java必須、§13.3）
 ```
 
 ```bash
