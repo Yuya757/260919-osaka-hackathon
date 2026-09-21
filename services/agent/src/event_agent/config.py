@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     # 高スコアの別イベント（2026 vs 2027 = 0.952、Kansai vs Kanto = 0.878）は
     # 開催開始日と地域の AND 条件で弾くので、この閾値でも誤併合しない。
     title_similarity_threshold: float = 0.80
-    prompt_version: str = "chat-1.0.0"
+    # 1.1.0: チャットのシステム命令にサンドイッチ防御とカナリアを追加（§10.1）
+    prompt_version: str = "chat-1.1.0"
     extraction_schema_version: str = "extract-1.0.0"
     validation_rule_version: str = "1.0.0"
     # 抽出が0件のときデモカタログで補う。実運用とデモの両立用。評価では False。
