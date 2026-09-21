@@ -10,7 +10,7 @@ Kept in sync with ``demo_catalog.py`` so both paths describe the same events.
 
 from __future__ import annotations
 
-from event_agent.page_fetcher import FixturePage, SearchHit
+from event_agent.clients.page_fetcher import FixturePage, SearchHit
 
 
 def _page(

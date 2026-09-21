@@ -26,7 +26,7 @@ def frozen_now() -> datetime:
 @pytest.fixture
 def reset_store():
     """Clear the in-process store before and after a test."""
-    from event_agent.store import store
+    from event_agent.storage.store import store
 
     store.reset()
     yield store
@@ -36,11 +36,11 @@ def reset_store():
 # --- store backends -------------------------------------------------------
 #
 # Every module binds ``store`` at import time, so swapping the backend has to
-# reach all of them; patching only ``event_agent.store`` would leave the
+# reach all of them; patching only ``event_agent.storage.store`` would leave the
 # workflow running on whichever backend it imported.
 
 STORE_HOLDERS = (
-    "event_agent.store",
+    "event_agent.storage.store",
     "event_agent.workflows.collect",
     "event_agent.entrypoints.service",
     "event_agent.agents.chat",
@@ -67,7 +67,7 @@ def build_firestore_store():
     pytest.importorskip("google.cloud.firestore")
     from google.cloud import firestore
 
-    from event_agent.firestore_store import FirestoreStore
+    from event_agent.storage.firestore_store import FirestoreStore
 
     backend = FirestoreStore(
         firestore.Client(project=EMULATOR_PROJECT, database="(default)")
@@ -88,7 +88,7 @@ def firestore_backend(monkeypatch):
 @pytest.fixture(params=["memory", "firestore"])
 def store_backend(request, monkeypatch):
     """Both backends. The Firestore parameter skips without the emulator."""
-    from event_agent.store import MemoryStore
+    from event_agent.storage.store import MemoryStore
 
     if request.param == "memory":
         backend = MemoryStore()

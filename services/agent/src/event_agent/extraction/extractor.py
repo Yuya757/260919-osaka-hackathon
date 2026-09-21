@@ -14,7 +14,7 @@ from datetime import datetime
 
 from event_agent.extraction import dates as d
 from event_agent.extraction.html_text import to_text
-from event_agent.page_fetcher import FetchedPage, SearchHit
+from event_agent.clients.page_fetcher import FetchedPage, SearchHit
 from event_agent.schemas import (
     ApiEvent,
     EventDates,

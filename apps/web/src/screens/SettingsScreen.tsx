@@ -2,10 +2,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
-import { ProfileDialog } from '../ProfileDialog'
-import { loadProfile, profileStorageKey } from '../profile'
+import { ProfileDialog } from '../components/ProfileDialog'
+import { loadProfile, profileStorageKey } from '../lib/profile'
 import { RunProgressBanner } from '../components/RunProgressBanner'
-import type { Profile } from '../profile'
+import type { Profile } from '../lib/profile'
 
 export function SettingsScreen() {
   const { run, calendar } = useAppState()

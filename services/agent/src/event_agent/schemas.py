@@ -7,7 +7,7 @@ from event_agent.domain.normalize import compute_dedup_key, normalize_title
 
 DEMO_USER_ID = "demo-user"
 
-from event_agent.ekispert import RouteSummary
+from event_agent.clients.ekispert import RouteSummary
 
 
 class UserPreferences(BaseModel):

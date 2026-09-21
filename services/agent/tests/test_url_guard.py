@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from event_agent.url_guard import UnsafeUrl, assert_safe_url, classify_address
+from event_agent.security.url_guard import UnsafeUrl, assert_safe_url, classify_address
 
 
 @pytest.mark.parametrize(
@@ -54,7 +54,7 @@ async def test_allows_public(url: str) -> None:
 @pytest.mark.asyncio
 async def test_dns_result_is_checked(monkeypatch: pytest.MonkeyPatch) -> None:
     """公開ホスト名が内部アドレスに解決されるケースを拒否する。"""
-    monkeypatch.setattr("event_agent.url_guard._resolve", lambda host, port: ["10.1.2.3"])
+    monkeypatch.setattr("event_agent.security.url_guard._resolve", lambda host, port: ["10.1.2.3"])
     with pytest.raises(UnsafeUrl) as excinfo:
         await assert_safe_url("https://rebind.example.com/x", resolve=True)
     assert excinfo.value.reason == "private"
@@ -64,7 +64,7 @@ async def test_dns_result_is_checked(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_one_bad_address_rejects_all(monkeypatch: pytest.MonkeyPatch) -> None:
     """複数レコードのうち1つでも内部なら拒否する（DNS rebinding対策）。"""
     monkeypatch.setattr(
-        "event_agent.url_guard._resolve", lambda host, port: ["93.184.216.34", "127.0.0.1"]
+        "event_agent.security.url_guard._resolve", lambda host, port: ["93.184.216.34", "127.0.0.1"]
     )
     with pytest.raises(UnsafeUrl) as excinfo:
         await assert_safe_url("https://mixed.example.com/x", resolve=True)
@@ -84,7 +84,7 @@ async def test_fixture_source_enforces_the_guard() -> None:
 
     ここを素通りさせると、評価がSSRF防御の有無を区別できなくなる。
     """
-    from event_agent.page_fetcher import FetchRejected, FixturePage, FixturePageSource
+    from event_agent.clients.page_fetcher import FetchRejected, FixturePage, FixturePageSource
 
     bad = "http://169.254.169.254/latest/meta-data/"
     source = FixturePageSource({bad: FixturePage(body="<html><body>secret</body></html>")})
