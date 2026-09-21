@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,7 @@ from event_agent.enrichment import (
 from event_agent.extraction import extract_candidates
 from event_agent.gemini_client import gemini_client
 from event_agent.page_fetcher import FetchedPage, SearchHit, page_fetcher
+from event_agent.security import prompt_guard
 from event_agent.schemas import (
     DEMO_USER_ID,
     AgentRun,
@@ -29,6 +31,8 @@ from event_agent.schemas import (
 )
 from event_agent.store import store
 from event_agent.trajectory import ToolTrajectory
+
+logger = logging.getLogger(__name__)
 
 
 async def _set_step(run: AgentRun, step: str) -> AgentRun:
@@ -152,10 +156,35 @@ async def _fetch_step(
     for hit in hits[: settings.max_candidates]:
         result = await page_fetcher.fetch(hit.url, trajectory)
         if isinstance(result, FetchedPage):
+            _note_injection_attempt(result, trajectory)
             pages.append(result)
         else:
             rejected.append(f"{result.reason}:{hit.url}")
     return pages, rejected
+
+
+def _note_injection_attempt(
+    page: FetchedPage, trajectory: ToolTrajectory | None
+) -> None:
+    """Record injected instructions in a page without discarding the page.
+
+    §13.2 asks for「悪意あるページによるTool逸脱 0件」— that the agent ignores the
+    instruction, not that it drops the event. Quarantining on detection would
+    let anyone hide a legitimate event from users by adding one line to its
+    page, so detection here is observational: it goes to the log and to the
+    tool trajectory that the evaluation inspects.
+    """
+    findings = prompt_guard.scan(page.text)
+    if not findings:
+        return
+    codes = prompt_guard.codes(findings)
+    logger.warning(
+        "PROMPT_INJECTION_IN_PAGE url=%s codes=%s", page.final_url, codes
+    )
+    if trajectory is not None:
+        trajectory.record(
+            "detect_injection", page.final_url, outcome=",".join(codes)
+        )
 
 
 @dataclass
