@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -12,16 +11,12 @@ from event_agent.config import settings
 from event_agent.demo_catalog import demo_catalog
 from event_agent.demo_evidence import demo_evidence
 from event_agent.demo_pages import DEMO_PAGE_SOURCES, demo_search_hits
-from event_agent.enrichment import (
-    group_duplicates,
-    merge_group,
-    score_event,
-    score_recommendation,
-)
+from event_agent.domain.dedup import group_duplicates, merge_group
+from event_agent.domain.ranking import score_recommendation
+from event_agent.domain.validation import score_event
 from event_agent.extraction import extract_candidates
 from event_agent.gemini_client import gemini_client
 from event_agent.page_fetcher import FetchedPage, SearchHit, page_fetcher
-from event_agent.security import prompt_guard
 from event_agent.schemas import (
     DEMO_USER_ID,
     AgentRun,
@@ -29,6 +24,7 @@ from event_agent.schemas import (
     Recommendation,
     UserPreferences,
 )
+from event_agent.security import prompt_guard
 from event_agent.store import store
 from event_agent.trajectory import ToolTrajectory
 
@@ -207,7 +203,7 @@ def _validate(
 ) -> Buckets:
     """Attach evidence, score confidence app-side, and bucket by status.
 
-    Confidence and validationStatus are derived in ``enrichment`` from the
+    Confidence and validationStatus are derived in ``domain.validation`` from the
     evidence and the date checks, never from a model's self-report (§7.5).
     ``now`` is injected so the 終了済み check is reproducible (§13.2).
     """

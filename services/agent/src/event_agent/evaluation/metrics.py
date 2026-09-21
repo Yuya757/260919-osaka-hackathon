@@ -16,7 +16,7 @@ from datetime import datetime
 from itertools import combinations
 from typing import Iterable
 
-from event_agent.enrichment import normalize_url
+from event_agent.domain.normalize import normalize_url
 from event_agent.evaluation.cases import EvalCase, ExpectedEvent
 from event_agent.evaluation.harness import CaseResult
 
