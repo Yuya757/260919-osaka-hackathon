@@ -31,3 +31,72 @@ def reset_store():
     store.reset()
     yield store
     store.reset()
+
+
+# --- store backends -------------------------------------------------------
+#
+# Every module binds ``store`` at import time, so swapping the backend has to
+# reach all of them; patching only ``event_agent.store`` would leave the
+# workflow running on whichever backend it imported.
+
+STORE_HOLDERS = (
+    "event_agent.store",
+    "event_agent.workflows.collect",
+    "event_agent.entrypoints.service",
+    "event_agent.agents.chat",
+    "event_agent.evaluation.harness",
+)
+
+EMULATOR_PROJECT = "osaka-hackathon-test"
+
+
+def install_store(monkeypatch, backend):
+    for module in STORE_HOLDERS:
+        monkeypatch.setattr(f"{module}.store", backend)
+    return backend
+
+
+def build_firestore_store():
+    """A FirestoreStore pointed at the emulator, or a skip if there is none."""
+    import os
+
+    if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
+        pytest.skip(
+            "FIRESTORE_EMULATOR_HOST is not set; run scripts/run-integration-tests.sh"
+        )
+    pytest.importorskip("google.cloud.firestore")
+    from google.cloud import firestore
+
+    from event_agent.firestore_store import FirestoreStore
+
+    backend = FirestoreStore(
+        firestore.Client(project=EMULATOR_PROJECT, database="(default)")
+    )
+    backend.reset()
+    return backend
+
+
+@pytest.fixture
+def firestore_backend(monkeypatch):
+    """Firestore only. Skips without the emulator."""
+    backend = build_firestore_store()
+    install_store(monkeypatch, backend)
+    yield backend
+    backend.reset()
+
+
+@pytest.fixture(params=["memory", "firestore"])
+def store_backend(request, monkeypatch):
+    """Both backends. The Firestore parameter skips without the emulator."""
+    from event_agent.store import MemoryStore
+
+    if request.param == "memory":
+        backend = MemoryStore()
+        install_store(monkeypatch, backend)
+        yield backend
+        return
+
+    backend = build_firestore_store()
+    install_store(monkeypatch, backend)
+    yield backend
+    backend.reset()

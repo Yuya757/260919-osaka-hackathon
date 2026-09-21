@@ -9,7 +9,6 @@ it with ./scripts/run-integration-tests.sh tests/test_firestore_workflow.py.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -18,34 +17,12 @@ from event_agent.schemas import UserPreferences
 
 JST = timezone(timedelta(hours=9))
 NOW = datetime(2026, 9, 21, 9, 0, tzinfo=JST)
-EMULATOR_PROJECT = "osaka-hackathon-test"
-
-# Every module binds ``store`` at import time, so the swap has to reach all of
-# them; patching only event_agent.store would leave the workflow on memory.
-STORE_HOLDERS = (
-    "event_agent.store",
-    "event_agent.workflows.collect",
-    "event_agent.entrypoints.service",
-    "event_agent.agents.chat",
-    "event_agent.evaluation.harness",
-)
 
 
 @pytest.fixture
-def firestore_store(monkeypatch):
-    if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
-        pytest.skip("FIRESTORE_EMULATOR_HOST is not set; run scripts/run-integration-tests.sh")
-    pytest.importorskip("google.cloud.firestore")
-    from google.cloud import firestore
-
-    from event_agent.firestore_store import FirestoreStore
-
-    backend = FirestoreStore(firestore.Client(project=EMULATOR_PROJECT, database="(default)"))
-    backend.reset()
-    for module in STORE_HOLDERS:
-        monkeypatch.setattr(f"{module}.store", backend)
-    yield backend
-    backend.reset()
+def firestore_store(firestore_backend):
+    """Alias for the shared conftest fixture; skips without the emulator."""
+    return firestore_backend
 
 
 @pytest.mark.asyncio
