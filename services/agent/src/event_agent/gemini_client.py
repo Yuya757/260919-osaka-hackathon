@@ -3,12 +3,37 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
 
 from event_agent.config import settings
 from event_agent.schemas import UserPreferences
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _CallBudget:
+    """§9.2「Gemini呼び出し: 1 Run最大15回」の残数。"""
+
+    limit: int
+    used: int = 0
+
+    def take(self) -> bool:
+        if self.used >= self.limit:
+            return False
+        self.used += 1
+        return True
+
+
+# Run単位の予算。ContextVar にするのは、`asyncio.create_task` がコンテキストを
+# コピーするため、同時に走るRunが別々の残数を持てるから。インスタンス変数だと
+# 後から始まったRunの reset が先行Runの残数を消し、上限が1 Runあたりでは
+# なくなる。
+_call_budget: ContextVar[_CallBudget | None] = ContextVar(
+    "gemini_call_budget", default=None
+)
 
 
 class GeminiClient:
@@ -21,7 +46,6 @@ class GeminiClient:
 
     def __init__(self) -> None:
         self._client: Any = None
-        self._model_calls = 0
         if settings.use_vertex:
             try:
                 from google import genai
@@ -40,18 +64,31 @@ class GeminiClient:
         return self._client is None
 
     def reset_call_budget(self) -> None:
-        """Reset the per-run model-call counter (§9.2「1 Run最大15回」).
+        """Start a fresh per-run model-call budget (§9.2「1 Run最大15回」).
 
-        The counter is instance state on a module singleton, so without this a
-        long-lived process silently stops calling the model after 15 calls in
-        total rather than 15 per run.
+        Called at the top of every run. The budget lives in a ContextVar, so a
+        run started while another is in flight gets its own allowance instead
+        of resetting the one already running.
         """
-        self._model_calls = 0
+        _call_budget.set(_CallBudget(settings.max_model_calls))
+
+    @property
+    def calls_used(self) -> int:
+        """Calls spent by the run in the current context."""
+        budget = _call_budget.get()
+        return budget.used if budget else 0
+
+    def _take_call(self) -> bool:
+        budget = _call_budget.get()
+        if budget is None:
+            # 単体呼び出しなど、Runの外から使われた場合。
+            budget = _CallBudget(settings.max_model_calls)
+            _call_budget.set(budget)
+        return budget.take()
 
     async def generate_text(self, prompt: str, system: str | None = None) -> str | None:
-        if not self._client or self._model_calls >= settings.max_model_calls:
+        if not self._client or not self._take_call():
             return None
-        self._model_calls += 1
         try:
             from google.genai import types
 
@@ -71,9 +108,8 @@ class GeminiClient:
 
     async def search_with_grounding(self, query: str) -> list[dict[str, str]]:
         """Grounding-only call (no tools mixed with other function calling)."""
-        if not self._client or self._model_calls >= settings.max_model_calls:
+        if not self._client or not self._take_call():
             return []
-        self._model_calls += 1
         try:
             from google.genai import types
 

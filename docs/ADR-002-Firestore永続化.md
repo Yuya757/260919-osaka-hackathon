@@ -107,5 +107,5 @@ Cloud Run のランタイムサービスアカウント（`event-agent-runtime`�
 
 - ユーザー削除時の関連データ削除（§10.3）は未実装。`userId` によるスコープ分離を先に入れる。
 - Run詳細ログの30日保持（§10.3）は、`agentRuns` のTTLポリシーで行う想定。未設定。
-- §13.3 の Load（同時手動Runと定期Job重複時のロック・クォータ）は、対象のCloud Run Jobと
-  Cloud Scheduler が Phase 2 で未実装のため保留。
+- §13.3 の Load は `services/agent/tests/test_load.py` で実施した（ADR-003）。
+  Cloud Run Job と Cloud Scheduler のデプロイは Phase 2 のまま残っている。

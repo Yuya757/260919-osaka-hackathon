@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # 進捗バナーを見せるためだけの待ち時間。評価では 0 にする。
     step_delay_seconds: float = 0.1
     eval_repeat_count: int = 3
+    # 定期Runの冪等キーに混ぜる版番号（§9.3）。収集条件を変えて同じ日にもう一度
+    # 走らせたいときに上げる。
+    run_schedule_version: str = "daily-1"
     ekispert_api_key: str | None = None
 
     @property

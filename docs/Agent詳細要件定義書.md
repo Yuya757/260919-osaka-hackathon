@@ -748,6 +748,7 @@ Agent Engine移行時も、Agent CoreのTool契約、Event Schema、Validation R
 | `RUN_TIMEOUT_SECONDS` | Run上限、初期値300 |
 | `VERIFIED_CONFIDENCE_THRESHOLD` | Verified閾値、初期値0.80 |
 | `AGGREGATOR_ONLY_MIN_CONFIDENCE` | 集約サイト単独出典を表示する下限、初期値0.60 |
+| `RUN_SCHEDULE_VERSION` | 定期Runの冪等キーに混ぜる版番号、初期値`daily-1` |
 | `FIRESTORE_ENABLED` | Firestore永続化の有効化、初期値false |
 | `FIRESTORE_DATABASE` | Firestoreデータベース名、初期値`(default)` |
 | `PROMPT_VERSION` | Prompt版 |
