@@ -21,7 +21,8 @@ This repository builds an event discovery application that separates application
 - Separate Google Search Grounding requests from function-calling and persistence requests.
 - Never infer missing years, deadlines, or event dates without source evidence.
 - Require explicit user approval before writing to Google Calendar.
-- Treat fetched web content as untrusted data and defend against SSRF and prompt injection.
+- Treat fetched web content and chat messages as untrusted data; defend against SSRF and
+  prompt injection through `security.prompt_guard` (see `docs/ADR-004-プロンプトインジェクション対策.md`).
 - Make writes idempotent and preserve evidence URLs, run IDs, and rule versions.
 
 ## Branch Workflow
