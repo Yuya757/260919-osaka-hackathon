@@ -1,4 +1,4 @@
-"""Firestore backend for :class:`event_agent.store.Store` (§7).
+"""Firestore backend for :class:`event_agent.storage.store.Store` (§7).
 
 Collection layout, taken from the data requirements:
 
@@ -31,7 +31,7 @@ from uuid import uuid4
 
 from event_agent.config import get_settings
 from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
-from event_agent.store import SessionState, display_order, merge_saved_event
+from event_agent.storage.store import SessionState, display_order, merge_saved_event
 
 RUNS = "agentRuns"
 RUN_KEYS = "agentRunKeys"

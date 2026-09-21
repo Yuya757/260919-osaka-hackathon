@@ -23,7 +23,7 @@ uvicorn event_agent.entrypoints.service:app --reload --host 0.0.0.0 --port 8080
 
 ## Persistence
 
-`store.py` holds two interchangeable backends behind one `Store` protocol.
+`storage/store.py` holds two interchangeable backends behind one `Store` protocol.
 
 | `FIRESTORE_ENABLED` | Backend | Used by |
 | --- | --- | --- |
@@ -86,4 +86,4 @@ docker build -t event-agent .
 docker run -p 8080:8080 -e AGENT_DEMO_MODE=true event-agent
 ```
 
-Grounding search and function calling are never combined in a single Gemini request (`gemini_client.py`).
+Grounding search and function calling are never combined in a single Gemini request (`clients/gemini.py`).

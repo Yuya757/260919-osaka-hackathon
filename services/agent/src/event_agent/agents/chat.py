@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 
-from event_agent.gemini_client import extract_preferences_from_message, gemini_client
+from event_agent.clients.gemini import extract_preferences_from_message, gemini_client
 from event_agent.schemas import (
     AgentRunStartedAction,
     ChatRequest,
@@ -21,7 +21,7 @@ from event_agent.schemas import (
     preferences_to_api_dict,
 )
 from event_agent.security import prompt_guard
-from event_agent.store import store
+from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 
 logger = logging.getLogger(__name__)

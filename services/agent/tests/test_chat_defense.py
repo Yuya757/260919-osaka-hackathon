@@ -37,7 +37,7 @@ async def test_a_refused_message_never_reaches_the_model(store_backend, monkeypa
         return None
 
     monkeypatch.setattr("event_agent.agents.chat.gemini_client.generate_text", spy)
-    monkeypatch.setattr("event_agent.gemini_client.gemini_client.generate_text", spy)
+    monkeypatch.setattr("event_agent.clients.gemini.gemini_client.generate_text", spy)
 
     await handle_chat(ChatRequest(message=ATTACK))
 
@@ -108,7 +108,7 @@ async def test_a_reply_that_echoes_the_system_prompt_is_discarded(
 @pytest.mark.asyncio
 async def test_an_injected_message_does_not_poison_the_interest_prompt(store_backend) -> None:
     """`interestsPrompt` は保存され、UIに出て、検索クエリにも混ざる。"""
-    from event_agent.gemini_client import extract_preferences_from_message
+    from event_agent.clients.gemini import extract_preferences_from_message
     from event_agent.schemas import UserPreferences
 
     current = UserPreferences(interestsPrompt="ハッカソン 関西")
