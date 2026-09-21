@@ -26,6 +26,9 @@ gha-creds-*.json
 .playwright-mcp/
 artifacts/
 
+# AI Agentのローカル設定。Skillsは共有するがローカル権限設定は共有しない
+.claude/settings.local.json
+
 # Editors and operating systems
 .DS_Store
 *.swp

@@ -5,7 +5,7 @@
 ## デモ
 
 - [Firebase Hosting](https://osaka-hackathon-260919.web.app)
-- `develop` ブランチへのpushでGitHub Actionsが自動デプロイします。
+- `develop` ブランチへのpushでGitHub Actionsが自動デプロイします。つまり `develop` が本番であり、直接pushはしません（[ブランチ運用ルール](docs/ブランチ運用ルール.md)）。
 
 ## 技術構成
 
@@ -34,8 +34,10 @@
 ├── firestore.indexes.json      # Firestore複合インデックス定義
 ├── docs/                       # 補足設計資料
 ├── scripts/                    # WSLで実行する開発・デプロイスクリプト
+├── .claude/
+│   └── skills/                 # プロジェクト固有のSkills（Claude Code）
 ├── .cursor/
-│   └── skills/                 # プロジェクト固有のCursor Skills
+│   └── skills/                 # 同内容のSkills（Cursor）。両者は同期して更新する
 └── AGENTS.md                   # AI Agent向けプロジェクト規約
 ```
 
@@ -59,6 +61,7 @@
 - [スマートフォン画面設計書](docs/画面設計書_スマホ.md) — 画面一覧は §2.2、各画面仕様は §4
 - [ADR-001 駅すぱあと経路検索](docs/ADR-001-駅すぱあと経路検索.md)
 - [ADR-002 Firestore永続化](docs/ADR-002-Firestore永続化.md) — コレクション構成と §9.3 の冪等性
+- [ブランチ運用ルール](docs/ブランチ運用ルール.md) — `develop` が本番。作業ブランチは `develop` から切る
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
 
