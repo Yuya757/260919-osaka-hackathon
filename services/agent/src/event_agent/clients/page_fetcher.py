@@ -16,7 +16,7 @@ from urllib.parse import urljoin
 
 import httpx
 
-from event_agent.url_guard import UnsafeUrl, assert_safe_url
+from event_agent.security.url_guard import UnsafeUrl, assert_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +235,7 @@ def _default_source() -> PageSource:
 
     if settings.use_vertex:
         return HttpPageSource()
-    from event_agent.demo_pages import demo_pages
+    from event_agent.demo.pages import demo_pages
 
     return FixturePageSource(demo_pages())
 

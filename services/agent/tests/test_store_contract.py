@@ -27,7 +27,7 @@ from event_agent.schemas import (
     Recommendation,
     UserPreferences,
 )
-from event_agent.store import MemoryStore
+from event_agent.storage.store import MemoryStore
 
 JST = timezone(timedelta(hours=9))
 NOW = datetime(2026, 9, 21, 9, 0, tzinfo=JST)
@@ -37,7 +37,7 @@ EMULATOR_PROJECT = "osaka-hackathon-test"
 def _firestore_store():
     from google.cloud import firestore
 
-    from event_agent.firestore_store import FirestoreStore
+    from event_agent.storage.firestore_store import FirestoreStore
 
     client = firestore.Client(project=EMULATOR_PROJECT, database="(default)")
     created = FirestoreStore(client)

@@ -9,7 +9,7 @@ import pytest
 from event_agent.extraction import dates as d
 from event_agent.extraction.extractor import extract_candidate
 from event_agent.extraction.html_text import build_untrusted_block, to_text
-from event_agent.page_fetcher import FetchedPage
+from event_agent.clients.page_fetcher import FetchedPage
 
 JST = timezone(timedelta(hours=9))
 NOW = datetime(2026, 9, 21, 9, 0, tzinfo=JST)

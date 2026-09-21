@@ -4,8 +4,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from event_agent import ekispert as ekispert_module
-from event_agent.ekispert import (
+from event_agent.clients import ekispert as ekispert_module
+from event_agent.clients.ekispert import (
     EkispertClient,
     EkispertError,
     RouteNotFound,

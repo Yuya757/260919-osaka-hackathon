@@ -17,7 +17,7 @@ from itertools import combinations
 from typing import Iterable
 
 from event_agent.domain.normalize import normalize_url
-from event_agent.evaluation.cases import EvalCase, ExpectedEvent
+from event_agent.evaluation.cases import ExpectedEvent
 from event_agent.evaluation.harness import CaseResult
 
 REQUIRED_FIELDS = ("title", "dates.eventStart", "officialUrl")
@@ -282,8 +282,7 @@ def evaluate(results: Iterable[CaseResult]) -> Report:
         fp += len(produced_pairs - expected_pairs)
         fn += len(expected_pairs - produced_pairs)
 
-    precision = _ratio(tp, tp + fp, empty=1.0)
-    recall = _ratio(tp, tp + fn, empty=1.0)
+    # F1 は tp/fp/fn から直接出す。precision と recall は表に出さないので持たない。
     f1 = 0.0 if tp == 0 and (fp or fn) else _ratio(2 * tp, 2 * tp + fp + fn, empty=1.0)
 
     metrics = [

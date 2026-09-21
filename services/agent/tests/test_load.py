@@ -158,7 +158,7 @@ async def test_the_model_call_budget_is_per_run(store_backend) -> None:
     first run's counter and the cap stopped being per-run. It now lives in a
     ContextVar, which asyncio copies per task.
     """
-    from event_agent.gemini_client import gemini_client
+    from event_agent.clients.gemini import gemini_client
 
     observed: list[int] = []
 
@@ -176,7 +176,7 @@ async def test_the_model_call_budget_is_per_run(store_backend) -> None:
 
 @pytest.mark.asyncio
 async def test_the_budget_refuses_calls_past_the_limit() -> None:
-    from event_agent.gemini_client import gemini_client
+    from event_agent.clients.gemini import gemini_client
 
     gemini_client.reset_call_budget()
     allowed = sum(1 for _ in range(settings.max_model_calls + 5) if gemini_client._take_call())
