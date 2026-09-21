@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     max_candidates: int = 30
     max_model_calls: int = 15
     verified_confidence_threshold: float = 0.8
+    # 公式・主催者の根拠が無く集約サイトだけを出典とするイベントを表示する下限
+    # （画面設計書§8-2）。compute_confidence の重み上、集約サイト単独ホストの
+    # 理論最大は 0.65 なので、0.60 は「title と dates.eventStart の両方に根拠が
+    # あり、矛盾も無い」場合しか通さない。S-01 のデュアル日付表示が成立する
+    # 最小条件と一致する。
+    aggregator_only_min_confidence: float = 0.60
     # §6.7 優先度4のタイトル類似度。0.80 は実測で決めた値で、
     # 「大阪データ活用カンファレンス」と同名+接尾辞の併合が 0.800 のため。
     # 高スコアの別イベント（2026 vs 2027 = 0.952、Kansai vs Kanto = 0.878）は

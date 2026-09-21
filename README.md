@@ -28,7 +28,7 @@
 │   └── agent/                  # FastAPI + Google ADKバックエンド
 ├── packages/
 │   └── contracts/              # Web・Agent間の共有Schema
-├── evals/                      # Agent評価データセット（59ケース、§13）
+├── evals/                      # Agent評価データセット（61ケース、§13）
 ├── infra/                      # GCP・Firebase構成
 ├── firestore.rules             # Firestore Security Rules（クライアント直接アクセスは全拒否）
 ├── firestore.indexes.json      # Firestore複合インデックス定義
@@ -81,7 +81,7 @@ npm run dev
 
 ```bash
 cd services/agent && pytest         # 115件（Firestoreの27件は自動スキップ）
-./scripts/run-evals.sh              # 59ケース、§13.2 の受入基準で判定
+./scripts/run-evals.sh              # 61ケース、§13.2 の受入基準で判定
 ./scripts/run-integration-tests.sh  # Firestore Emulator上で142件（Java必須、§13.3）
 ```
 

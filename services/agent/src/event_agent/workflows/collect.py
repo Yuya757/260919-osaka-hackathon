@@ -192,6 +192,7 @@ def _validate(
             threshold=settings.verified_confidence_threshold,
             now=now,
             target_year=target_year,
+            aggregator_min_confidence=settings.aggregator_only_min_confidence,
         )
         store.save_evidence(run_id, evidence)
         scored = scored.model_copy(

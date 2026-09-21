@@ -124,6 +124,8 @@ def derive_validation_status(
     is_finished: bool = False,
     in_target_year: bool = True,
     url_safe: bool = True,
+    aggregator_only: bool = False,
+    aggregator_min_confidence: float = 0.0,
 ) -> str:
     """Map facts onto the §6.6 statuses.
 
@@ -133,10 +135,18 @@ def derive_validation_status(
 
     ``partial`` is only allowed when the event date itself is settled and
     evidenced; a missing deadline must never be presented as "no deadline".
+
+    An event whose only sources are aggregator sites is held back below
+    ``aggregator_min_confidence`` (画面設計書§8-2). §6.6「公式性」 asks for the
+    lack of an official page to be stated rather than hidden, but below that
+    floor the event has not even got evidence on both required fields, and the
+    dual-date display the product exists for would be guesswork.
     """
     if not url_safe or is_finished or not in_target_year:
         return "rejected"
     if has_conflict or not has_required_evidence:
+        return "quarantined"
+    if aggregator_only and confidence < aggregator_min_confidence:
         return "quarantined"
     if not deadline_known:
         return "partial"
@@ -248,6 +258,7 @@ def score_event(
     now: datetime | None = None,
     target_year: int | None = None,
     url_safe: bool = True,
+    aggregator_min_confidence: float = 0.0,
 ):
     """Return a copy of ``event`` with evidence, confidence and status filled in.
 
@@ -294,6 +305,9 @@ def score_event(
         is_finished=is_finished,
         in_target_year=in_target_year,
         url_safe=url_safe,
+        aggregator_only=bool(source_types)
+        and not any(t in ("official", "organizer") for t in source_types),
+        aggregator_min_confidence=aggregator_min_confidence,
     )
     return event.model_copy(
         update={

@@ -115,14 +115,14 @@ export function SettingsScreen() {
             <h3>通知</h3>
             <div className="setting-row">
               <span className="setting-key">
-                毎朝の自動更新
+                毎朝7時の自動更新
                 <small>Phase 2 で対応予定</small>
               </span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={false}
-                aria-label="毎朝の自動更新"
+                aria-label="毎朝7時の自動更新"
                 className="switch"
                 disabled
               />

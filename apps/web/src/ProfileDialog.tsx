@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { emptyProfile, genres, isProfile, meals, prefectures } from './profile'
+import { emptyProfile, genres, isProfile, prefectures } from './profile'
 import type { Profile } from './profile'
 
 type Props = {
@@ -41,20 +41,22 @@ export function ProfileDialog({ profile, persisted, onClose, onSave }: Props) {
     setError('')
   }
 
-  function toggleChoice(key: 'genres' | 'meals', value: string) {
-    setDraft(current => {
-      const values = current[key].includes(value) ? current[key].filter(item => item !== value) : [...current[key], value]
-      return { ...current, [key]: values, ...(key === 'genres' && !values.includes('食事') ? { meals: [] } : {}) }
-    })
+  function toggleGenre(value: string) {
+    setDraft(current => ({
+      ...current,
+      genres: current.genres.includes(value)
+        ? current.genres.filter(item => item !== value)
+        : [...current.genres, value],
+    }))
     setError('')
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (step === 0) { setStep(1); return }
-    if (draft.genres.length === 0 || (draft.genres.includes('食事') && draft.meals.length === 0)) {
-      setError(draft.genres.length === 0 ? 'ジャンルを1つ以上選択してください。' : '食事の時間帯を1つ以上選択してください。')
-      event.currentTarget.querySelector<HTMLInputElement>(draft.genres.length === 0 ? '[name="genre"]' : '[name="meal"]')?.focus()
+    if (draft.genres.length === 0) {
+      setError('ジャンルを1つ以上選択してください。')
+      event.currentTarget.querySelector<HTMLInputElement>('[name="genre"]')?.focus()
       return
     }
     const value = { ...draft, city: draft.city.trim(), keywords: draft.keywords.trim(), excluded: draft.excluded.trim(), snsInterests: draft.snsInterests.trim() }
@@ -89,17 +91,14 @@ export function ProfileDialog({ profile, persisted, onClose, onSave }: Props) {
           <label className="profile-check"><input type="checkbox" checked={draft.online} onChange={event => update('online', event.target.checked)} />オンラインのイベントも候補に含める</label>
         </div> : <div className="profile-fields">
           <fieldset><legend>興味のあるジャンル（1つ以上）</legend><div className="profile-choices">
-            {genres.map(value => <label className="profile-choice" key={value}><input type="checkbox" name="genre" checked={draft.genres.includes(value)} onChange={() => toggleChoice('genres', value)} />{value}</label>)}
+            {genres.map(value => <label className="profile-choice" key={value}><input type="checkbox" name="genre" checked={draft.genres.includes(value)} onChange={() => toggleGenre(value)} />{value}</label>)}
           </div></fieldset>
-          {draft.genres.includes('食事') && <fieldset><legend>食事の時間帯（1つ以上）</legend><div className="profile-choices">
-            {meals.map(value => <label className="profile-choice" key={value}><input type="checkbox" name="meal" checked={draft.meals.includes(value)} onChange={() => toggleChoice('meals', value)} />{value}</label>)}
-          </div></fieldset>}
-          <label>追加キーワード（任意）<textarea rows={2} maxLength={300} value={draft.keywords} onChange={event => update('keywords', event.target.value)} placeholder="例：ジャズ、イタリアン、GCP、初心者歓迎" /></label>
+          <label>追加キーワード（任意）<textarea rows={2} maxLength={300} value={draft.keywords} onChange={event => update('keywords', event.target.value)} placeholder="例：生成AI、GCP、Rust、初心者歓迎" /></label>
           <label>興味のないジャンル（任意）<input maxLength={200} value={draft.excluded} onChange={event => update('excluded', event.target.value)} placeholder="例：投資セミナー、営業交流会" /></label>
           <details className="profile-sns"><summary>SNSの情報も検索に使う（任意）</summary>
             <p className="profile-help">SNS連携は準備中です。興味の情報を手入力できます。</p>
             {['X', 'Instagram'].map(value => <div className="profile-sns-row" key={value}><strong>{value}</strong><button type="button" disabled>未接続・準備中</button></div>)}
-            <label>SNSに登録している興味（任意）<textarea rows={2} maxLength={300} value={draft.snsInterests} onChange={event => update('snsInterests', event.target.value)} placeholder="例：ライブ音楽、カフェ巡り" /></label>
+            <label>SNSに登録している興味（任意）<textarea rows={2} maxLength={300} value={draft.snsInterests} onChange={event => update('snsInterests', event.target.value)} placeholder="例：生成AI、クラウド、スタートアップ" /></label>
           </details>
           <label className="profile-check"><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />この端末のブラウザにプロフィールを保存する</label>
           <p className="profile-help">チェックしない場合、再読み込みで内容は消えます。サーバーには送信しません。登録した条件によるイベント検索は準備中です。</p>
