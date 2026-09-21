@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       service_url: ${{ steps.deploy.outputs.url }}
+      image: ${{ steps.build.outputs.image }}
 
     steps:
       - name: Check out repository
@@ -57,12 +58,14 @@ jobs:
         run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
 
       - name: Build and push agent image
+        id: build
         working-directory: services/agent
         run: |
           IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/apps/event-agent:${{ github.sha }}"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Cloud Run service
         id: deploy
@@ -77,6 +80,41 @@ jobs:
             --quiet
           URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  collection_job:
+    needs: [tests, agent]
+    name: Deploy daily collection job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy the daily collection Cloud Run Job
+        # §14 Phase 2 の定期収集。Cloud Scheduler はまだ作っていないので、この
+        # Job は手動実行（gcloud run jobs execute）でしか動かない。ADR-003 参照。
+        # --max-retries 0 は意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
+        # 落ちた実行の再開はしないため、自動リトライは同じ日を再収集せずに
+        # 成功終了してしまう。失敗は気づけるほうがよい。
+        run: |
+          gcloud run jobs deploy event-agent-daily \
+            --image "${{ needs.agent.outputs.image }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --command=python \
+            --args="-m,event_agent.entrypoints.job" \
+            --max-retries 0 \
+            --task-timeout 300s \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.0-flash-001|AGENT_DEMO_MODE=true|FIRESTORE_ENABLED=true" \
+            --quiet
 
   web:
     name: Build and deploy web demo

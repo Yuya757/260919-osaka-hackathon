@@ -37,7 +37,9 @@ This repository builds an event discovery application that separates application
 - Name branches `<type>/<kebab-case-summary>` using the Conventional Commits types
   (`feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`).
 - Write commit messages as `<type>(<scope>): <summary>` and explain why, not what.
-- Merge with squash and delete the remote branch afterwards.
+- Merge a working branch into `develop` with squash, then delete the remote branch.
+  Syncing `develop` into `main` is the exception: use a merge commit, never squash —
+  squashing severs the shared history and makes the next sync conflict on every file.
 - Require CI to pass before merging; a merge into `develop` deploys immediately.
 - Sync `develop` into `main` with a pull request at release points.
 
