@@ -93,6 +93,10 @@ body {
 
 /* ---------- シェル ---------- */
 .app {
+  /* width を明示するのは、親がグリッドやフレックスになったときに
+     shrink-to-fit へ落ちないようにするため。max-width だけだと、
+     親の配置指定しだいで幅が中身に引きずられる。 */
+  width: 100%;
   max-width: var(--shell-max);
   margin-inline: auto;
   position: relative; /* タブバーの sticky の基準 */
@@ -1653,7 +1657,13 @@ a.ghost-button {
 @media (min-width: 600px) {
   body {
     display: grid;
-    place-items: start center;
+    /*
+     * justify-items は既定の stretch のままにする。center にすると #root が
+     * 内容幅に縮み、.app の max-width が上限としてしか効かなくなって、
+     * 画面ごとに外枠の幅が変わっていた（カレンダー332px / ホーム402px /
+     * 設定420px）。水平方向の中央寄せは .app の margin-inline: auto が担う。
+     */
+    align-items: start;
     padding-block: 24px;
   }
 
