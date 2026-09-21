@@ -93,6 +93,7 @@ create_service_account "${RUNTIME_SA}" "Event Agent runtime"
 
 deployer_roles=(
   roles/artifactregistry.writer
+  roles/cloudscheduler.admin
   roles/datastore.indexAdmin
   roles/firebasehosting.admin
   roles/firebaserules.admin

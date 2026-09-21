@@ -83,9 +83,60 @@ Cloud Run Job の作成、Cloud Scheduler の登録、デプロイワークフ�
 - §9.2 の「1 Run最大15回」が、同時実行下で実際に1 Runあたりの上限として働くようになった。
 - 定期実行を Phase 2 で動かすとき、二重収集の防止は既に済んでいる状態から始められる。
 
+## デプロイ状況（2026-09-21 更新）
+
+| 対象 | 状態 |
+| --- | --- |
+| Cloud Run Job `event-agent-daily` | `deploy-develop.yml` からデプロイする |
+| Cloud Scheduler | **未作成**（下記） |
+
+Job は同じコンテナイメージを `python -m event_agent.entrypoints.job` で起動する。
+`--task-timeout 300s` を付けたので、§9.2 の「Run全体300秒で強制終了」はJob経路に限り
+インフラ側で満たされる。アプリ内のタイムアウトは引き続き未実装である。
+
+`--max-retries 0` は意図的な選択である。§9.3 のロックは二重収集を防ぐが、キーを
+claim した実行が途中で落ちた場合の再開はしない。自動リトライを入れると、再試行は
+「今日は既に担当済み」と判断して収集せずに成功終了し、Runが `running` のまま残る。
+失敗は成功に見えないほうがよい。
+
+### Cloud Scheduler を作るには
+
+デプロイ用サービスアカウントに `roles/cloudscheduler.admin` が無く、Scheduler が
+Job を起動するための `roles/run.invoker` も付与できていないため、未作成である。
+`scripts/bootstrap-gcp.sh` には前者を追加済み。既存プロジェクトでは次を実行する。
+
+```bash
+PROJECT=osaka-hackathon-260919
+REGION=asia-northeast1
+SA="event-agent-scheduler@${PROJECT}.iam.gserviceaccount.com"
+
+gcloud iam service-accounts create event-agent-scheduler \
+  --display-name="Cloud Scheduler invoker" --project="$PROJECT"
+
+gcloud run jobs add-iam-policy-binding event-agent-daily \
+  --member="serviceAccount:${SA}" --role="roles/run.invoker" \
+  --region="$REGION" --project="$PROJECT"
+
+# 毎朝7時 JST（画面設計書§8-4）
+gcloud scheduler jobs create http event-agent-daily-0700 \
+  --location="$REGION" --project="$PROJECT" \
+  --schedule="0 7 * * *" --time-zone="Asia/Tokyo" \
+  --uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/event-agent-daily:run" \
+  --http-method=POST \
+  --oauth-service-account-email="$SA"
+```
+
+動作確認は手動実行でできる。
+
+```bash
+gcloud run jobs execute event-agent-daily --region=asia-northeast1 --wait
+```
+
 ## 残件
 
-- Cloud Run Job の作成と Cloud Scheduler への登録（`0 7 * * *` / `Asia/Tokyo`、画面設計書§8-4）。
+- Cloud Scheduler の作成（上記コマンド。IAM付与が前提）。
 - 対象ユーザーの列挙。現在の `job.py` は引数のユーザー1件だけを処理する。
   複数ユーザーへ広げるときは §11.2 の1日あたり費用上限を先に決める必要がある。
-- §9.2 の「Run全体300秒で強制終了」は未実装。タイムアウトは負荷試験の対象外のままである。
+- claim 後に落ちた実行の再開。現状は `RUN_SCHEDULE_VERSION` を上げるか翌日を待つしかない。
+- §9.2 の「Run全体300秒で強制終了」のアプリ内実装。Job経路は `--task-timeout` で
+  代替しているが、手動Runには効かない。
