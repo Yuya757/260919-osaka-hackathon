@@ -50,6 +50,23 @@ them, use the emulator (needs Java):
 ./scripts/run-integration-tests.sh          # リポジトリルートから
 ```
 
+`tests/test_load.py` covers §13.3 Load: the §9.3 locks under concurrent manual
+and scheduled runs, the §9.2 per-run quotas, and the §11.1 acceptance latency.
+It runs against both store backends. See
+[ADR-003](../../docs/ADR-003-定期Runのロックと負荷試験.md).
+
+## Scheduled collection
+
+`entrypoints/job.py` is the Cloud Run Job entry point for the daily run
+(§14 Phase 2). **It is not deployed**: no Job or Scheduler exists for it yet.
+
+```bash
+PYTHONPATH=src python -m event_agent.entrypoints.job [userId]
+```
+
+Its idempotency key is `userId + JST date + RUN_SCHEDULE_VERSION`, so a retried
+execution finds the day already claimed and exits without collecting again.
+
 ## Docker
 
 ```bash
