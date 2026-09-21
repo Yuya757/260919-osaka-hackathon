@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from event_agent.agents.chat import handle_chat
@@ -25,6 +25,7 @@ from event_agent.schemas import (
     ChatResponse,
     EventRouteResponse,
     EventsResponse,
+    EvidenceListResponse,
     HealthResponse,
 )
 from event_agent.store import store
@@ -67,9 +68,16 @@ async def chat(body: ChatRequest) -> ChatResponse:
 
 
 @app.post("/api/agent-runs", response_model=AgentRunCreateResponse)
-async def create_agent_run(body: AgentRunCreateRequest) -> AgentRunCreateResponse:
+async def create_agent_run(
+    body: AgentRunCreateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> AgentRunCreateResponse:
     session = store.get_or_create_session(None)
-    run = schedule_collect_run(session.preferences, force_refresh=body.force_refresh)
+    run = schedule_collect_run(
+        session.preferences,
+        force_refresh=body.force_refresh,
+        idempotency_key=idempotency_key,
+    )
     return AgentRunCreateResponse(runId=run.run_id, status="queued")
 
 
@@ -102,6 +110,23 @@ def _find_event(event_id: str) -> ApiEvent | None:
         if event.event_id == event_id:
             return event
     return None
+
+
+@app.get("/api/events/{event_id}/evidence", response_model=EvidenceListResponse)
+async def get_event_evidence(event_id: str) -> EvidenceListResponse:
+    """根拠（§7.2）を返す。S-08 の根拠シートが使う。
+
+    quarantined / rejected のイベントは通常UIへ出さないため、根拠も返さない（§8.3）。
+    """
+    event = _find_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.validation_status not in ("verified", "partial"):
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EvidenceListResponse(
+        eventId=event.event_id,
+        evidence=store.get_evidence(event.evidence_ids),
+    )
 
 
 @app.get("/api/events/{event_id}/route", response_model=EventRouteResponse)

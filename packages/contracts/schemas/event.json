@@ -59,7 +59,17 @@
     },
     "EventLifecycleStatus": {
       "type": "string",
-      "enum": ["suggested", "bookmarked", "dismissed"]
+      "enum": ["suggested", "bookmarked", "dismissed"],
+      "description": "ユーザーによる選別の状態。上位要件 §6.2 が挙げる added_to_calendar は含めない。カレンダー登録状態は詳細要件 §7.3 に従い googleCalendarEventIds で表現し、選別状態と登録状態を独立に保持する。"
+    },
+    "GoogleCalendarEventIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "登録済みGoogleカレンダー予定のID。申込締切と本番日程を別々に保持する（要件定義書 §6.2）。未登録は null。",
+      "properties": {
+        "deadlineEventId": { "type": ["string", "null"] },
+        "mainEventId": { "type": ["string", "null"] }
+      }
     },
     "Event": {
       "type": "object",
@@ -94,7 +104,7 @@
         "location": { "$ref": "#/$defs/EventLocation" },
         "dates": { "$ref": "#/$defs/EventDates" },
         "officialUrl": { "type": "string", "format": "uri" },
-        "applicationUrl": { "type": "string", "format": "uri" },
+        "applicationUrl": { "type": ["string", "null"], "format": "uri" },
         "validationStatus": { "$ref": "#/$defs/ValidationStatus" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "evidenceIds": {
@@ -102,11 +112,19 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "dedupKey": { "type": "string", "minLength": 1 },
-        "recommendation": { "$ref": "#/$defs/EventRecommendation" },
+        "recommendation": {
+          "oneOf": [{ "$ref": "#/$defs/EventRecommendation" }, { "type": "null" }]
+        },
         "firstSeenAt": { "type": "string", "format": "date-time" },
         "lastSeenAt": { "type": "string", "format": "date-time" },
         "sourceRunId": { "type": "string", "minLength": 1 },
-        "status": { "$ref": "#/$defs/EventLifecycleStatus" }
+        "status": { "$ref": "#/$defs/EventLifecycleStatus" },
+        "googleCalendarEventIds": { "$ref": "#/$defs/GoogleCalendarEventIds" },
+        "source": {
+          "type": "string",
+          "deprecated": true,
+          "description": "出典の表示用文字列。Phase 1 の暫定項目で、evidence.json の Evidence.sourceType へ統合して廃止する。"
+        }
       }
     },
     "EventListResponse": {

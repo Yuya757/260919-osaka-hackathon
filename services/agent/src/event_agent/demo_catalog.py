@@ -82,4 +82,26 @@ def demo_catalog() -> list[ApiEvent]:
             ),
             source="公式サイトで確認済み",
         ),
+        # 申込締切が公開されていないイベント。UIは「締切なし」ではなく
+        # 「未確認」と表示し、カレンダーの締切登録を無効化しなければならない（§6.6）。
+        ApiEvent(
+            eventId="kansai-demoday",
+            title="関西スタートアップ Demo Day 2026",
+            organizer="Kansai Startup Network",
+            category="pitch",
+            summary="関西の起業家が事業構想を発表するデモデイ。登壇枠の募集要項は公開されていますが、締切日が明記されていません。",
+            location=EventLocation(
+                type="offline", venue="大阪イノベーションハブ", region="大阪", nearestStation="大阪"
+            ),
+            dates=EventDates(
+                applicationDeadline=None,
+                eventStart=datetime(2026, 11, 20, 13, 0, tzinfo=JST),
+                eventEnd=datetime(2026, 11, 20, 18, 0, tzinfo=JST),
+            ),
+            officialUrl="https://example.com/kansai-demoday-2026",
+            recommendation=Recommendation(
+                score=78, reason="関西開催で、起業・登壇の機会に関する関心に一致します。"
+            ),
+            source="公式サイトで確認済み",
+        ),
     ]

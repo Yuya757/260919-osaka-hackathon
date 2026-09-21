@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from uuid import uuid4
 
-from event_agent.schemas import AgentRun, ApiEvent, UserPreferences
+from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
 
 
 @dataclass
@@ -23,6 +23,7 @@ class MemoryStore:
         self._runs: dict[str, AgentRun] = {}
         self._events_by_run: dict[str, list[ApiEvent]] = {}
         self._latest_events: list[ApiEvent] = []
+        self._evidence: dict[str, Evidence] = {}
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -55,6 +56,17 @@ class MemoryStore:
         with self._lock:
             self._events_by_run[run_id] = events
             self._latest_events = events
+
+    def save_evidence(self, evidence: list[Evidence]) -> None:
+        with self._lock:
+            for item in evidence:
+                self._evidence[item.evidence_id] = item
+
+    def get_evidence(self, evidence_ids: list[str]) -> list[Evidence]:
+        with self._lock:
+            return [
+                self._evidence[eid] for eid in evidence_ids if eid in self._evidence
+            ]
 
     def list_events(self, source_run_id: str | None = None) -> list[ApiEvent]:
         with self._lock:

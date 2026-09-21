@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import re
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from event_agent.config import settings
 from event_agent.demo_catalog import demo_catalog
+from event_agent.demo_evidence import demo_evidence
+from event_agent.enrichment import score_event
 from event_agent.gemini_client import gemini_client
 from event_agent.schemas import AgentRun, ApiEvent, UserPreferences
 from event_agent.store import store
@@ -96,29 +99,47 @@ async def _search_step(queries: list[str]) -> None:
         await asyncio.sleep(0.05)
 
 
-def _validate(events: list[ApiEvent]) -> tuple[list[ApiEvent], list[ApiEvent]]:
+def _validate(
+    events: list[ApiEvent], run_id: str
+) -> tuple[list[ApiEvent], list[ApiEvent], list[ApiEvent]]:
+    """Attach evidence, score confidence app-side, and bucket by status.
+
+    Confidence and validationStatus are derived in ``enrichment`` from the
+    evidence and the date checks, never from a model's self-report (§7.5).
+    """
+    catalog = demo_evidence()
+    now = datetime.now(timezone.utc)
     verified: list[ApiEvent] = []
     partial: list[ApiEvent] = []
+    quarantined: list[ApiEvent] = []
+
     for event in events:
         if not event.title or not event.dates.event_start:
             continue
-        if event.dates.application_deadline and event.dates.application_deadline > event.dates.event_start:
-            continue
-        if event.dates.application_deadline is None:
-            partial.append(event.model_copy(update={"validation_status": "partial"}))
+        evidence = catalog.get(event.event_id, [])
+        scored = score_event(
+            event.model_copy(update={"source_run_id": run_id, "last_seen_at": now}),
+            evidence,
+            threshold=settings.verified_confidence_threshold,
+        )
+        store.save_evidence(evidence)
+        if scored.validation_status == "verified":
+            verified.append(scored)
+        elif scored.validation_status == "partial":
+            partial.append(scored)
         else:
-            verified.append(event.model_copy(update={"validation_status": "verified"}))
-    return verified, partial
+            quarantined.append(scored)
+    return verified, partial, quarantined
 
 
 def _dedupe(events: list[ApiEvent]) -> list[ApiEvent]:
+    """Collapse duplicates on the stable dedupKey (§9.3)."""
     seen: set[str] = set()
     unique: list[ApiEvent] = []
     for event in events:
-        key = f"{event.title}|{event.dates.event_start.date()}|{event.official_url or ''}"
-        if key in seen:
+        if event.dedup_key in seen:
             continue
-        seen.add(key)
+        seen.add(event.dedup_key)
         unique.append(event)
     return unique
 
@@ -148,7 +169,7 @@ async def execute_collect_workflow(
 
         await _set_step(run, "extract_validate")
         await asyncio.sleep(0.1)
-        verified, partial = _validate(candidates)
+        verified, partial, quarantined = _validate(candidates, run.run_id)
 
         await _set_step(run, "dedupe")
         await asyncio.sleep(0.1)
@@ -163,24 +184,46 @@ async def execute_collect_workflow(
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
 
-        run.status = "succeeded" if verified else "partial_success"
+        # §6.9: partial_success は「一部候補だけ失敗した」場合。validationStatus が
+        # partial のイベントは取得に成功しており、失敗ではない。保留(quarantined)に
+        # 落ちた候補があるときだけ partial_success とする。
+        run.status = "partial_success" if quarantined else "succeeded"
         run.verified_count = len(verified)
         run.partial_count = len(partial)
+        run.quarantined_count = len(quarantined)
+        run.candidate_count = len(candidates)
+        run.query_count = len(queries)
         run.current_step = "completed"
+        run.completed_at = datetime.now(timezone.utc)
         store.update_run(run)
     except Exception as exc:
         run.status = "failed"
         run.error_message = "イベント収集中にエラーが発生しました。"
         run.current_step = "failed"
+        run.error_count += 1
+        run.completed_at = datetime.now(timezone.utc)
         store.update_run(run)
         raise exc
+
+
+def _new_run(idempotency_key: str | None) -> AgentRun:
+    """Create a queued run. Manual runs take the client key, else server-issued (§9.3)."""
+    return AgentRun(
+        runId=str(uuid4()),
+        idempotencyKey=idempotency_key or str(uuid4()),
+        triggerType="manual",
+        status="queued",
+        currentStep="queued",
+        model=settings.gemini_model,
+    )
 
 
 def schedule_collect_run(
     preferences: UserPreferences,
     force_refresh: bool = False,
+    idempotency_key: str | None = None,
 ) -> AgentRun:
-    run = AgentRun(runId=str(uuid4()), status="queued", currentStep="queued")
+    run = _new_run(idempotency_key)
     store.create_run(run)
     asyncio.create_task(execute_collect_workflow(run.run_id, preferences, force_refresh))
     return run
@@ -191,7 +234,7 @@ async def run_collect_workflow(
     force_refresh: bool = False,
 ) -> AgentRun:
     """Run workflow to completion (used from chat when immediate feedback is ok)."""
-    run = AgentRun(runId=str(uuid4()), status="queued", currentStep="queued")
+    run = _new_run(None)
     store.create_run(run)
     await execute_collect_workflow(run.run_id, preferences, force_refresh)
     updated = store.get_run(run.run_id)

@@ -67,6 +67,10 @@
         "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/ChatAction" }
+        },
+        "searchSuggestionsHtml": {
+          "type": ["string", "null"],
+          "description": "Google Search Grounding の searchEntryPoint.renderedContent をそのまま渡す。Grounding由来の生成文を表示する画面では、このHTMLを無改変で描画する義務がある（§6.4）。再スタイル・切り抜き・折りたたみ・非表示は禁止。"
         }
       }
     }

@@ -21,6 +21,12 @@ export type ChatResponse = {
   sessionId: string
   reply: string
   actions?: ChatAction[]
+  /**
+   * Grounding の searchEntryPoint.renderedContent。Grounding由来の生成文を
+   * 表示する画面は、このHTMLを無改変で描画する義務がある（§6.4）。
+   * 再スタイル・切り抜き・折りたたみ・非表示は禁止。
+   */
+  searchSuggestionsHtml?: string | null
 }
 
 export type AgentRunStatus =
@@ -77,11 +83,14 @@ export type EventLocation = {
 export type DatePrecision = 'datetime' | 'date' | 'unknown'
 
 export type EventDates = {
+  /** null は「未確認」。UIで「締切なし」と表現してはならない（§6.6）。 */
   applicationDeadline?: string | null
+  /** 'date' のとき時刻を表示してはならない */
   applicationDeadlinePrecision?: DatePrecision
   eventStart: string
   eventStartPrecision?: 'datetime' | 'date'
   eventEnd?: string | null
+  /** IANA timezone。表示は必ずこのタイムゾーンで解釈する。 */
   timezone: string
 }
 
@@ -92,7 +101,57 @@ export type EventRecommendation = {
   reason: string
 }
 
+/**
+ * 選別の状態。カレンダー登録状態は含めない（上位§6.2 の added_to_calendar は
+ * 採用せず、§7.3 に従い googleCalendarEventIds で表現する）。
+ */
 export type EventLifecycleStatus = 'suggested' | 'bookmarked' | 'dismissed'
+
+/** 登録済みカレンダー予定のID。未登録は null。 */
+export type GoogleCalendarEventIds = {
+  deadlineEventId?: string | null
+  mainEventId?: string | null
+}
+
+export type EvidenceSourceType = 'official' | 'organizer' | 'aggregator' | 'other'
+
+/** この根拠が裏付けている Event のフィールドパス */
+export type SupportedField =
+  | 'title'
+  | 'summary'
+  | 'organizer'
+  | 'category'
+  | 'location'
+  | 'dates.eventStart'
+  | 'dates.eventEnd'
+  | 'dates.applicationDeadline'
+  | 'officialUrl'
+  | 'applicationUrl'
+
+export type GroundingMetadata = {
+  chunkIndex: number
+  supportScore?: number | null
+}
+
+/** 根拠（§7.2）。excerpt は検証に必要な最小限の引用のみ。 */
+export type Evidence = {
+  evidenceId: string
+  query?: string | null
+  sourceUrl: string
+  canonicalUrl?: string | null
+  sourceType: EvidenceSourceType
+  title?: string | null
+  excerpt?: string | null
+  supports: SupportedField[]
+  retrievedAt: string
+  groundingMetadata?: GroundingMetadata | null
+  contentHash?: string | null
+}
+
+export type EvidenceListResponse = {
+  eventId: string
+  evidence: Evidence[]
+}
 
 /** Event candidate / persisted event (§7.3) */
 export type Event = {
@@ -106,16 +165,20 @@ export type Event = {
   location: EventLocation
   dates: EventDates
   officialUrl: string
-  applicationUrl?: string
+  applicationUrl?: string | null
   validationStatus: ValidationStatus
+  /** アプリ側算出値。LLMの自己申告値ではない（§7.5） */
   confidence: number
   evidenceIds: string[]
   dedupKey: string
-  recommendation?: EventRecommendation
+  recommendation?: EventRecommendation | null
   firstSeenAt: string
   lastSeenAt: string
   sourceRunId: string
   status: EventLifecycleStatus
+  googleCalendarEventIds?: GoogleCalendarEventIds
+  /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */
+  source?: string
 }
 
 export type EventListResponse = {

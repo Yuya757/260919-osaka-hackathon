@@ -33,6 +33,7 @@
         "EventLocation",
         "EventDates",
         "EventRecommendation",
+        "GoogleCalendarEventIds",
         "EventListResponse"
       ]
     },
@@ -44,6 +45,17 @@
         "RouteLeg",
         "RouteSummary",
         "EventRouteResponse"
+      ]
+    },
+    {
+      "id": "evidence",
+      "path": "evidence.json",
+      "definitions": [
+        "Evidence",
+        "EvidenceSourceType",
+        "SupportedField",
+        "GroundingMetadata",
+        "EvidenceListResponse"
       ]
     }
   ]
