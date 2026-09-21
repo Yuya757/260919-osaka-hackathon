@@ -16,6 +16,8 @@ __pycache__/
 # Firebase
 .firebase/
 firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
 # Google GitHub Actions credentials
 gha-creds-*.json
