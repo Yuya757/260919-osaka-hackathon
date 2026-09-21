@@ -30,6 +30,8 @@
 │   └── contracts/              # Web・Agent間の共有Schema
 ├── evals/                      # Agent評価データセット（59ケース、§13）
 ├── infra/                      # GCP・Firebase構成
+├── firestore.rules             # Firestore Security Rules（クライアント直接アクセスは全拒否）
+├── firestore.indexes.json      # Firestore複合インデックス定義
 ├── docs/                       # 補足設計資料
 ├── scripts/                    # WSLで実行する開発・デプロイスクリプト
 ├── .cursor/
@@ -48,6 +50,7 @@
 - 画面遷移は react-router で行い、端末の戻る操作が効く状態を保つ
 - 日時は必ずイベントの `dates.timezone` で解釈して表示する
 - API応答は `packages/contracts/schemas/*.json` に適合させる（`services/agent/tests/test_contracts.py` が検証）
+- 永続化は `Store` プロトコル越しに行い、`MemoryStore` と `FirestoreStore` を入れ替え可能に保つ（[ADR-002](docs/ADR-002-Firestore永続化.md)）
 
 ## ドキュメント
 
@@ -55,6 +58,7 @@
 - [Agent詳細要件定義書](docs/Agent詳細要件定義書.md)
 - [スマートフォン画面設計書](docs/画面設計書_スマホ.md) — 画面一覧は §2.2、各画面仕様は §4
 - [ADR-001 駅すぱあと経路検索](docs/ADR-001-駅すぱあと経路検索.md)
+- [ADR-002 Firestore永続化](docs/ADR-002-Firestore永続化.md) — コレクション構成と §9.3 の冪等性
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
 
@@ -73,8 +77,9 @@ npm run dev
 テストと評価データセット:
 
 ```bash
-cd services/agent && pytest      # 93件
-./scripts/run-evals.sh           # 59ケース、§13.2 の受入基準で判定
+cd services/agent && pytest         # 115件（Firestoreの27件は自動スキップ）
+./scripts/run-evals.sh              # 59ケース、§13.2 の受入基準で判定
+./scripts/run-integration-tests.sh  # Firestore Emulator上で142件（Java必須、§13.3）
 ```
 
 ```bash

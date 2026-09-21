@@ -747,6 +747,8 @@ Agent Engine移行時も、Agent CoreのTool契約、Event Schema、Validation R
 | `MAX_MODEL_CALLS` | Runあたりモデル呼び出し数、初期値15 |
 | `RUN_TIMEOUT_SECONDS` | Run上限、初期値300 |
 | `VERIFIED_CONFIDENCE_THRESHOLD` | Verified閾値、初期値0.80 |
+| `FIRESTORE_ENABLED` | Firestore永続化の有効化、初期値false |
+| `FIRESTORE_DATABASE` | Firestoreデータベース名、初期値`(default)` |
 | `PROMPT_VERSION` | Prompt版 |
 | `VALIDATION_RULE_VERSION` | 検証ルール版 |
 
