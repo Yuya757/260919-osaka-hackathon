@@ -3,6 +3,10 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
 
 # Local environment
 .env

@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/event.json",
+  "title": "Event",
+  "$defs": {
+    "EventLocationType": {
+      "type": "string",
+      "enum": ["online", "offline", "hybrid", "unknown"]
+    },
+    "EventLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "$ref": "#/$defs/EventLocationType" },
+        "venue": { "type": ["string", "null"] },
+        "region": { "type": ["string", "null"] },
+        "nearestStation": {
+          "type": ["string", "null"],
+          "description": "会場の最寄駅名（駅すぱあと経路検索の到着駅として使用）"
+        }
+      }
+    },
+    "DatePrecision": {
+      "type": "string",
+      "enum": ["datetime", "date", "unknown"]
+    },
+    "EventDates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventStart", "eventStartPrecision", "timezone"],
+      "properties": {
+        "applicationDeadline": { "type": ["string", "null"], "format": "date-time" },
+        "applicationDeadlinePrecision": { "$ref": "#/$defs/DatePrecision" },
+        "eventStart": { "type": "string", "format": "date-time" },
+        "eventStartPrecision": {
+          "type": "string",
+          "enum": ["datetime", "date"]
+        },
+        "eventEnd": { "type": ["string", "null"], "format": "date-time" },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone identifier (e.g. Asia/Tokyo)"
+        }
+      }
+    },
+    "ValidationStatus": {
+      "type": "string",
+      "enum": ["verified", "partial", "quarantined", "rejected"]
+    },
+    "EventRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "reason"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "reason": { "type": "string" }
+      }
+    },
+    "EventLifecycleStatus": {
+      "type": "string",
+      "enum": ["suggested", "bookmarked", "dismissed"]
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "userId",
+        "title",
+        "normalizedTitle",
+        "summary",
+        "category",
+        "location",
+        "dates",
+        "officialUrl",
+        "validationStatus",
+        "confidence",
+        "evidenceIds",
+        "dedupKey",
+        "firstSeenAt",
+        "lastSeenAt",
+        "sourceRunId",
+        "status"
+      ],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "normalizedTitle": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" },
+        "category": { "type": "string", "minLength": 1 },
+        "organizer": { "type": ["string", "null"] },
+        "location": { "$ref": "#/$defs/EventLocation" },
+        "dates": { "$ref": "#/$defs/EventDates" },
+        "officialUrl": { "type": "string", "format": "uri" },
+        "applicationUrl": { "type": "string", "format": "uri" },
+        "validationStatus": { "$ref": "#/$defs/ValidationStatus" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidenceIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dedupKey": { "type": "string", "minLength": 1 },
+        "recommendation": { "$ref": "#/$defs/EventRecommendation" },
+        "firstSeenAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "sourceRunId": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/EventLifecycleStatus" }
+      }
+    },
+    "EventListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["events"],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Event" }
+        }
+      }
+    }
+  }
+}

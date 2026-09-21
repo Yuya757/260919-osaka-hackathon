@@ -52,11 +52,27 @@
 
 ## セットアップ
 
+### Web
+
 ```bash
 cd apps/web
 npm ci
 npm run dev
 ```
+
+### Agent API
+
+```bash
+cd services/agent
+uv venv .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+cp .env.example .env
+export PYTHONPATH=src
+uvicorn event_agent.entrypoints.service:app --reload --host 0.0.0.0 --port 8080
+```
+
+Vite は `/api` を `localhost:8080` へプロキシします。
 
 GCP環境の再構成には、WSLから以下を実行します。
 

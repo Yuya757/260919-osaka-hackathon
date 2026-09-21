@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/chat.json",
+  "title": "Chat API",
+  "$defs": {
+    "UserPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interestsPrompt", "targetYear", "onlineAllowed", "locations"],
+      "properties": {
+        "interestsPrompt": { "type": "string", "minLength": 1 },
+        "targetYear": { "type": "integer", "minimum": 2000, "maximum": 2100 },
+        "onlineAllowed": { "type": "boolean" },
+        "locations": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ChatAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "runId"],
+          "properties": {
+            "type": { "const": "agent_run_started" },
+            "runId": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "preferences"],
+          "properties": {
+            "type": { "const": "preferences_updated" },
+            "preferences": { "$ref": "#/$defs/UserPreferences" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "count"],
+          "properties": {
+            "type": { "const": "events_ready" },
+            "count": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "ChatRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ChatResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "reply"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "reply": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ChatAction" }
+        }
+      }
+    }
+  }
+}
