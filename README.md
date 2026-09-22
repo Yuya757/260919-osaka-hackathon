@@ -74,8 +74,9 @@
 
 ```bash
 cd apps/web
-npm ci
-npm run dev
+corepack enable   # package.json の packageManager に従って pnpm を用意する
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 ### Agent API
