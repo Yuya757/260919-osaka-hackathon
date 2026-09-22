@@ -293,6 +293,7 @@ def extract_candidate(
                 )
             ],
         ),
+        attributes=d.find_attributes(text, kind=resolved_kind),
         officialUrl=page.final_url,
         recommendation=Recommendation(score=0, reason=""),
         firstSeenAt=now,

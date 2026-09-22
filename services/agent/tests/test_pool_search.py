@@ -16,6 +16,7 @@ from event_agent.workflows.collect import run_collect_workflow
 from event_agent.workflows.pool_search import (
     _heuristic_intent,
     _kinds_in,
+    _order_in,
     _relative_period,
     search_pool,
 )
@@ -66,6 +67,34 @@ async def test_search_narrows_the_pool_by_kind(store_backend):
     everything = await search_pool("大阪", None, now=FROZEN_NOW)
     assert everything.intent.kinds == []
     assert {e.kind for e in everything.events} > {"contest"}
+
+
+def test_order_words_map_to_sorting():
+    assert _order_in("締切が近い順で") == "deadline"
+    assert _order_in("実施が近い順に並べて") == "held"
+    assert _order_in("早く始まるアクセラ") == "held"
+    assert _order_in("大阪のハッカソン") == "score"
+
+
+@pytest.mark.asyncio
+async def test_search_can_sort_by_the_nearest_date(store_backend):
+    """締切と実施が何ヶ月も離れるジャンルのために、日付順でも並べられる。"""
+    await run_collect_workflow(UserPreferences(), True, now=FROZEN_NOW)
+
+    by_deadline = await search_pool("締切が近い順で", None, now=FROZEN_NOW)
+    assert by_deadline.intent.order == "deadline"
+    deadlines = [
+        e.dates.application_deadline for e in by_deadline.events if e.dates.application_deadline
+    ]
+    assert deadlines == sorted(deadlines)
+    assert any("締切が近い順に並べ替え" in line.message for line in by_deadline.activity)
+
+    by_held = await search_pool("実施が近い順に並べて", None, now=FROZEN_NOW)
+    starts = [e.dates.event_start for e in by_held.events if e.dates.event_start]
+    assert starts == sorted(starts)
+    # 日付が分からないものは後ろ（いつ始まるか分からないものを先に薦めない）
+    unknown = [i for i, e in enumerate(by_held.events) if e.dates.event_start is None]
+    assert all(i >= len(starts) for i in unknown)
 
 
 @pytest.mark.asyncio

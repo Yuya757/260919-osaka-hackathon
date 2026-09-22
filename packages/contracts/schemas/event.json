@@ -162,6 +162,12 @@
         "themeId": { "type": ["string", "null"], "description": "収集したテーマ（ADR-008）。手動 Run 由来は null" },
         "normalizedOfficialUrl": { "type": "string", "description": "officialUrl の正規化形。既知ページの照合キー" },
         "lastExtractedAt": { "type": ["string", "null"], "format": "date-time", "description": "本文から実際に抽出した最終時刻。lastSeenAt と違い、既知ページの省略では進まない" },
+        "attributes": {
+          "type": "object",
+          "maxProperties": 10,
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "description": "ジャンル固有の値（賞金・支援内容・対象ステージなど）。ページの行をそのまま持ち、構造化はしない（ジャンル拡張計画 段階2）"
+        },
         "evidencePreview": {
           "type": "array",
           "maxItems": 4,

@@ -34,6 +34,7 @@ class ExpectedEvent:
     location_type: str | None = None
     kind: str | None = None
     milestone_labels: tuple[str, ...] = ()
+    attributes: dict[str, str] | None = None
     evidence_required: tuple[str, ...] = ()
 
 
@@ -68,6 +69,7 @@ def _expected(entry: dict[str, Any]) -> ExpectedEvent:
         location_type=entry.get("locationType"),
         kind=entry.get("kind"),
         milestone_labels=tuple(entry.get("milestoneLabels", ())),
+        attributes=entry.get("attributes"),
         evidence_required=tuple(entry.get("evidenceRequired", ())),
     )
 

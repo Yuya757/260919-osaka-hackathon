@@ -16,7 +16,7 @@
     "SearchIntent": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["interestsPrompt", "locations", "onlineOnly", "keywords", "kinds"],
+      "required": ["interestsPrompt", "locations", "onlineOnly", "keywords", "kinds", "order"],
       "description": "問いかけの構造化。モデルが返した値は選択肢・日付形式で検証してから使う",
       "properties": {
         "interestsPrompt": { "type": "string" },
@@ -25,6 +25,11 @@
         "dateFrom": { "type": ["string", "null"], "format": "date" },
         "dateTo": { "type": ["string", "null"], "format": "date" },
         "keywords": { "type": "array", "items": { "type": "string" } },
+        "order": {
+          "type": "string",
+          "enum": ["score", "deadline", "held"],
+          "description": "並び順。既定は適合順。「締切が近い順」「実施が近い順」と聞かれたときだけ変わる"
+        },
         "kinds": {
           "type": "array",
           "description": "問いかけが指す機会の種別（ジャンル拡張計画）。空なら種別で絞らない",

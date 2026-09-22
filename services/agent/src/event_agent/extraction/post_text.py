@@ -202,6 +202,7 @@ def derive_event_from_post(
                 )
             ],
         ),
+        attributes=d.find_attributes(text, kind=kind),
         officialUrl=request.contact_url,
         recommendation=None,
         firstSeenAt=now,

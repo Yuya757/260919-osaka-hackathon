@@ -160,6 +160,21 @@ export function EventDetailScreen() {
       </section>
 
       <p className="detail-summary">{event.summary}</p>
+
+      {/* ジャンル固有の値（賞金・支援内容・対象ステージ…）。ページの行をそのまま出す */}
+      {Object.keys(event.attributes ?? {}).length > 0 && (
+        <section className="attributes">
+          <p className="eyebrow">募集要項</p>
+          <dl className="attribute-list">
+            {Object.entries(event.attributes ?? {}).map(([label, value]) => (
+              <div className="attribute-row" key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {event.recommendation?.reason && (
         <p className="detail-reason">{event.recommendation.reason}</p>
       )}

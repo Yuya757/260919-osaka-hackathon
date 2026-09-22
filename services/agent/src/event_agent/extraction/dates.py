@@ -47,6 +47,16 @@ MILESTONE_LABELS = (
 )
 
 
+# ジャンル固有の値として拾うラベル（ジャンル拡張計画 段階2）。
+# 値は行をそのまま持ち、構造化はしない。日付のラベルはここに入れない。
+COMMON_ATTRIBUTE_LABELS = ("参加費", "対象", "応募資格", "参加資格", "定員")
+CONTEST_ATTRIBUTE_LABELS = ("賞金", "副賞", "最優秀賞", "表彰")
+PROGRAM_ATTRIBUTE_LABELS = (
+    "支援内容", "提供リソース", "出資", "出資額", "募集テーマ", "募集企業",
+    "対象ステージ", "採択予定数", "活動場所",
+)
+
+
 class LabelSet(NamedTuple):
     """ジャンルごとのラベル表（ジャンル拡張計画の事前調査）。
 
@@ -59,6 +69,7 @@ class LabelSet(NamedTuple):
     exclude: tuple[str, ...]
     event_dates: tuple[str, ...]
     milestones: tuple[str, ...]
+    attributes: tuple[str, ...] = COMMON_ATTRIBUTE_LABELS
 
 
 _CONTEST_EXCLUDE = tuple(
@@ -72,11 +83,14 @@ _CONTEST_EXCLUDE = tuple(
 # 書かれないことが多い。期間が書いてあればその開始を実施日にする。
 _PROGRAM_DATE_LABELS = EVENT_DATE_LABELS + ("プログラム期間", "Demo Day", "デモデイ")
 
+_CONTEST_ATTRIBUTES = CONTEST_ATTRIBUTE_LABELS + COMMON_ATTRIBUTE_LABELS
+_PROGRAM_ATTRIBUTES = PROGRAM_ATTRIBUTE_LABELS + CONTEST_ATTRIBUTE_LABELS + COMMON_ATTRIBUTE_LABELS
+
 LABEL_SETS: dict[str, LabelSet] = {
-    "hackathon": LabelSet(APPLICATION_LABELS, NON_APPLICATION_DEADLINE_LABELS, EVENT_DATE_LABELS, MILESTONE_LABELS),
-    "contest": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS + ("最終審査会", "最終審査"), MILESTONE_LABELS),
-    "accelerator": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS),
-    "cocreation": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS),
+    "hackathon": LabelSet(APPLICATION_LABELS, NON_APPLICATION_DEADLINE_LABELS, EVENT_DATE_LABELS, MILESTONE_LABELS, _CONTEST_ATTRIBUTES),
+    "contest": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS + ("最終審査会", "最終審査"), MILESTONE_LABELS, _CONTEST_ATTRIBUTES),
+    "accelerator": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS, _PROGRAM_ATTRIBUTES),
+    "cocreation": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS, _PROGRAM_ATTRIBUTES),
 }
 
 
@@ -274,6 +288,32 @@ def find_milestones(
             break
     # 時系列として出すので日付順。本文の並びは節目の順とは限らない
     return sorted(found, key=lambda pair: pair[1].value)
+
+
+def find_attributes(
+    text: str, *, kind: str = "hackathon", limit: int = 10
+) -> dict[str, str]:
+    """ジャンル固有の値を行から拾う（ジャンル拡張計画 段階2）。
+
+    値は行に書かれたまま持ち、構造化も換算もしない（「賞金」を数値にしない）。
+    文章になっている行（「賞金については後日お知らせします。」）は捨てる:
+    一覧や詳細に並べる値であって、本文の写しではない。
+    """
+    found: dict[str, str] = {}
+    for label, rest, line in find_labelled(text, labels_for(kind).attributes):
+        if label in found:
+            continue
+        # 「対象」は「対象ステージ」の一部でもある。区切りが続く行だけ採る
+        after = line.find(label) + len(label)
+        if after < len(line) and line[after] not in " 　:：-ー・|/\t":
+            continue
+        value = rest.strip(" 　:：-ー・")
+        if not 1 <= len(value) <= 60 or value.endswith(("。", "ます", "です", "ください")):
+            continue
+        found[label] = value
+        if len(found) >= limit:
+            break
+    return found
 
 
 def find_event_dates(

@@ -386,6 +386,8 @@ class ApiEvent(BaseModel):
     normalized_official_url: str = Field(default="", alias="normalizedOfficialUrl")
     # 本文から実際に抽出した時刻。既知ページの省略では進まない（ADR-008）
     last_extracted_at: datetime | None = Field(default=None, alias="lastExtractedAt")
+    # ジャンル固有の値（賞金・支援内容・対象ステージ…）。ページの行をそのまま持つ
+    attributes: dict[str, str] = Field(default_factory=dict)
     status: Literal["suggested", "bookmarked", "dismissed"] = "suggested"
     google_calendar_event_ids: GoogleCalendarEventIds = Field(
         default_factory=GoogleCalendarEventIds, alias="googleCalendarEventIds"
@@ -396,6 +398,19 @@ class ApiEvent(BaseModel):
     source: str = "公式サイトで確認済み"
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+    @model_validator(mode="after")
+    def _cap_attributes(self) -> "ApiEvent":
+        """契約どおり 10 項目・各 60 字に収める。抽出側の取りこぼしで契約を割らない。"""
+        if self.attributes:
+            capped = {
+                key: value.strip()[:60]
+                for key, value in list(self.attributes.items())[:10]
+                if key and value and value.strip()
+            }
+            if capped != self.attributes:
+                object.__setattr__(self, "attributes", capped)
+        return self
 
     @model_validator(mode="after")
     def _derive(self) -> "ApiEvent":
@@ -581,6 +596,8 @@ class SearchIntent(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     # 機会の種別（ジャンル拡張計画）。空なら種別では絞らない
     kinds: list[EventKind] = Field(default_factory=list)
+    # 並び順。既定は適合順（ジャンル拡張計画 段階2）
+    order: Literal["score", "deadline", "held"] = "score"
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
 

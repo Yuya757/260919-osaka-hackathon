@@ -218,6 +218,8 @@ export type Event = {
   sourceRunId: string
   status: EventLifecycleStatus
   googleCalendarEventIds?: GoogleCalendarEventIds
+  /** ジャンル固有の値（賞金・支援内容・対象ステージなど）。最大10項目 */
+  attributes?: Record<string, string>
   /** 一覧用の根拠（サーバーが list 応答で添える）。最大4件 */
   evidencePreview?: EvidencePreview[]
   /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */

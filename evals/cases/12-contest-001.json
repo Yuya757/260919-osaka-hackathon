@@ -24,7 +24,7 @@
   "pages": [
     {
       "url": "https://contest1.example.jp/2026",
-      "body": "<html><head><title>高校生ビジネスプラン・グランプリ 2026</title></head><body><h1>高校生ビジネスプラン・グランプリ 2026</h1><p>ビジネスプランを募集します。</p><div>応募締切: 2026年10月24日 23:59</div><div>最終審査会: 2026年12月10日 13:00</div><div>会場: 東京大学 伊藤謝恩ホール</div><div>主催: 主催公庫</div></body></html>",
+      "body": "<html><head><title>高校生ビジネスプラン・グランプリ 2026</title></head><body><h1>高校生ビジネスプラン・グランプリ 2026</h1><p>ビジネスプランを募集します。</p><div>応募締切: 2026年10月24日 23:59</div><div>最終審査会: 2026年12月10日 13:00</div><div>会場: 東京大学 伊藤謝恩ホール</div><div>賞金: 最優秀賞 100万円</div><div>応募資格: 高校生</div><div>主催: 主催公庫</div></body></html>",
       "sourceType": "official"
     }
   ],
@@ -41,7 +41,11 @@
         "evidenceRequired": [
           "title",
           "dates.eventStart"
-        ]
+        ],
+        "attributes": {
+          "賞金": "最優秀賞 100万円",
+          "応募資格": "高校生"
+        }
       }
     ]
   }

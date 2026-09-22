@@ -11,6 +11,7 @@ Two rules from the requirements shape the arithmetic:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import combinations
@@ -176,6 +177,17 @@ def evaluate(results: Iterable[CaseResult]) -> Report:
                             "milestones",
                             "・".join(expected.milestone_labels),
                             "・".join(got_labels) or "（なし）",
+                        )
+                    )
+            if expected.attributes is not None:
+                got = {k: event.attributes.get(k) for k in expected.attributes}
+                if got != expected.attributes:
+                    failures.append(
+                        Failure(
+                            case.case_id,
+                            "attributes",
+                            json.dumps(expected.attributes, ensure_ascii=False),
+                            json.dumps(got, ensure_ascii=False),
                         )
                     )
             if expected.event_start is not None:
