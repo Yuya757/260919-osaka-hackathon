@@ -27,6 +27,7 @@ from event_agent.schemas import (
 from event_agent.security import prompt_guard
 from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
+from event_agent.workflows.organizer_posts import seed_bot_posts
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +320,12 @@ async def execute_collect_workflow(
 
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
+        # 収集したイベントをボット投稿としてフィードへ流す（F-06）。失敗しても
+        # Run 自体は成功で、フィードが埋まらないだけ。
+        try:
+            seed_bot_posts(events, now=now)
+        except Exception:  # noqa: BLE001
+            logger.exception("bot seeding failed for run %s", run.run_id)
         if trajectory is not None:
             trajectory.record("save_agent_results", run.run_id)
 

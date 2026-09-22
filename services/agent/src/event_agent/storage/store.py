@@ -11,7 +11,10 @@ functions so the two implementations cannot drift:
 - a run is identified by its ``idempotencyKey``; creating a run twice with the
   same key returns the first run instead of starting a second one;
 - an event is identified by its ``dedupKey``; re-saving one keeps the identity
-  and the user's own state, and only moves ``lastSeenAt`` forward.
+  and the user's own state, and only moves ``lastSeenAt`` forward;
+- an organizer post is identified by its ``postId`` (derived from the same
+  ``dedupKey``); re-saving one keeps ``createdAt`` and the moderation and
+  placement state, which the poster must not be able to reset.
 """
 
 from __future__ import annotations
@@ -22,7 +25,14 @@ from threading import Lock
 from typing import Protocol
 from uuid import uuid4
 
-from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
+from event_agent.schemas import (
+    AgentRun,
+    ApiEvent,
+    Evidence,
+    OrganizerPost,
+    PostPlacement,
+    UserPreferences,
+)
 
 
 @dataclass
@@ -71,6 +81,63 @@ def display_order(events: list[ApiEvent]) -> list[ApiEvent]:
     )
 
 
+def merge_saved_post(incoming: OrganizerPost, existing: OrganizerPost | None) -> OrganizerPost:
+    """Fold a re-submitted post into what is already stored (ADR-006).
+
+    The text and the derived event may change, so the incoming post wins on
+    those. ``createdAt`` keeps the feed order stable, and ``status`` /
+    ``placement`` are moderation and sponsorship state that a repeated submit
+    must not be able to reset.
+    """
+    if existing is None:
+        return incoming
+    return incoming.model_copy(
+        update={
+            "created_at": existing.created_at,
+            "status": existing.status,
+            "placement": existing.placement,
+        }
+    )
+
+
+def _with_state(
+    post: OrganizerPost, *, status: str | None, placement: PostPlacement | None
+) -> OrganizerPost:
+    update: dict[str, object] = {"updated_at": datetime.now(timezone.utc)}
+    if status is not None:
+        update["status"] = status
+    if placement is not None:
+        update["placement"] = placement
+    return post.model_copy(update=update)
+
+
+_PLACEMENT_RANK = {"pinned": 0, "priority": 1, "normal": 2}
+
+
+def effective_placement(post: OrganizerPost, now: datetime) -> PostPlacement:
+    """A pinned or priority slot whose ``until`` has passed counts as normal."""
+    placement = post.placement
+    if placement.kind != "normal" and placement.until is not None and placement.until <= now:
+        return PostPlacement(kind="normal", until=None)
+    return placement
+
+
+def feed_order(posts: list[OrganizerPost], *, now: datetime) -> list[OrganizerPost]:
+    """Feed order: pinned, then priority, then newest first.
+
+    Sorted here rather than in the query so that both backends agree and so
+    that Firestore needs no composite index (ADR-002).
+    """
+    return sorted(
+        posts,
+        key=lambda p: (
+            _PLACEMENT_RANK[effective_placement(p, now).kind],
+            -p.created_at.timestamp(),
+            p.post_id,
+        ),
+    )
+
+
 class Store(Protocol):
     """The persistence surface the workflow and the API depend on."""
 
@@ -107,6 +174,25 @@ class Store(Protocol):
     def list_events(self, source_run_id: str | None = None) -> list[ApiEvent]:
         """Events of one run, or of the most recent run when no id is given."""
 
+    def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
+        """Upsert by ``postId`` and return what is now stored."""
+
+    def get_organizer_post(self, post_id: str) -> OrganizerPost | None: ...
+
+    def list_organizer_posts(self, status: str | None = None) -> list[OrganizerPost]:
+        """All posts, or only those with the given status. Unordered."""
+
+    def update_post_state(
+        self,
+        post_id: str,
+        *,
+        status: str | None = None,
+        placement: PostPlacement | None = None,
+    ) -> OrganizerPost | None:
+        """Moderation and sponsorship state. The only way to change either:
+        a re-submitted post keeps them (see :func:`merge_saved_post`). No API
+        exposes this yet (ADR-006)."""
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -118,6 +204,7 @@ class MemoryStore:
         self._events_by_dedup_key: dict[str, ApiEvent] = {}
         self._latest_run_id: str | None = None
         self._evidence: dict[tuple[str, str], Evidence] = {}
+        self._posts: dict[str, OrganizerPost] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -128,6 +215,7 @@ class MemoryStore:
             self._events_by_dedup_key.clear()
             self._latest_run_id = None
             self._evidence.clear()
+            self._posts.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -205,6 +293,35 @@ class MemoryStore:
                     if key in self._events_by_dedup_key
                 ]
             )
+
+    def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
+        with self._lock:
+            merged = merge_saved_post(post, self._posts.get(post.post_id))
+            self._posts[merged.post_id] = merged
+            return merged
+
+    def get_organizer_post(self, post_id: str) -> OrganizerPost | None:
+        with self._lock:
+            return self._posts.get(post_id)
+
+    def list_organizer_posts(self, status: str | None = None) -> list[OrganizerPost]:
+        with self._lock:
+            return [p for p in self._posts.values() if status is None or p.status == status]
+
+    def update_post_state(
+        self,
+        post_id: str,
+        *,
+        status: str | None = None,
+        placement: PostPlacement | None = None,
+    ) -> OrganizerPost | None:
+        with self._lock:
+            existing = self._posts.get(post_id)
+            if existing is None:
+                return None
+            updated = _with_state(existing, status=status, placement=placement)
+            self._posts[post_id] = updated
+            return updated
 
 
 def create_store() -> Store:

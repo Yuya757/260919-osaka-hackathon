@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Query
@@ -27,9 +28,19 @@ from event_agent.schemas import (
     EventsResponse,
     EvidenceListResponse,
     HealthResponse,
+    OrganizerPostCreateResponse,
+    OrganizerPostListResponse,
+    OrganizerPostPreviewResponse,
+    OrganizerPostRequest,
 )
 from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
+from event_agent.workflows.organizer_posts import (
+    PostRejected,
+    create_post,
+    list_feed,
+    preview_post,
+)
 
 logging.basicConfig(level=logging.INFO)
 # httpx logs full request URLs (including API keys in query strings) at INFO.
@@ -169,3 +180,35 @@ async def get_event_route(
         raise HTTPException(status_code=502, detail="経路検索サービスに接続できませんでした。") from exc
 
     return EventRouteResponse(eventId=event.event_id, arriveBy=event.dates.event_start, route=route)
+
+
+# ------------------------------------------------------------ organizer posts
+
+
+@app.post("/api/organizer-posts/preview", response_model=OrganizerPostPreviewResponse)
+async def preview_organizer_post(request: OrganizerPostRequest) -> OrganizerPostPreviewResponse:
+    """投稿前の確認（F-06）。何も保存せず、抽出した日程と指摘だけを返す。"""
+    try:
+        draft, linked = preview_post(request, now=datetime.now(timezone.utc))
+    except PostRejected as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return OrganizerPostPreviewResponse(event=draft.event, linkedEvent=linked, issues=draft.issues)
+
+
+@app.post(
+    "/api/organizer-posts",
+    response_model=OrganizerPostCreateResponse,
+    status_code=201,
+)
+async def create_organizer_post(request: OrganizerPostRequest) -> OrganizerPostCreateResponse:
+    try:
+        post, warnings = create_post(request, now=datetime.now(timezone.utc))
+    except PostRejected as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return OrganizerPostCreateResponse(post=post, warnings=warnings)
+
+
+@app.get("/api/organizer-posts", response_model=OrganizerPostListResponse)
+async def list_organizer_posts() -> OrganizerPostListResponse:
+    """フィード。公開中で開催前の投稿を、固定 → 優先 → 新しい順で返す。"""
+    return OrganizerPostListResponse(posts=list_feed(now=datetime.now(timezone.utc)))

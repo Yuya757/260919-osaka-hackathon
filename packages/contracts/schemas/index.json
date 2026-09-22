@@ -57,6 +57,23 @@
         "GroundingMetadata",
         "EvidenceListResponse"
       ]
+    },
+    {
+      "id": "organizer-post",
+      "path": "organizer-post.json",
+      "definitions": [
+        "PostOrigin",
+        "PostStatus",
+        "PlacementKind",
+        "PostPlacement",
+        "PostIssueCode",
+        "PostIssue",
+        "OrganizerPostRequest",
+        "OrganizerPost",
+        "OrganizerPostPreviewResponse",
+        "OrganizerPostCreateResponse",
+        "OrganizerPostListResponse"
+      ]
     }
   ]
 }

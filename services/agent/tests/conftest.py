@@ -42,6 +42,7 @@ def reset_store():
 STORE_HOLDERS = (
     "event_agent.storage.store",
     "event_agent.workflows.collect",
+    "event_agent.workflows.organizer_posts",
     "event_agent.entrypoints.service",
     "event_agent.agents.chat",
     "event_agent.evaluation.harness",

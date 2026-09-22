@@ -263,6 +263,25 @@ def sanitize_free_text(value: str | None, *, fallback: str, max_chars: int = 300
     return cleaned[:max_chars]
 
 
+_BLANK_LINES = re.compile(r"\n{3,}")
+
+
+def clean_multiline(value: str, *, max_chars: int) -> str:
+    """Clean a multi-line body without collapsing its line structure.
+
+    :func:`sanitize_free_text` folds every run of whitespace into one space,
+    which is right for a one-line preference but destroys a post body: the
+    deterministic date extraction works line by line (``ラベル: 値``), so the
+    newlines are load-bearing. This keeps them, normalises line endings, drops
+    control characters and bounds the length. It does not judge injection —
+    the caller scans the whole payload and rejects it as one unit.
+    """
+    cleaned = _CONTROL.sub("", value.replace("\r\n", "\n").replace("\r", "\n"))
+    cleaned = "\n".join(line.rstrip() for line in cleaned.split("\n"))
+    cleaned = _BLANK_LINES.sub("\n\n", cleaned).strip()
+    return cleaned[:max_chars]
+
+
 # ----------------------------------------------------- instruction defence
 
 _DEFENCE = (

@@ -86,7 +86,7 @@ def _labelled_value(text: str, labels: tuple[str, ...]) -> str | None:
     return None
 
 
-def _location_of(text: str) -> tuple[str, str | None, str]:
+def location_of(text: str) -> tuple[str, str | None, str]:
     """Return ``(type, venue, snippet)``."""
     lowered = text.casefold()
     venue = _labelled_value(text, _VENUE_LABELS)
@@ -102,7 +102,7 @@ def _location_of(text: str) -> tuple[str, str | None, str]:
     return "unknown", None, ""
 
 
-def _category_of(text: str) -> str:
+def category_of(text: str) -> str:
     lowered = text.casefold()
     for category, words in _CATEGORY_WORDS:
         if any(word in lowered for word in words):
@@ -110,7 +110,7 @@ def _category_of(text: str) -> str:
     return "other"
 
 
-def _summary_of(text: str, title: str) -> str:
+def summary_of(text: str, title: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
         if len(stripped) >= 20 and stripped != title:
@@ -158,7 +158,7 @@ def extract_candidate(
             "dates.applicationDeadline", deadline.snippet, page.final_url
         )
 
-    location_type, venue, location_snippet = _location_of(text)
+    location_type, venue, location_snippet = location_of(text)
     if location_snippet:
         sources["location"] = FieldSource("location", location_snippet, page.final_url)
 
@@ -173,8 +173,8 @@ def extract_candidate(
         userId=user_id,
         title=title,
         organizer=organizer,
-        category=_category_of(text),
-        summary=_summary_of(text, title),
+        category=category_of(text),
+        summary=summary_of(text, title),
         location=EventLocation(type=location_type, venue=venue, region=venue),
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,

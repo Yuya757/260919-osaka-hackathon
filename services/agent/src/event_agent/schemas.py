@@ -292,6 +292,91 @@ class EventsResponse(BaseModel):
     events: list[ApiEvent]
 
 
+# ---------------------------------------------------------------- organizer posts
+
+# 投稿から派生した Event の sourceRunId。agentRuns には対応するドキュメントを作らない。
+# 根拠は投稿に埋め込むので Store.get_evidence を通らない（ADR-006）。
+ORGANIZER_POST_RUN_ID = "organizer-posts"
+ORGANIZER_POST_BODY_MAX = 4000
+
+PostIssueCode = Literal[
+    "EVENT_DATE_MISSING",
+    "YEAR_AMBIGUOUS",
+    "EVENT_FINISHED",
+    "DATE_CONFLICT",
+    "DEADLINE_MISSING",
+    "DUPLICATE_OF_EVENT",
+]
+
+
+class PostPlacement(BaseModel):
+    """固定/優先表示の枠（要件定義書 §7-2）。作成時は必ず normal。変更 API は無い。"""
+
+    kind: Literal["normal", "pinned", "priority"] = "normal"
+    until: datetime | None = None
+
+
+class PostIssue(BaseModel):
+    """投稿本文の抽出結果に対する指摘。error は投稿を拒み、warning は投稿者に確認を求める。"""
+
+    code: PostIssueCode
+    severity: Literal["error", "warning"]
+    message: str
+
+
+class OrganizerPostRequest(BaseModel):
+    organizer_name: str = Field(min_length=1, max_length=80, alias="organizerName")
+    contact_url: str = Field(min_length=1, max_length=2048, alias="contactUrl")
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=ORGANIZER_POST_BODY_MAX)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class OrganizerPost(BaseModel):
+    """主催者投稿（F-06）。Mirrors packages/contracts/schemas/organizer-post.json.
+
+    ``event`` は投稿本文から決定論的に抽出した Event の写し。``linkedEventId`` は
+    AI 収集イベントと重複と判定されたときの相手で、相手側は書き換えない。
+    """
+
+    post_id: str = Field(alias="postId")
+    user_id: str = Field(default=DEMO_USER_ID, alias="userId")
+    origin: Literal["organizer", "bot"]
+    organizer_name: str = Field(alias="organizerName")
+    contact_url: str = Field(alias="contactUrl")
+    title: str
+    body: str
+    event: ApiEvent
+    evidence: list[Evidence] = Field(default_factory=list)
+    status: Literal["published", "hidden"] = "published"
+    placement: PostPlacement = Field(default_factory=PostPlacement)
+    linked_event_id: str | None = Field(default=None, alias="linkedEventId")
+    linked_dedup_key: str | None = Field(default=None, alias="linkedDedupKey")
+    injection_flags: list[str] = Field(default_factory=list, alias="injectionFlags")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class OrganizerPostPreviewResponse(BaseModel):
+    event: ApiEvent | None = None
+    linked_event: ApiEvent | None = Field(default=None, alias="linkedEvent")
+    issues: list[PostIssue] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class OrganizerPostCreateResponse(BaseModel):
+    post: OrganizerPost
+    warnings: list[PostIssue] = Field(default_factory=list)
+
+
+class OrganizerPostListResponse(BaseModel):
+    posts: list[OrganizerPost]
+
+
 class EventRouteResponse(BaseModel):
     event_id: str = Field(alias="eventId")
     arrive_by: datetime = Field(alias="arriveBy")

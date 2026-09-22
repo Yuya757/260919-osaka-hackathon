@@ -65,6 +65,7 @@
 - [ADR-003 定期Runのロックと負荷試験](docs/ADR-003-定期Runのロックと負荷試験.md) — §13.3 Load と §9.2 のRun単位クォータ
 - [ADR-004 プロンプトインジェクション対策](docs/ADR-004-プロンプトインジェクション対策.md) — 検出・デリミタ・カナリアの3層と、ページと発話で扱いを分ける理由
 - [ADR-005 PWA化とキャッシュ方針](docs/ADR-005-PWA化とキャッシュ方針.md) — `/api/` をキャッシュしない理由とアプリシェルだけを持つ Service Worker
+- [ADR-006 主催者投稿フィード](docs/ADR-006-主催者投稿フィード.md) — 投稿を Event に実体化せず埋め込む理由、投稿本文の扱い、ボット投稿と固定枠のモデル
 - [ブランチ運用ルール](docs/ブランチ運用ルール.md) — `develop` が本番。作業ブランチは `develop` から切る
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
@@ -85,9 +86,9 @@ pnpm run dev
 テストと評価データセット:
 
 ```bash
-cd services/agent && pytest         # 184件（Firestoreの44件は自動スキップ）
+cd services/agent && pytest         # 209件（Firestoreの56件は自動スキップ）
 ./scripts/run-evals.sh              # 61ケース、§13.2 の受入基準で判定
-./scripts/run-integration-tests.sh  # Firestore Emulator上で228件（Java必須、§13.3）
+./scripts/run-integration-tests.sh  # Firestore Emulator上で273件（Java必須、§13.3）
 ```
 
 ```bash
