@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -477,5 +477,51 @@ class EventRouteResponse(BaseModel):
     event_id: str = Field(alias="eventId")
     arrive_by: datetime = Field(alias="arriveBy")
     route: RouteSummary
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+# ---------------------------------------------------------------- pool search (ADR-010)
+
+SearchAgent = Literal["interpreter", "filter", "scorer", "presenter"]
+
+
+class SearchIntent(BaseModel):
+    """問いかけの構造化。モデルの出力は検証してから採用する。"""
+
+    interests_prompt: str = Field(default="", alias="interestsPrompt")
+    locations: list[str] = Field(default_factory=list)
+    online_only: bool = Field(default=False, alias="onlineOnly")
+    date_from: date | None = Field(default=None, alias="dateFrom")
+    date_to: date | None = Field(default=None, alias="dateTo")
+    keywords: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class SearchActivity(BaseModel):
+    agent: SearchAgent
+    message: str = Field(max_length=300)
+    level: Literal["info", "warn"] = "info"
+    at: datetime
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class PoolSearchRequest(BaseModel):
+    session_id: str | None = Field(default=None, alias="sessionId")
+    query: str = Field(default="", max_length=500)
+
+    model_config = {"populate_by_name": True}
+
+
+class PoolSearchResponse(BaseModel):
+    session_id: str = Field(alias="sessionId")
+    reply: str
+    intent: SearchIntent
+    events: list[ApiEvent]
+    activity: list[SearchActivity] = Field(default_factory=list)
+    last_collected_at: datetime | None = Field(default=None, alias="lastCollectedAt")
+    model_calls: int = Field(default=0, ge=0, alias="modelCalls")
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}

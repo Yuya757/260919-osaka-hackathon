@@ -767,6 +767,16 @@ button.next-title:hover {
   line-height: 1.5;
 }
 
+/* エージェントの「なぜ合うか」の一言（ADR-010）。候補の事実に基づく短文 */
+.row-reason {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.6;
+  border-left: 2px solid var(--ink);
+  padding-left: 8px;
+}
+
 .row-evidence {
   margin: 0;
   font-size: 11px;

@@ -49,6 +49,7 @@ STORE_HOLDERS = (
     "event_agent.workflows.collect",
     "event_agent.workflows.organizer_posts",
     "event_agent.workflows.pool",
+    "event_agent.workflows.pool_search",
     "event_agent.entrypoints.service",
     "event_agent.agents.chat",
     "event_agent.evaluation.harness",

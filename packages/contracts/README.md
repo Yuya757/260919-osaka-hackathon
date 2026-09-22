@@ -11,6 +11,7 @@ Field names follow `docs/Agent詳細要件定義書.md` sections 7 (data) and 8 
 | `schemas/event.json` | `Event`, `EventLocation`, `EventDates`, `EventRecommendation`, `GoogleCalendarEventIds` |
 | `schemas/evidence.json` | `Evidence`, `EvidenceListResponse` (section 7.2) |
 | `schemas/route.json` | `Station`, `RouteLeg`, `RouteSummary`, `EventRouteResponse` |
+| `schemas/pool-search.json` | `PoolSearchRequest`, `SearchIntent`, `SearchActivity`, `PoolSearchResponse`（ADR-010） |
 | `schemas/organizer-post.json` | `OrganizerPost`, `OrganizerPostRequest`, `PostIssue`, `PostPlacement`, and the preview / create / list responses (F-06, ADR-006) |
 | `schemas/index.json` | Catalog of all schema documents |
 

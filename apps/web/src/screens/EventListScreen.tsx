@@ -7,17 +7,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
-import {
-  categoryLabel,
-  daysUntil,
-  formatLocationType,
-  isFinished,
-  isUrgent,
-  placeLabel,
-} from '../lib/eventView'
-import { isRunning } from '../lib/runSteps'
+import { daysUntil, isFinished, isUrgent } from '../lib/eventView'
 import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
+import { SearchActivityPanel } from '../components/SearchActivityPanel'
 import type { Event } from '../types/api'
 
 type Filter = 'all' | 'soon' | 'online' | 'check'
@@ -29,23 +22,6 @@ const FILTERS: [Filter, string][] = [
   ['check', '要確認'],
 ]
 
-/** 入力欄の語をすべて含むイベントだけ残す。表示している文字列に対して照合する。 */
-function matches(event: Event, query: string): boolean {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  if (terms.length === 0) return true
-  const hay = [
-    event.title,
-    categoryLabel(event.category),
-    event.organizer ?? '',
-    placeLabel(event),
-    formatLocationType(event.location.type),
-    event.summary,
-  ]
-    .join(' ')
-    .toLowerCase()
-  return terms.every((term) => hay.includes(term))
-}
-
 type Props = { mode: 'home' | 'saved' }
 
 export function EventListScreen({ mode }: Props) {
@@ -53,7 +29,6 @@ export function EventListScreen({ mode }: Props) {
     events,
     loadState,
     loadError,
-    run,
     saved,
     calendar,
     query,
@@ -61,7 +36,6 @@ export function EventListScreen({ mode }: Props) {
     agentReply,
     agentPending,
     ask,
-    manualRunsEnabled,
     lastCollectedAt,
     toggleSaved,
     register,
@@ -70,7 +44,6 @@ export function EventListScreen({ mode }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
-  const busy = isRunning(run?.status)
 
   const upcoming = useMemo(() => {
     const open = events.filter((event) => !isFinished(event))
@@ -78,12 +51,13 @@ export function EventListScreen({ mode }: Props) {
   }, [events, mode, saved])
 
   const visible = useMemo(() => {
-    let pool = upcoming.filter((event) => matches(event, query))
+    // 問いかけの解釈と絞り込みはプール探索エージェントが行う。ここではチップだけ
+    let pool = upcoming
     if (filter === 'soon') pool = pool.filter((event) => isUrgent(event))
     if (filter === 'online') pool = pool.filter((event) => event.location.type !== 'offline')
     if (filter === 'check') pool = pool.filter((event) => event.validationStatus === 'partial')
     return pool
-  }, [upcoming, query, filter])
+  }, [upcoming, filter])
 
   // 締切が確認できているものの中で、いちばん近いもの。不明な締切は候補にしない
   const nextDeadline = useMemo(() => {
@@ -118,11 +92,11 @@ export function EventListScreen({ mode }: Props) {
             id="ask-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="条件で絞り込み・探す（例：大阪 生成AI）"
+            placeholder="どんなハッカソン？（例：京都で来月 学生向け 生成AI）"
             autoComplete="off"
           />
-          <button type="submit" disabled={agentPending || busy}>
-            {agentPending || busy ? '探索中…' : manualRunsEnabled ? '探す' : '並べ替え'}
+          <button type="submit" disabled={agentPending}>
+            {agentPending ? '探索中…' : '探す'}
           </button>
         </form>
 
@@ -139,27 +113,12 @@ export function EventListScreen({ mode }: Props) {
           ))}
         </div>
 
-        {agentReply && (
-          <div className="agent-line" role="status">
-            <p>{agentReply.text}</p>
-            {/*
-             * Search Suggestions（§3.7 / §6.4）。Grounding 由来の生成文を出す
-             * 唯一の場所なので、Googleが返すHTMLを無改変で直下に描画する。
-             * 再スタイル・切り抜き・折りたたみ・非表示は禁止。
-             */}
-            <div className="search-suggestions">
-              {agentReply.searchSuggestionsHtml ? (
-                <div
-                  // eslint-disable-next-line react/no-danger
-                  dangerouslySetInnerHTML={{ __html: agentReply.searchSuggestionsHtml }}
-                />
-              ) : (
-                <span className="fine">
-                  Search Suggestions 表示位置（Grounding応答時にGoogle提供のHTMLを挿入）
-                </span>
-              )}
-            </div>
-          </div>
+        {(agentReply || agentPending) && (
+          <SearchActivityPanel
+            reply={agentReply?.text ?? ''}
+            activity={agentReply?.activity ?? []}
+            pending={agentPending}
+          />
         )}
       </div>
 
@@ -192,7 +151,7 @@ export function EventListScreen({ mode }: Props) {
             hour: '2-digit',
             minute: '2-digit',
           })}
-          {mode === 'home' && !manualRunsEnabled && ' · 毎朝7時に自動収集'}
+          {mode === 'home' && ' · 毎朝7時に自動収集'}
         </p>
       )}
 
@@ -230,9 +189,7 @@ export function EventListScreen({ mode }: Props) {
               <>
                 条件に合うイベントはありません。
                 <br />
-                {manualRunsEnabled
-                  ? '上の入力欄に関心を書くと、エージェントが探し直します。'
-                  : '毎朝の自動収集で増えます。絞り込みを緩めてみてください。'}
+                上の入力欄に問いかけると、収集済みのハッカソンから探し直します。
               </>
             )}
           </p>

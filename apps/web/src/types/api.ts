@@ -314,3 +314,36 @@ export type OrganizerPostCreateResponse = {
 export type OrganizerPostListResponse = {
   posts: OrganizerPost[]
 }
+
+// ---- プール探索エージェント（ADR-010）— packages/contracts/schemas/pool-search.json
+
+export type SearchAgent = 'interpreter' | 'filter' | 'scorer' | 'presenter'
+
+export type SearchActivity = {
+  agent: SearchAgent
+  message: string
+  level?: 'info' | 'warn'
+  at: string
+}
+
+export type SearchIntent = {
+  interestsPrompt: string
+  locations: string[]
+  onlineOnly: boolean
+  dateFrom?: string | null
+  dateTo?: string | null
+  keywords: string[]
+}
+
+export type PoolSearchRequest = { sessionId?: string; query: string }
+
+export type PoolSearchResponse = {
+  sessionId: string
+  /** 一覧の上に出す一言。Grounding 由来ではない（§3.7 の表示義務は生じない） */
+  reply: string
+  intent: SearchIntent
+  events: Event[]
+  activity: SearchActivity[]
+  lastCollectedAt?: string | null
+  modelCalls: number
+}

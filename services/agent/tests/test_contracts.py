@@ -230,3 +230,13 @@ def test_organizer_post_feed_conforms(client: TestClient, finished_run: str) -> 
     for post in body["posts"]:
         assert post["status"] == "published"
         assert post["event"]["validationStatus"] in ("verified", "partial")
+
+
+def test_pool_search_conforms(client: TestClient, finished_run: str) -> None:
+    response = client.post("/api/pool-search", json={"query": "関西 生成AI ハッカソン"})
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("pool-search.json", "PoolSearchResponse"),
+        response.json(),
+        "PoolSearchResponse",
+    )

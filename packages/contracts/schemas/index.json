@@ -77,6 +77,17 @@
         "OrganizerPostCreateResponse",
         "OrganizerPostListResponse"
       ]
+    },
+    {
+      "id": "pool-search",
+      "path": "pool-search.json",
+      "definitions": [
+        "PoolSearchRequest",
+        "SearchIntent",
+        "SearchAgent",
+        "SearchActivity",
+        "PoolSearchResponse"
+      ]
     }
   ]
 }
