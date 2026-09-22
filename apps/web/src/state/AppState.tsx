@@ -14,7 +14,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { AgentRunPendingError, listEvents, pollAgentRun, startAgentRun } from '../api/client'
+import {
+  AgentRunPendingError,
+  listEvents,
+  pollAgentRun,
+  sendChat,
+  startAgentRun,
+} from '../api/client'
 import { displayable } from '../lib/eventView'
 import { loadRegistrations, registerToCalendar, unregisterFromCalendar } from '../lib/calendarMock'
 import type { CalendarSelection } from '../lib/calendarMock'
@@ -33,6 +39,15 @@ function readSaved(): Record<string, boolean> {
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
+/**
+ * 一覧最上部の入力欄から送った問いかけへの、エージェントの直近の応答。
+ * Grounding 由来の生成文なので、Search Suggestions の HTML も一緒に持つ（§6.4）。
+ */
+export type AgentReply = {
+  text: string
+  searchSuggestionsHtml?: string | null
+}
+
 type AppState = {
   events: Event[]
   loadState: LoadState
@@ -41,8 +56,15 @@ type AppState = {
   runPending: boolean
   saved: Record<string, boolean>
   calendar: Record<string, GoogleCalendarEventIds>
+  /** 一覧の絞り込み文字列。ホームと保存で共有する */
+  query: string
+  setQuery: (query: string) => void
+  agentReply: AgentReply | null
+  agentPending: boolean
   refresh: () => Promise<void>
   startRun: () => Promise<void>
+  /** 入力欄の内容をエージェントに送る。Run が始まれば進捗はバナーで追える */
+  ask: (message: string) => Promise<void>
   toggleSaved: (eventId: string) => void
   register: (event: Event, selection: CalendarSelection) => Promise<void>
   unregister: (eventId: string) => Promise<void>
@@ -61,6 +83,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [calendar, setCalendar] = useState<Record<string, GoogleCalendarEventIds>>(() =>
     loadRegistrations(),
   )
+  const [query, setQuery] = useState('')
+  const [agentReply, setAgentReply] = useState<AgentReply | null>(null)
+  const [agentPending, setAgentPending] = useState(false)
+  const sessionRef = useRef<string | undefined>(undefined)
   const runningRef = useRef(false)
 
   const refresh = useCallback(async (sourceRunId?: string) => {
@@ -121,6 +147,37 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, [refresh])
 
+  const ask = useCallback(
+    async (message: string) => {
+      const trimmed = message.trim()
+      if (!trimmed || agentPending) return
+      setAgentPending(true)
+      try {
+        const response = await sendChat({ sessionId: sessionRef.current, message: trimmed })
+        sessionRef.current = response.sessionId
+        setAgentReply({
+          text: response.reply,
+          searchSuggestionsHtml: response.searchSuggestionsHtml,
+        })
+        for (const action of response.actions ?? []) {
+          // Run の完了は待たない。進捗は全画面共通のバナーで見せる
+          if (action.type === 'agent_run_started') void startRun()
+          if (action.type === 'events_ready') await refresh()
+        }
+      } catch (error) {
+        setAgentReply({
+          text:
+            error instanceof Error
+              ? `接続に失敗しました: ${error.message}`
+              : 'エージェントに接続できませんでした。',
+        })
+      } finally {
+        setAgentPending(false)
+      }
+    },
+    [agentPending, refresh, startRun],
+  )
+
   const toggleSaved = useCallback((eventId: string) => {
     setSaved((current) => ({ ...current, [eventId]: !current[eventId] }))
   }, [])
@@ -153,8 +210,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       runPending,
       saved,
       calendar,
+      query,
+      setQuery,
+      agentReply,
+      agentPending,
       refresh: () => refresh(),
       startRun,
+      ask,
       toggleSaved,
       register,
       unregister,
@@ -168,8 +230,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       runPending,
       saved,
       calendar,
+      query,
+      agentReply,
+      agentPending,
       refresh,
       startRun,
+      ask,
       toggleSaved,
       register,
       unregister,
