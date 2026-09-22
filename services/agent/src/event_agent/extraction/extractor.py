@@ -33,6 +33,17 @@ _HYBRID_WORDS = ("ハイブリッド", "hybrid", "現地とオンライン", "�
 _VENUE_LABELS = ("会場", "開催場所", "場所", "venue")
 _ACCESS_LABELS = ("最寄駅", "最寄り駅", "アクセス", "交通")
 _STATION = re.compile(r"([一-龥ぁ-んァ-ヶA-Za-z0-9ー]{1,12}?)駅")
+# 「京阪電車「天満橋」駅」のように括弧で囲む書き方。こちらを先に見る
+_STATION_QUOTED = re.compile(r"[「『\"]([^」』\"]{1,12})[」』\"]\s*駅")
+# 路線名の接頭辞。駅名検索の妨げになるので落とす
+_LINE_PREFIX = re.compile(
+    r"^(JR西日本|JR東日本|JR東海|JR|ＪＲ|阪急電鉄|阪急|阪神電車|阪神|京阪電車|京阪|近鉄|南海|"
+    r"Osaka Metro|OsakaMetro|大阪メトロ|東京メトロ|都営地下鉄|都営|地下鉄|市営|新交通)"
+)
+# 「◯◯駅」に見えて駅名ではない語
+_STATION_NOISE = ("各", "当", "最寄", "この", "同", "終着", "始発", "前", "無人", "次", "各停")
+# 駅名が本文にあると判断してよい言い回し。無関係な文中の「大阪駅前の再開発」を拾わない
+_ACCESS_WORDS = ("徒歩", "下車", "駅から", "駅より", "最寄", "アクセス", "分の", "直結")
 _ORGANIZER_LABELS = ("主催", "主催者", "organizer", "運営")
 
 # category（表示用の細分）→ kind（絞り込みとラベル表の切り替え）
@@ -143,20 +154,49 @@ def location_of(text: str) -> tuple[str, str | None, str]:
     return "unknown", None, ""
 
 
+def _clean_station(raw: str) -> str | None:
+    """駅名だけにする。路線名の接頭辞と「◯◯線」までを落とす。"""
+    name = _LINE_PREFIX.sub("", raw).strip(" 　・（）()")
+    if "線" in name:
+        # 「御堂筋線本町」→「本町」。路線名まで入れると駅名検索に当たらない
+        name = name.rsplit("線", 1)[1].strip(" 　・")
+    if not name or name in _STATION_NOISE or len(name) > 12:
+        return None
+    return name
+
+
+def _station_in(fragment: str) -> str | None:
+    for match in _STATION_QUOTED.finditer(fragment):
+        name = _clean_station(match.group(1))
+        if name:
+            return name
+    for match in _STATION.finditer(fragment):
+        name = _clean_station(match.group(1))
+        if name:
+            return name
+    return None
+
+
 def station_of(text: str) -> str | None:
     """「最寄駅: JR大阪駅から徒歩5分」→「大阪」。経路検索の到着駅に使う。
 
-    路線名の接頭辞（JR / 阪急 など）は駅名検索の妨げになるので落とす。
-    見つからなければ None。推測しない。
+    ラベル行（最寄駅 / アクセス / 交通）が無い告知が実際には多いので、
+    アクセスの言い回し（徒歩・下車・◯◯駅から…）を含む行も見る。
+    本文全体を舐めはしない。「大阪駅前の再開発」のような無関係な文を
+    最寄駅にしてしまう。見つからなければ None（推測しない）。
     """
-    value = _labelled_value(text, _ACCESS_LABELS)
-    if not value:
-        return None
-    match = _STATION.search(value)
-    if not match:
-        return None
-    name = re.sub(r"^(JR|ＪＲ|阪急|阪神|京阪|近鉄|南海|地下鉄|Osaka Metro|大阪メトロ|市営)", "", match.group(1))
-    return name or None
+    labelled = _labelled_value(text, _ACCESS_LABELS)
+    if labelled:
+        found = _station_in(labelled)
+        if found:
+            return found
+    for raw_line in d.normalize(text).splitlines():
+        line = raw_line.strip()
+        if "駅" in line and any(word in line for word in _ACCESS_WORDS):
+            found = _station_in(line)
+            if found:
+                return found
+    return None
 
 
 def category_of(text: str) -> str:

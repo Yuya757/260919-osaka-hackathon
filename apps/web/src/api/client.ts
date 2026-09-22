@@ -103,8 +103,13 @@ export function listEvidence(eventId: string): Promise<EvidenceListResponse> {
   )
 }
 
-export function getEventRoute(eventId: string, from: string): Promise<EventRouteResponse> {
-  const query = `?from=${encodeURIComponent(from)}`
+export function getEventRoute(
+  eventId: string,
+  from: string,
+  /** 到着駅。イベントの最寄駅が未確認のときに使う */
+  to?: string,
+): Promise<EventRouteResponse> {
+  const query = `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}`
   return request<EventRouteResponse>(`/api/events/${encodeURIComponent(eventId)}/route${query}`)
 }
 
