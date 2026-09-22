@@ -240,3 +240,13 @@ def test_pool_search_conforms(client: TestClient, finished_run: str) -> None:
         response.json(),
         "PoolSearchResponse",
     )
+def test_post_metrics_conform(client: TestClient) -> None:
+    created = client.post("/api/organizer-posts", json=POST_BODY).json()["post"]
+    response = client.get(f"/api/organizer-posts/{created['postId']}/metrics")
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("organizer-post.json", "PostMetricsResponse"),
+        response.json(),
+        "PostMetricsResponse",
+    )
+    assert created["organizerConfirmed"] is False

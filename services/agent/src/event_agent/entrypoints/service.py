@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from event_agent.agents.chat import handle_chat
@@ -35,16 +36,22 @@ from event_agent.schemas import (
     OrganizerPostRequest,
     PoolSearchRequest,
     PoolSearchResponse,
+    PostMetricsResponse,
+    MetricEventRequest,
     preview_evidence,
 )
 from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 from event_agent.workflows.pool import ranked_pool
 from event_agent.workflows.pool_search import search_pool
+from event_agent.domain.outbound import with_utm
 from event_agent.workflows.organizer_posts import (
+    PostNotFound,
     PostRejected,
     create_post,
     list_feed,
+    outbound_url,
+    post_metrics,
     preview_post,
 )
 
@@ -272,3 +279,49 @@ async def create_organizer_post(request: OrganizerPostRequest) -> OrganizerPostC
 async def list_organizer_posts() -> OrganizerPostListResponse:
     """フィード。公開中で開催前の投稿を、固定 → 優先 → 新しい順で返す。"""
     return OrganizerPostListResponse(posts=list_feed(now=datetime.now(timezone.utc)))
+
+
+# -------------------------------------------------------------- metrics (ADR-009)
+
+JST_OFFSET = timedelta(hours=9)
+
+
+def _jst_date(now: datetime) -> str:
+    return (now + JST_OFFSET).date().isoformat()
+
+
+@app.get("/api/go/{event_id}/{kind}")
+async def go_outbound(event_id: str, kind: str) -> RedirectResponse:
+    """公式サイト・申込ページへの計測付きリダイレクト。
+
+    宛先は保存済みの URL だけ（クエリで受け取らない）。CDN やブラウザが 302 を
+    キャッシュしてカウンタを飛ばさないよう no-store。
+    """
+    if kind not in ("official", "application", "contact"):
+        raise HTTPException(status_code=404, detail="Not found")
+    event = _find_event(event_id)
+    target = outbound_url(event, kind) if event else None
+    if not target:
+        raise HTTPException(status_code=404, detail="Not found")
+    store.increment_event_metric(event_id, kind, jst_date=_jst_date(datetime.now(timezone.utc)))
+    return RedirectResponse(
+        with_utm(target, event_id), status_code=302, headers={"Cache-Control": "no-store"}
+    )
+
+
+@app.post("/api/events/{event_id}/metrics", status_code=204)
+async def record_event_metric(event_id: str, body: MetricEventRequest) -> Response:
+    """カレンダー登録の計測。登録そのものは端末側のモックで行われる。"""
+    if not _find_event(event_id):
+        raise HTTPException(status_code=404, detail="Event not found")
+    store.increment_event_metric(event_id, body.kind, jst_date=_jst_date(datetime.now(timezone.utc)))
+    return Response(status_code=204)
+
+
+@app.get("/api/organizer-posts/{post_id}/metrics", response_model=PostMetricsResponse)
+async def get_post_metrics(post_id: str) -> PostMetricsResponse:
+    """投稿の成果（認証は未導入なので公開。ADR-009）。"""
+    try:
+        return post_metrics(post_id)
+    except PostNotFound as exc:
+        raise HTTPException(status_code=404, detail="Post not found") from exc

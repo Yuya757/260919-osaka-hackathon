@@ -480,3 +480,27 @@ class TestReset:
         assert store.list_events() == []
         assert store.get_evidence("run-1", ["ev-1"]) == []
         assert store.list_organizer_posts() == []
+
+
+class TestMetrics:
+    def test_increment_creates_and_accumulates(self, store):
+        assert store.get_event_metrics("evt-1") is None
+        store.increment_event_metric("evt-1", "official", jst_date="2026-09-21")
+        store.increment_event_metric("evt-1", "official", jst_date="2026-09-21")
+        store.increment_event_metric("evt-1", "calendar", jst_date="2026-09-22")
+        metrics = store.get_event_metrics("evt-1")
+        assert metrics.event_id == "evt-1"
+        assert metrics.clicks.official == 2 and metrics.clicks.application == 0
+        assert metrics.calendar == 1
+        assert metrics.daily["2026-09-21"].clicks == 2 and metrics.daily["2026-09-21"].calendar == 0
+        assert metrics.daily["2026-09-22"].calendar == 1
+        assert metrics.updated_at is not None
+
+    def test_confirmation_is_kept_on_resave(self, store):
+        store.save_organizer_post(make_post())
+        confirmed = store.update_post_state("post-1", organizer_confirmed=True, now=NOW)
+        assert confirmed.organizer_confirmed and confirmed.confirmed_at == NOW
+        resaved = store.save_organizer_post(make_post(title="改題"))
+        assert resaved.organizer_confirmed and resaved.confirmed_at == NOW
+        cleared = store.update_post_state("post-1", organizer_confirmed=False, now=NOW)
+        assert not cleared.organizer_confirmed and cleared.confirmed_at is None

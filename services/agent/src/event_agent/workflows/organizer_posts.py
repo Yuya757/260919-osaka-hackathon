@@ -21,9 +21,11 @@ from event_agent.extraction.post_text import PostDraft, derive_event_from_post, 
 from event_agent.schemas import (
     ORGANIZER_POST_BODY_MAX,
     ApiEvent,
+    EventMetrics,
     OrganizerPost,
     OrganizerPostRequest,
     PostIssue,
+    PostMetricsResponse,
     PostPlacement,
 )
 from event_agent.security import prompt_guard
@@ -258,8 +260,90 @@ def list_feed(*, now: datetime) -> list[OrganizerPost]:
     return feed_order(visible, now=now)
 
 
+# ------------------------------------------------- moderation / sponsorship / metrics
+
+
+class PostNotFound(Exception):
+    pass
+
+
+def _require_post(post_id: str) -> OrganizerPost:
+    post = store.get_organizer_post(post_id)
+    if post is None:
+        raise PostNotFound(post_id)
+    return post
+
+
+def confirm_post(post_id: str, *, now: datetime) -> OrganizerPost:
+    """管理者が主催者の本人性を確認した印を付ける（ADR-009）。ボット投稿には付けない。"""
+    post = _require_post(post_id)
+    if post.origin == "bot":
+        raise ValueError("ボット投稿は AI 収集イベントの写しなので主催者確認できません")
+    return store.update_post_state(post_id, organizer_confirmed=True, now=now) or post
+
+
+def pin_post(post_id: str, *, until: datetime, now: datetime) -> OrganizerPost:
+    """PR 枠（固定）。期限は必須で、過ぎれば一覧側で通常扱いになる。"""
+    _require_post(post_id)
+    placement = PostPlacement(kind="pinned", until=until)
+    return store.update_post_state(post_id, placement=placement, now=now)  # type: ignore[return-value]
+
+
+def unpin_post(post_id: str, *, now: datetime) -> OrganizerPost:
+    _require_post(post_id)
+    return store.update_post_state(post_id, placement=PostPlacement(), now=now)  # type: ignore[return-value]
+
+
+def hide_post(post_id: str, *, now: datetime) -> OrganizerPost:
+    _require_post(post_id)
+    return store.update_post_state(post_id, status="hidden", now=now)  # type: ignore[return-value]
+
+
+def show_post(post_id: str, *, now: datetime) -> OrganizerPost:
+    _require_post(post_id)
+    return store.update_post_state(post_id, status="published", now=now)  # type: ignore[return-value]
+
+
+def post_metrics(post_id: str) -> PostMetricsResponse:
+    """投稿の成果。自イベントと、結び付いた AI 収集イベントの両方を返す。"""
+    post = _require_post(post_id)
+    own = store.get_event_metrics(post.event.event_id) or EventMetrics(eventId=post.event.event_id)
+    linked = None
+    if post.linked_event_id and post.linked_event_id != post.event.event_id:
+        linked = store.get_event_metrics(post.linked_event_id) or EventMetrics(
+            eventId=post.linked_event_id
+        )
+    return PostMetricsResponse(
+        postId=post.post_id,
+        eventId=post.event.event_id,
+        linkedEventId=post.linked_event_id,
+        metrics=own,
+        linkedMetrics=linked,
+    )
+
+
+def outbound_url(event: ApiEvent, kind: str) -> str | None:
+    """保存済みの URL だけを返す。クエリで宛先を受け取らない（オープンリダイレクト防止）。"""
+    if kind == "official":
+        return event.official_url
+    if kind == "application":
+        return event.application_url or None
+    if kind == "contact":
+        # 投稿由来のイベントは officialUrl が主催者の連絡先 URL
+        return event.official_url
+    return None
+
+
 __all__ = [
+    "PostNotFound",
     "PostRejected",
+    "confirm_post",
+    "hide_post",
+    "outbound_url",
+    "pin_post",
+    "post_metrics",
+    "show_post",
+    "unpin_post",
     "create_post",
     "effective_placement",
     "link_to_collected_event",
