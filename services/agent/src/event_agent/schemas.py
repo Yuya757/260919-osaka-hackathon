@@ -163,6 +163,17 @@ class AgentRun(BaseModel):
             del self.activity[: len(self.activity) - RUN_ACTIVITY_MAX]
 
 
+class UsageRecord(BaseModel):
+    """1 日（JST）の検索・生成の使用量（ADR-008 決定5）。`usage/{jstDate}`。"""
+
+    day: str
+    grounding_calls: int = Field(default=0, ge=0, alias="groundingCalls")
+    model_calls: int = Field(default=0, ge=0, alias="modelCalls")
+    updated_at: datetime | None = Field(default=None, alias="updatedAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     demo_mode: bool

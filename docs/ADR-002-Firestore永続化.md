@@ -29,6 +29,8 @@ Evidenceがすべて消えていた。設計書 §7 が要求する `agentRuns` 
 | `agentRunKeys/{hash(idempotencyKey)}` | Runの冪等キー索引 | §9.3 |
 | `sessions/{hash(sessionId)}` | チャットセッション | — |
 | `appState/latestRun` | 最新Runへのポインタ | — |
+| `organizerPosts/{postId}` | 主催者投稿（派生 Event を埋め込む） | ADR-006 |
+| `usage/{jstDate}` | 1 日の検索・生成回数（上限の予約） | ADR-008 |
 
 ### 決定1: イベントのドキュメントIDを `eventId` ではなく `dedupKey` にする
 

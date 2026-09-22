@@ -25,6 +25,8 @@ class FakeSearch:
     def __init__(self, hits: tuple[SearchHit, ...]) -> None:
         self._hits = hits
         self.demo_mode = False  # フィクスチャ経路ではなく本番と同じ分岐を通す
+        self.grounding_calls_used = 0
+        self.text_calls_used = 0
 
     def reset_call_budget(self) -> None:
         return

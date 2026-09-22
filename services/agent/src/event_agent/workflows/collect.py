@@ -14,6 +14,7 @@ from event_agent.demo.catalog import demo_catalog
 from event_agent.demo.evidence import demo_evidence
 from event_agent.demo.pages import DEMO_PAGE_SOURCES, demo_search_hits
 from event_agent.domain.dedup import group_duplicates, merge_group
+from event_agent.domain.normalize import normalize_url
 from event_agent.domain.ranking import score_recommendation
 from event_agent.domain.validation import score_event
 from event_agent.extraction import extract_candidates
@@ -22,6 +23,7 @@ from event_agent.extraction.sources import ARTICLE_HOSTS, is_article_host, sourc
 from event_agent.clients.gemini import gemini_client
 from event_agent.clients.page_fetcher import FetchedPage, SearchHit, page_fetcher
 from event_agent.schemas import (
+    SYSTEM_USER_ID,
     DEMO_USER_ID,
     AgentRun,
     ApiEvent,
@@ -32,6 +34,7 @@ from event_agent.security import prompt_guard
 from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
 from event_agent.workflows.organizer_posts import seed_bot_posts
+from event_agent.workflows.themes import CollectionTheme
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +236,51 @@ def _note_injection_attempt(
         )
 
 
+def _jst_day(now: datetime) -> str:
+    return now.astimezone(JST).date().isoformat()
+
+
+def _split_known_pages(
+    pages: list[FetchedPage], *, now: datetime
+) -> tuple[list[FetchedPage], list[ApiEvent]]:
+    """既知ページ（最近抽出したもの）を抽出対象から外す（ADR-008 決定4）。
+
+    Grounding の結果 URL は毎回変わるリダイレクトなので、取得後の final_url で
+    照合するしかない。`lastExtractedAt` が refresh 日数以内なら抽出（モデル呼び出し）
+    を省く。`lastSeenAt` だけを進めるのは呼び出し側。
+    """
+    by_url = {normalize_url(p.final_url): p for p in pages}
+    known = store.find_events_by_urls(list(by_url))
+    fresh_after = now - timedelta(days=settings.known_url_refresh_days)
+    skipped: list[ApiEvent] = []
+    remaining: list[FetchedPage] = []
+    for url, page in by_url.items():
+        event = known.get(url)
+        if event is not None and event.last_extracted_at and event.last_extracted_at >= fresh_after:
+            skipped.append(event)
+        else:
+            remaining.append(page)
+    return remaining, skipped
+
+
+def _gate_categories(
+    candidates: list, allowed: tuple[str, ...] | None, note: Note
+) -> tuple[list, int]:
+    """テーマ Run では対象カテゴリ以外を検証前に落とす。検証ルール自体は変えない。"""
+    if not allowed:
+        return candidates, 0
+    kept = []
+    dropped = 0
+    for candidate in candidates:
+        event = candidate.event if hasattr(candidate, "event") else candidate
+        if event.category in allowed:
+            kept.append(candidate)
+        else:
+            dropped += 1
+            note("extractor", f"対象カテゴリ外のため除外: {_host(event.official_url)}", level="warn")
+    return kept, dropped
+
+
 @dataclass
 class Buckets:
     verified: list[ApiEvent]
@@ -250,6 +298,7 @@ def _validate(
     *,
     now: datetime,
     target_year: int | None = None,
+    theme_id: str | None = None,
 ) -> Buckets:
     """Attach evidence, score confidence app-side, and bucket by status.
 
@@ -269,7 +318,14 @@ def _validate(
         if not event.title or not event.dates.event_start:
             continue
         scored = score_event(
-            event.model_copy(update={"source_run_id": run_id, "last_seen_at": now}),
+            event.model_copy(
+                update={
+                    "source_run_id": run_id,
+                    "last_seen_at": now,
+                    "last_extracted_at": now,
+                    "theme_id": theme_id,
+                }
+            ),
             evidence,
             threshold=settings.verified_confidence_threshold,
             now=now,
@@ -307,8 +363,12 @@ async def execute_collect_workflow(
     *,
     now: datetime | None = None,
     trajectory: ToolTrajectory | None = None,
+    theme: CollectionTheme | None = None,
 ) -> None:
     """The 8-step collection workflow (§6).
+
+    ``theme`` が与えられたときはテーマ単位の定期収集（ADR-008）: 対象カテゴリで
+    候補を絞り、年で弾かず、per-user の推薦スコアを保存しない。
 
     ``now`` is injected so the 終了済み check and the deadline-headroom score are
     reproducible; ``trajectory`` records tool calls for the evaluation's
@@ -347,7 +407,20 @@ async def execute_collect_workflow(
             note("planner", f"クエリ: {query}")
 
         await _set_step(run, "search")
-        hits = await _search_step(queries, trajectory, note)
+        # 1 日の検索上限（ADR-008 決定5）。予約できなければ検索を飛ばして partial_success
+        budget_exhausted = False
+        if gemini_client.demo_mode or store.reserve_grounding_calls(
+            _jst_day(now), len(queries), cap=settings.daily_grounding_cap
+        ):
+            hits = await _search_step(queries, trajectory, note)
+        else:
+            budget_exhausted = True
+            hits = []
+            note(
+                "searcher",
+                f"本日の検索上限（{settings.daily_grounding_cap} 回）に達したため検索を見送り",
+                level="warn",
+            )
 
         pages, fetch_rejected = await _fetch_step(hits, trajectory, note)
         # まとめ記事やブログは告知ページではない。記事中の日付を開催日にしない
@@ -356,6 +429,15 @@ async def execute_collect_workflow(
         fetch_rejected.extend(f"article-host:{p.final_url}" for p in articles)
         for article in articles:
             note("searcher", f"記事サイトのため対象外: {_host(article.final_url)}", level="warn")
+
+        # 最近抽出したページは抽出を省く（ADR-008 決定4）。lastSeenAt だけ進める。
+        # テーマ Run だけ。手動 Run はその Run の結果として一覧に返す必要がある
+        known: list[ApiEvent] = []
+        if theme:
+            pages, known = _split_known_pages(pages, now=now)
+        if known:
+            store.touch_events([e.dedup_key for e in known], last_seen_at=now)
+            note("extractor", f"{len(known)} ページは最近抽出済みのため省略")
 
         await _set_step(run, "extract_validate")
         await asyncio.sleep(delay)
@@ -411,12 +493,21 @@ async def execute_collect_workflow(
                     note("extractor", f"日程を特定できず: {_host(page.final_url)}", level="warn")
 
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
-        if not candidates and settings.demo_catalog_fallback:
+        # 既知ページを省いただけなら「0件」ではない
+        if not candidates and not known and settings.demo_catalog_fallback:
             candidates = _filter_catalog(normalized)
             note("extractor", f"抽出 0 件のためデモカタログ {len(candidates)} 件で補完", level="warn")
 
+        candidates, off_category = _gate_categories(
+            candidates, theme.allowed_categories if theme else None, note
+        )
         buckets = _validate(
-            candidates, run.run_id, now=now, target_year=normalized.target_year
+            candidates,
+            run.run_id,
+            now=now,
+            # テーマ Run は年で弾かない（12 月に翌年の告知を落とさないため）。終了済みは別に弾く
+            target_year=None if theme else normalized.target_year,
+            theme_id=theme.id if theme else None,
         )
         note(
             "extractor",
@@ -430,8 +521,13 @@ async def execute_collect_workflow(
         note("organizer", f"重複 {duplicate_count} 件を統合 → {len(events)} 件")
 
         await _set_step(run, "rank")
-        events = _rank(events, normalized, run_id=run.run_id, now=now)
-        note("organizer", "関心との適合でおすすめ順に並べ替え")
+        if theme:
+            # 共有プールに特定ユーザーの点数を書かない。採点は読み出し時（ADR-008 決定2）
+            events = [e.model_copy(update={"recommendation": None}) for e in events]
+            note("organizer", "共有プール向けのため採点は読み出し時に行う")
+        else:
+            events = _rank(events, normalized, run_id=run.run_id, now=now)
+            note("organizer", "関心との適合でおすすめ順に並べ替え")
 
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
@@ -450,15 +546,21 @@ async def execute_collect_workflow(
         # partial のイベントは取得に成功しており、失敗ではない。保留(quarantined)や
         # 取得できなかった候補があるときだけ partial_success とする。
         dropped = len(buckets.quarantined) + len(fetch_rejected)
-        run.status = "partial_success" if dropped else "succeeded"
+        run.status = "partial_success" if dropped or budget_exhausted else "succeeded"
         run.verified_count = len(buckets.verified)
         run.partial_count = len(buckets.partial)
         run.quarantined_count = len(buckets.quarantined)
-        run.rejected_count = len(buckets.rejected)
+        run.rejected_count = len(buckets.rejected) + off_category
         run.duplicate_count = duplicate_count
         run.candidate_count = len(candidates)
         run.query_count = len(queries)
         run.error_count = len(fetch_rejected)
+        # 課金単位の記録（§11.2）
+        run.grounding_calls = gemini_client.grounding_calls_used
+        run.model_calls = gemini_client.text_calls_used
+        run.skipped_known_count = len(known)
+        if run.model_calls:
+            store.record_model_calls(_jst_day(now), run.model_calls)
         run.current_step = "completed"
         run.completed_at = datetime.now(timezone.utc)
         store.update_run(run)
@@ -481,6 +583,7 @@ def _new_run(
     *,
     trigger_type: str = "manual",
     user_id: str = DEMO_USER_ID,
+    theme_id: str | None = None,
 ) -> AgentRun:
     """Create a queued run. Manual runs take the client key, else server-issued (§9.3)."""
     return AgentRun(
@@ -491,20 +594,22 @@ def _new_run(
         status="queued",
         currentStep="queued",
         model=settings.gemini_model,
+        themeId=theme_id,
     )
 
 
 def scheduled_idempotency_key(
-    user_id: str, *, now: datetime, schedule_version: str
+    subject: str, *, now: datetime, schedule_version: str
 ) -> str:
-    """§9.3 の定期Runキー: ``userId + JST日付 + scheduleVersion``.
+    """§9.3 の定期Runキー: ``subject + JST日付 + scheduleVersion``.
 
+    ``subject`` はユーザー ID か、テーマ Run なら ``theme:<id>``（ADR-008）。
     The date is taken in JST because the schedule is "毎朝7時" in Japan; using
     UTC would give two different keys to a single Japanese morning whenever the
     job runs before 09:00 JST, which is exactly when it is meant to run.
     """
     jst_date = now.astimezone(JST).date().isoformat()
-    material = f"{user_id}|{jst_date}|{schedule_version}"
+    material = f"{subject}|{jst_date}|{schedule_version}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
@@ -562,4 +667,22 @@ async def run_daily_collection(
     if stored.run_id != run.run_id:
         return stored, False
     await execute_collect_workflow(run.run_id, preferences, False, now=now)
+    return store.get_run(run.run_id) or run, True
+
+
+async def run_theme_collection(
+    theme: CollectionTheme, *, now: datetime | None = None
+) -> tuple[AgentRun, bool]:
+    """テーマ単位の定期収集（ADR-008）。同じ JST 日に同じテーマは一度しか走らない。"""
+    now = now or datetime.now(timezone.utc)
+    key = scheduled_idempotency_key(
+        f"theme:{theme.id}", now=now, schedule_version=settings.run_schedule_version
+    )
+    run = _new_run(key, trigger_type="scheduled", user_id=SYSTEM_USER_ID, theme_id=theme.id)
+    stored = store.create_run(run)
+    if stored.run_id != run.run_id:
+        return stored, False
+    await execute_collect_workflow(
+        run.run_id, theme.preferences(now=now), False, now=now, theme=theme
+    )
     return store.get_run(run.run_id) or run, True
