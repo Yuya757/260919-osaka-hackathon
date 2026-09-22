@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
+import { goUrl } from '../api/client'
 import { formatLocationType, hostOf, isCalendarRegistered, placeLabel } from '../lib/eventView'
 import { excerpt, originLabel, placementLabel, postedAtLabel, profileMatches } from '../lib/feedView'
 import { loadProfile } from '../lib/profile'
@@ -42,7 +43,8 @@ export function FeedScreen() {
         <div className="row-main">
           <p className="post-eyebrow">
             <span>{originLabel(post)}</span>
-            {pinned && <span className="tag">{pinned}</span>}
+            {post.organizerConfirmed && <span className="tag tag-confirmed">主催者確認済み</span>}
+            {pinned && <span className="tag tag-pr">{pinned}</span>}
             {hits.length > 0 && <span className="tag tag-match">関心に合う: {hits.join('・')}</span>}
             <span className="post-date">{postedAtLabel(post.createdAt)}</span>
           </p>
@@ -58,7 +60,11 @@ export function FeedScreen() {
           </div>
           <p className="row-meta">
             {post.organizerName} · {placeLabel(event)} · {formatLocationType(event.location.type)} ·{' '}
-            <a href={post.contactUrl} target="_blank" rel="noopener noreferrer nofollow">
+            <a
+              href={goUrl(event.eventId, post.origin === 'organizer' ? 'contact' : 'official')}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+            >
               {hostOf(post.contactUrl)}
             </a>
           </p>

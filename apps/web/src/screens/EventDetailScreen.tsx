@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { listEvidence } from '../api/client'
+import { goUrl, listEvidence } from '../api/client'
 import { useAppState } from '../state/AppState'
 import {
   categoryLabel,
@@ -137,6 +137,7 @@ export function EventDetailScreen() {
         <p className="eyebrow">
           {categoryLabel(event.category)}
           {post && ' · 主催者投稿'}
+          {post?.organizerConfirmed && <span className="tag tag-confirmed">主催者確認済み</span>}
         </p>
         <h1>{event.title}</h1>
         <p className="detail-meta">
@@ -222,11 +223,21 @@ export function EventDetailScreen() {
         >
           {isSaved ? '保存済' : '保存'}
         </button>
-        <a className="button" href={event.officialUrl} target="_blank" rel="noopener noreferrer">
+        <a
+          className="button"
+          href={goUrl(event.eventId, post ? 'contact' : 'official')}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           公式サイト
         </a>
         {showApplication && (
-          <a className="button" href={event.applicationUrl!} target="_blank" rel="noopener noreferrer">
+          <a
+            className="button"
+            href={goUrl(event.eventId, 'application')}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             申込ページ
           </a>
         )}

@@ -1851,6 +1851,22 @@ button.next-title:hover {
   border-color: var(--deadline);
 }
 
+.tag-confirmed {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.tag-pr {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.detail-title .eyebrow .tag {
+  margin-left: 8px;
+  letter-spacing: 0;
+}
+
 .post-body {
   margin: 0;
   font-size: 12px;
