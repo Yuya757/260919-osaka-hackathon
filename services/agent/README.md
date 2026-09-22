@@ -10,6 +10,7 @@ FastAPI + ADK-style deterministic workflow for event discovery. Uses Vertex AI G
 - `GET /api/agent-runs/{runId}` の `activity[]` — 各役割（planner / searcher / extractor / organizer）の行動。UI の「エージェントの動き」用
 - `GET /api/agent-runs/{runId}`
 - `GET /api/events?sourceRunId=&sessionId=` — `sourceRunId` があればその Run、無ければ共有プール（ADR-008）を `sessionId` の関心で採点した順。`lastCollectedAt` を添える
+- `POST /api/pool-search` — `{ "sessionId?", "query" }` → 解釈・絞り込み・採点・提示の `activity[]` と採点済み `events[]`（ADR-010、Gemini 2 回、Web には出ない）
 - `GET /api/events/{eventId}/route?from=<出発駅名>` — 駅すぱあと API でイベント開始時刻に到着する経路を 1 件返す（`EKISPERT_API_KEY` 必須。未設定時は 503）
 - `POST /api/organizer-posts/preview` — 主催者投稿の下書き → `{ event|null, linkedEvent|null, issues[] }`。何も保存しない（F-06）
 - `POST /api/organizer-posts` — 投稿を保存 → `201 { post, warnings[] }`。命令様の本文・非公開URLは `400`

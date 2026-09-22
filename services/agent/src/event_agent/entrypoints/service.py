@@ -33,11 +33,14 @@ from event_agent.schemas import (
     OrganizerPostListResponse,
     OrganizerPostPreviewResponse,
     OrganizerPostRequest,
+    PoolSearchRequest,
+    PoolSearchResponse,
     preview_evidence,
 )
 from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 from event_agent.workflows.pool import ranked_pool
+from event_agent.workflows.pool_search import search_pool
 from event_agent.workflows.organizer_posts import (
     PostRejected,
     create_post,
@@ -216,6 +219,27 @@ async def get_event_route(
         raise HTTPException(status_code=502, detail="経路検索サービスに接続できませんでした。") from exc
 
     return EventRouteResponse(eventId=event.event_id, arriveBy=event.dates.event_start, route=route)
+
+
+# ---------------------------------------------------------------- pool search
+
+
+@app.post("/api/pool-search", response_model=PoolSearchResponse)
+async def pool_search(body: PoolSearchRequest) -> PoolSearchResponse:
+    """プール探索エージェント（ADR-010）。Web には出ず、収集済みイベントを問いかけで探す。"""
+    result = await search_pool(body.query, body.session_id)
+    evidence_by_id = store.get_evidence_for_events(result.events)
+    result.events = [
+        e.model_copy(
+            update={
+                "evidence_preview": preview_evidence(
+                    evidence_by_id.get(e.event_id) or demo_evidence().get(e.event_id, [])
+                )
+            }
+        )
+        for e in result.events
+    ]
+    return result
 
 
 # ------------------------------------------------------------ organizer posts

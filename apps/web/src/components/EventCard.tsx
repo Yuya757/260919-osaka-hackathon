@@ -35,6 +35,9 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
           {formatLocationType(event.location.type)}
         </p>
         <DualDateBlock event={event} />
+        {event.recommendation?.reason && (
+          <p className="row-reason">{event.recommendation.reason}</p>
+        )}
         {/* 根拠（出典と引用）。締切 → 開催日の順で最大2件。全文は詳細で */}
         {(event.evidencePreview ?? []).slice(0, 2).map((item) => (
           <p className="row-evidence" key={`${item.sourceUrl}-${item.excerpt}`}>

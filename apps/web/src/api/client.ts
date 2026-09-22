@@ -9,6 +9,8 @@ import type {
   OrganizerPostListResponse,
   OrganizerPostPreviewResponse,
   OrganizerPostRequest,
+  PoolSearchRequest,
+  PoolSearchResponse,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -76,6 +78,14 @@ export function listEvents(sourceRunId?: string, sessionId?: string): Promise<Ev
   if (sessionId) params.set('sessionId', sessionId)
   const query = params.toString()
   return request<EventListResponse>(`/api/events${query ? `?${query}` : ''}`)
+}
+
+/** プール探索エージェント（ADR-010）。Web には出ず、収集済みイベントを問いかけで探す。 */
+export function poolSearch(body: PoolSearchRequest): Promise<PoolSearchResponse> {
+  return request<PoolSearchResponse>('/api/pool-search', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export type HealthResponse = { status: string; demo_mode: boolean; model?: string | null; manualRunsEnabled: boolean }

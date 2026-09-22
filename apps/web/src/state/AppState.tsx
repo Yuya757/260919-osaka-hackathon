@@ -21,7 +21,7 @@ import {
   listEvents,
   listOrganizerPosts,
   pollAgentRun,
-  sendChat,
+  poolSearch,
   startAgentRun,
 } from '../api/client'
 import { displayable } from '../lib/eventView'
@@ -34,6 +34,7 @@ import type {
   OrganizerPost,
   OrganizerPostCreateResponse,
   OrganizerPostRequest,
+  SearchActivity,
 } from '../types/api'
 
 const SAVED_KEY = 'event-agent-saved-v1'
@@ -50,12 +51,12 @@ function readSaved(): Record<string, boolean> {
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 /**
- * 一覧最上部の入力欄から送った問いかけへの、エージェントの直近の応答。
- * Grounding 由来の生成文なので、Search Suggestions の HTML も一緒に持つ（§6.4）。
+ * 一覧最上部の入力欄から送った問いかけへの、プール探索エージェントの直近の応答
+ * （ADR-010）。Grounding 由来ではないので Search Suggestions の表示義務は無い。
  */
 export type AgentReply = {
   text: string
-  searchSuggestionsHtml?: string | null
+  activity: SearchActivity[]
 }
 
 type AppState = {
@@ -73,7 +74,7 @@ type AppState = {
   agentPending: boolean
   refresh: () => Promise<void>
   startRun: () => Promise<void>
-  /** 入力欄の内容をエージェントに送る。Run が始まれば進捗はバナーで追える */
+  /** 入力欄の内容でプールを探す（ADR-010）。Web には出ない */
   ask: (message: string) => Promise<void>
   /** ユーザー起点の Grounding 探索を受け付けるか（ADR-008）。false なら「探す」は並べ替え */
   manualRunsEnabled: boolean
@@ -210,53 +211,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   )
 
   /**
-   * 「探す」= 必ず探索を始める。文に「探して」と書かなくてもよい。
-   * 文があれば先にチャットへ送って関心条件を更新し、チャット側が Run を
-   * 始めなかったときはこちらから始める。空なら条件そのままで探索する。
+   * 「探す」= プール探索エージェント（ADR-010）。Web には出ず、毎朝の収集で貯めた
+   * イベントを問いかけで解釈 → 絞り込み → 採点 → 提示する。文に「探して」と
+   * 書かなくてもよく、空なら現在の関心条件で並べ直す。
    */
   const ask = useCallback(
     async (message: string) => {
-      const trimmed = message.trim()
       if (agentPending) return
-      if (!trimmed) {
-        // 空なら条件そのまま。探索が許されていなければプールを並べ直すだけ
-        if (manualRunsEnabled) void startRun()
-        else await refresh()
-        return
-      }
       setAgentPending(true)
       try {
-        const response = await sendChat({ sessionId: sessionRef.current, message: trimmed })
-        sessionRef.current = response.sessionId
-        setAgentReply({
-          text: response.reply,
-          searchSuggestionsHtml: response.searchSuggestionsHtml,
-        })
-        let started = false
-        for (const action of response.actions ?? []) {
-          // Run の完了は待たない。進捗は全画面共通のパネルで見せる
-          if (action.type === 'agent_run_started') {
-            started = true
-            void startRun()
-          }
-          if (action.type === 'events_ready') await refresh()
-        }
-        if (!started) {
-          if (manualRunsEnabled) void startRun()
-          else await refresh()
-        }
+        const result = await poolSearch({ sessionId: sessionRef.current, query: message.trim() })
+        sessionRef.current = result.sessionId
+        setAgentReply({ text: result.reply, activity: result.activity })
+        setEvents(displayable(result.events))
+        setLastCollectedAt(result.lastCollectedAt ?? null)
+        setLoadError(null)
+        setLoadState('ready')
       } catch (error) {
         setAgentReply({
           text:
             error instanceof Error
               ? `接続に失敗しました: ${error.message}`
               : 'エージェントに接続できませんでした。',
+          activity: [],
         })
       } finally {
         setAgentPending(false)
       }
     },
-    [agentPending, manualRunsEnabled, refresh, startRun],
+    [agentPending],
   )
 
   const toggleSaved = useCallback((eventId: string) => {
