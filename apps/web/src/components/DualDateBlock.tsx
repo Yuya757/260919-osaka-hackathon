@@ -10,6 +10,7 @@ import {
   deadlineLabel,
   formatDate,
   gapDays,
+  gapNote,
   heldLabel,
   heldMilestone,
   heldRowLabel,
@@ -59,7 +60,7 @@ export function DualDateBlock({ event, size = 'card' }: Props) {
       {size === 'detail' && (
         <p className="dates-gap">
           {gap === null
-            ? '締切が未確認のため間隔を出せません'
+            ? gapNote(event)
             : `締切から${named?.label ?? (event.kind === 'hackathon' ? '開催' : '実施')}まで ${gap} 日`}
         </p>
       )}

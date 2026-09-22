@@ -34,6 +34,7 @@ from event_agent.security import prompt_guard
 from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
 from event_agent.workflows.organizer_posts import seed_bot_posts
+from event_agent.workflows.subsidies import collect_subsidies
 from event_agent.workflows.themes import CollectionTheme
 
 logger = logging.getLogger(__name__)
@@ -408,17 +409,28 @@ async def execute_collect_workflow(
             f" / {normalized.target_year}年 / オンライン{'可' if normalized.online_allowed else '不可'}",
         )
 
+        # 補助金は Web を検索せず jGrants の公開 API から貰う（ADR-011）。
+        # 検索・取得・抽出を飛ばし、検証から先は他のジャンルと同じ経路に乗せる。
+        from_api = bool(theme and theme.source == "jgrants")
+
         await _set_step(run, "plan")
         await asyncio.sleep(delay)
-        queries = _plan_queries(normalized, theme)
-        note("planner", f"検索クエリを {len(queries)} 件作成")
-        for query in queries:
-            note("planner", f"クエリ: {query}")
+        queries = [] if from_api else _plan_queries(normalized, theme)
+        if from_api:
+            note("planner", f"jGrants のキーワード {len(theme.keywords)} 件で照会")
+            for keyword in theme.keywords:
+                note("planner", f"キーワード: {keyword}")
+        else:
+            note("planner", f"検索クエリを {len(queries)} 件作成")
+            for query in queries:
+                note("planner", f"クエリ: {query}")
 
         await _set_step(run, "search")
         # 1 日の検索上限（ADR-008 決定5）。予約できなければ検索を飛ばして partial_success
         budget_exhausted = False
-        if gemini_client.demo_mode or store.reserve_grounding_calls(
+        if from_api:
+            hits = []
+        elif gemini_client.demo_mode or store.reserve_grounding_calls(
             _jst_day(now), len(queries), cap=settings.daily_grounding_cap
         ):
             hits = await _search_step(queries, trajectory, note)
@@ -431,7 +443,7 @@ async def execute_collect_workflow(
                 level="warn",
             )
 
-        pages, fetch_rejected = await _fetch_step(hits, trajectory, note)
+        pages, fetch_rejected = ([], []) if from_api else await _fetch_step(hits, trajectory, note)
         # まとめ記事やブログは告知ページではない。記事中の日付を開催日にしない
         articles = [p for p in pages if is_article_host(p.final_url)]
         pages = [p for p in pages if not is_article_host(p.final_url)]
@@ -457,20 +469,32 @@ async def execute_collect_workflow(
             for url in (page.final_url, page.requested_url)
         }
         theme_kind = theme.kind if theme else None
-        candidates = extract_candidates(
-            pages,
-            hits=hits_by_url,
-            run_id=run.run_id,
-            now=now,
-            user_id=run.user_id,
-            source_types=source_types,
-            kind=theme_kind,
-        )
+        api_calls = 0
+        if from_api:
+            candidates, api_calls = await collect_subsidies(
+                theme, run_id=run.run_id, now=now
+            )
+            note(
+                "extractor",
+                f"jGrants から {len(candidates)} 件（API 呼び出し {api_calls} 回、検索代なし）",
+            )
+        else:
+            candidates = extract_candidates(
+                pages,
+                hits=hits_by_url,
+                run_id=run.run_id,
+                now=now,
+                user_id=run.user_id,
+                source_types=source_types,
+                kind=theme_kind,
+            )
+            note(
+                "extractor",
+                f"{len(pages)} ページから {len(candidates)} 件の候補を行ラベルで抽出",
+            )
         if trajectory is not None:
             for candidate in candidates:
                 trajectory.record("extract", candidate.event.official_url)
-
-        note("extractor", f"{len(pages)} ページから {len(candidates)} 件の候補を行ラベルで抽出")
 
         # 行ラベルで開催日が取れなかったページは、モデルに該当行を引用させてから
         # 同じパーサで読む（extraction/model_locator）。デモモードでは呼ばれない。
@@ -506,7 +530,7 @@ async def execute_collect_workflow(
 
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
         # 既知ページを省いただけなら「0件」ではない
-        if not candidates and not known and settings.demo_catalog_fallback:
+        if not from_api and not candidates and not known and settings.demo_catalog_fallback:
             candidates = _filter_catalog(normalized)
             note("extractor", f"抽出 0 件のためデモカタログ {len(candidates)} 件で補完", level="warn")
 

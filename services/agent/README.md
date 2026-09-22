@@ -97,9 +97,9 @@ See [ADR-004](../../docs/ADR-004-プロンプトインジェクション対策.m
 ## Scheduled collection
 
 `entrypoints/job.py` is the Cloud Run Job entry point for the daily run
-(§14 Phase 2, ADR-008). It is deployed as `event-agent-daily` with 13 tasks run
+(§14 Phase 2, ADR-008). It is deployed as `event-agent-daily` with 17 tasks run
 one at a time — one theme per task (`hackathon-*` 4, `contest-*` 3,
-`accelerator-*` 3, `cocreation-*` 3) — and Cloud Scheduler
+`accelerator-*` 3, `cocreation-*` 3, `subsidy-*` 4) — and Cloud Scheduler
 `event-agent-daily-0700` starts it every morning at 07:00 JST. Each theme
 carries its own `kind`, lead query and `site:` queries: contests search
 公募サイト / go.jp / ac.jp, accelerators and co-creation search Creww Growth and
@@ -125,3 +125,18 @@ docker run -p 8080:8080 -e AGENT_DEMO_MODE=true event-agent
 ```
 
 Grounding search and function calling are never combined in a single Gemini request (`clients/gemini.py`).
+
+## Subsidies (jGrants)
+
+`subsidy-*` themes do not search the web. They read the public jGrants API
+(`clients/jgrants.py`), so they cost no Grounding queries and no model calls, and
+the deadline comes from `acceptance_end_datetime` instead of a page. Subsidies
+carry no event date: the UI shows 実施日 as 「なし」. See
+[ADR-011](../../docs/ADR-011-補助金はAPIから取る.md).
+
+```bash
+PYTHONPATH=src python -m event_agent.entrypoints.job subsidy-dx
+```
+
+Demo mode and the tests use the fixtures in `demo/subsidies.py` and never reach
+the network.

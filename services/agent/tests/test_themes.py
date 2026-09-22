@@ -19,10 +19,12 @@ def test_themes_map_to_task_indices():
         "contest-kansai", "contest-kanto", "contest-online",
         "accelerator-kansai", "accelerator-kanto", "accelerator-online",
         "cocreation-kansai", "cocreation-kanto", "cocreation-online",
+        "subsidy-startup", "subsidy-dx", "subsidy-monozukuri", "subsidy-kansai",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
     assert theme_for_task_index(6).id == "contest-online"
     assert theme_for_task_index(12).id == "cocreation-online"
+    assert theme_for_task_index(16).id == "subsidy-kansai"
     with pytest.raises(ValueError):
         theme_for_task_index(len(COLLECTION_THEMES))
     assert theme_by_id("hackathon-kanto").locations == ("関東", "東京")

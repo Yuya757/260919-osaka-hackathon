@@ -41,6 +41,7 @@ _KIND_BY_CATEGORY = {
     "contest": "contest",
     "acceleration": "accelerator",
     "cocreation": "cocreation",
+    "subsidy": "subsidy",
     "pitch": "contest",
     "conference": "hackathon",
     "meetup": "hackathon",
@@ -55,6 +56,7 @@ _CATEGORY_WORDS = (
     ("meetup", ("ミートアップ", "meetup", "勉強会", "もくもく")),
     ("acceleration", ("アクセラレ", "accelerat", "インキュベーション", "incubation")),
     ("cocreation", ("オープンイノベーション", "open innovation", "共創", "マッチングプログラム", "公募プログラム")),
+    ("subsidy", ("補助金", "助成金", "給付金", "公募要領")),
     ("pitch", ("ピッチ", "pitch", "demo day", "デモデイ")),
     ("workshop", ("ワークショップ", "workshop")),
 )
@@ -185,6 +187,7 @@ _CATEGORY_BY_KIND = {
     "contest": "contest",
     "accelerator": "acceleration",
     "cocreation": "cocreation",
+    "subsidy": "subsidy",
 }
 
 

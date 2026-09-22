@@ -304,3 +304,28 @@ def test_rejected_message_is_generic():
     with pytest.raises(PostRejected) as caught:
         create_post(request(FULL_BODY, organizerName=ATTACK), now=FROZEN_NOW)
     assert caught.value.message == "投稿内容を受け付けられませんでした。"
+
+
+def test_subsidy_post_without_an_event_date_is_accepted():
+    """補助金や公募の告知に実施日は無い。締切だけでも受け付ける（ADR-011）。"""
+    body = (
+        "創業5年以内の中小企業を支援する補助金です。\n"
+        "応募締切: 2026年11月27日 17:00\n"
+        "補助率: 2/3\n"
+        "上限額: 300万円\n"
+    )
+    draft = derive_event_from_post(
+        request(body, title="大阪府 中小企業スタートアップ支援補助金"), now=FROZEN_NOW
+    )
+    assert draft.ok()
+    event = draft.event
+    assert event is not None
+    assert event.kind == "subsidy"
+    assert event.dates.event_start is None
+    assert event.dates.application_deadline.isoformat() == "2026-11-27T17:00:00+09:00"
+    assert event.attributes["補助率"] == "2/3"
+    # ハッカソンは実施日が無いままでは受け付けない
+    hackathon = derive_event_from_post(
+        request("生成AIハッカソンです。\n申込締切: 2026年9月30日\n"), now=FROZEN_NOW
+    )
+    assert not hackathon.ok()
