@@ -112,3 +112,24 @@ def test_pool_search_endpoint_conforms_and_updates_session(store_backend):
         listed = client.get("/api/events", params={"sessionId": body["sessionId"]}).json()
         assert listed["events"]
         assert client.post("/api/pool-search", json={"query": "x" * 501}).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_search_records_model_calls_in_daily_usage(store_backend, monkeypatch):
+    """プール探索の生成回数も日次の使用量に残す（ADR-008 決定5）。"""
+    from event_agent.workflows.collect import run_collect_workflow as _run
+
+    await _run(UserPreferences(), True, now=FROZEN_NOW)
+
+    async def fake_generate(prompt: str, system: str | None = None, **_: object) -> str | None:
+        # 本物と同じく予算を1つ消費する。応答が読めなくても呼び出しは数える
+        gemini.gemini_client._take_call("text")
+        return None
+
+    monkeypatch.setattr(gemini.gemini_client, "_client", object())
+    monkeypatch.setattr(gemini.gemini_client, "generate_text", fake_generate)
+    result = await search_pool("大阪のハッカソン", None, now=FROZEN_NOW)
+    assert result.model_calls >= 1
+    usage = store_backend.get_usage("2026-09-21")
+    assert usage is not None and usage.model_calls == result.model_calls
+    assert usage.grounding_calls == 0
