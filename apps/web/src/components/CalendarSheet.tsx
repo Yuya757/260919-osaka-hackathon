@@ -73,7 +73,7 @@ export function CalendarSheet({ event, onClose, onConfirm }: Props) {
           <p className="sheet-note">
             実際のGoogleカレンダーには書き込んでいません。設定画面から連携状態を確認できます。
           </p>
-          <button type="button" className="primary-button wide" onClick={onClose}>
+          <button type="button" className="button button-primary wide" onClick={onClose}>
             閉じる
           </button>
         </>
@@ -132,13 +132,13 @@ export function CalendarSheet({ event, onClose, onConfirm }: Props) {
 
           <button
             type="button"
-            className="primary-button wide"
+            className="button button-primary wide"
             disabled={busy || (!deadline && !main)}
             onClick={() => void submit()}
           >
             {busy ? '登録しています…' : ctaLabel}
           </button>
-          <button type="button" className="ghost-button wide" onClick={onClose}>
+          <button type="button" className="button wide" onClick={onClose}>
             キャンセル
           </button>
         </>
