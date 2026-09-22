@@ -7,7 +7,7 @@
  * サーバーには送らない。
  */
 
-export type ProfileGroup = 'area' | 'genres' | 'purposes' | 'skills' | 'availability'
+export type ProfileGroup = 'area' | 'hackathonTypes' | 'purposes' | 'skills' | 'availability'
 
 export type ProfileStep = {
   key: ProfileGroup
@@ -30,11 +30,11 @@ export const profileSteps: ProfileStep[] = [
     options: ['大阪府', '京都府', '兵庫県', '奈良県', '関西どこでも', 'オンラインだけ'],
   },
   {
-    key: 'genres',
-    title: 'どんなイベントに行きたいですか',
+    key: 'hackathonTypes',
+    title: 'どんなハッカソンに出たいですか',
     help: 'いくつでも選べます。',
     multi: true,
-    options: ['ハッカソン', '勉強会・ミートアップ', 'カンファレンス', 'LT・登壇', 'ピッチ・アクセラレータ'],
+    options: ['学生・初心者歓迎', 'ビジネス・起業', '技術特化', 'オンライン参加OK'],
   },
   {
     key: 'purposes',
@@ -79,12 +79,12 @@ export const profileSteps: ProfileStep[] = [
   },
 ]
 
-export type Profile = { version: 4 } & Record<ProfileGroup, string[]>
+export type Profile = { version: 5 } & Record<ProfileGroup, string[]>
 
 export const emptyProfile: Profile = {
-  version: 4,
+  version: 5,
   area: [],
-  genres: [],
+  hackathonTypes: [],
   purposes: [],
   skills: [],
   availability: [],
@@ -107,7 +107,7 @@ function validChoices(value: unknown, step: ProfileStep): value is string[] {
 export function isProfile(value: unknown): value is Profile {
   if (!value || typeof value !== 'object') return false
   const p = value as Record<string, unknown>
-  if (p.version !== 4) return false
+  if (p.version !== 5) return false
   return profileSteps.every((step) => validChoices(p[step.key], step))
 }
 
@@ -125,7 +125,6 @@ export function sanitizeProfile(value: Profile): Profile {
 function migrateFromV3(value: Record<string, unknown>): Profile | null {
   if (value.version !== 3) return null
   const areaStep = stepByKey.get('area')!
-  const genreStep = stepByKey.get('genres')!
   const prefecture = typeof value.prefecture === 'string' ? value.prefecture : ''
   const online = value.online === true
   const area = areaStep.options.includes(prefecture)
@@ -133,12 +132,26 @@ function migrateFromV3(value: Record<string, unknown>): Profile | null {
     : online && !prefecture
       ? ['オンラインだけ']
       : ['関西どこでも']
-  const genres = Array.isArray(value.genres)
-    ? value.genres.filter(
-        (item): item is string => typeof item === 'string' && genreStep.options.includes(item),
+  const candidate: Profile = { ...emptyProfile, area }
+  return isProfile(candidate) ? candidate : null
+}
+
+/**
+ * v4（ジャンル選択あり）からの読み替え。ハッカソンに絞ったので「ジャンル」は捨て、
+ * 行ける範囲・目的・技術・日時はそのまま引き継ぐ。
+ */
+function migrateFromV4(value: Record<string, unknown>): Profile | null {
+  if (value.version !== 4) return null
+  const candidate: Profile = { ...emptyProfile }
+  for (const step of profileSteps) {
+    if (step.key === 'hackathonTypes') continue
+    const raw = value[step.key]
+    if (Array.isArray(raw)) {
+      candidate[step.key] = raw.filter(
+        (item): item is string => typeof item === 'string' && step.options.includes(item),
       )
-    : []
-  const candidate: Profile = { ...emptyProfile, area, genres: [...new Set(genres)] }
+    }
+  }
   return isProfile(candidate) ? candidate : null
 }
 
@@ -149,7 +162,8 @@ export function loadProfile(): { profile: Profile | null; notice: string } {
     const value: unknown = JSON.parse(raw)
     if (isProfile(value)) return { profile: value, notice: '' }
     if (value && typeof value === 'object') {
-      const migrated = migrateFromV3(value as Record<string, unknown>)
+      const record = value as Record<string, unknown>
+      const migrated = migrateFromV4(record) ?? migrateFromV3(record)
       if (migrated) {
         return {
           profile: migrated,
