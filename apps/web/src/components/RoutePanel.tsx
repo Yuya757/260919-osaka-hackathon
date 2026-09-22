@@ -4,7 +4,10 @@ import type { RouteSummary } from '../types/api'
 
 type RoutePanelProps = {
   eventId: string
+  /** 到着駅。最寄駅が未確認なら地域名で代用する（サーバー側と同じ規則） */
   nearestStation: string
+  /** false のときは代用であることを明示する */
+  stationConfirmed?: boolean
 }
 
 const ORIGIN_STORAGE_KEY = 'event-agent.origin-station'
@@ -43,7 +46,7 @@ function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours}時間` : `${hours}時間${rest}分`
 }
 
-export function RoutePanel({ eventId, nearestStation }: RoutePanelProps) {
+export function RoutePanel({ eventId, nearestStation, stationConfirmed = true }: RoutePanelProps) {
   const [open, setOpen] = useState(false)
   const [origin, setOrigin] = useState(readSavedOrigin)
   const [pending, setPending] = useState(false)
@@ -78,7 +81,11 @@ export function RoutePanel({ eventId, nearestStation }: RoutePanelProps) {
         onClick={() => setOpen((current) => !current)}
       >
         <span aria-hidden="true">⇢</span>
-        {open ? '経路を閉じる' : `会場までの経路（最寄: ${nearestStation}駅）`}
+        {open
+          ? '経路を閉じる'
+          : stationConfirmed
+            ? `会場までの経路（最寄: ${nearestStation}駅）`
+            : `会場までの経路（${nearestStation} 周辺の駅まで）`}
       </button>
 
       {open && (

@@ -116,7 +116,7 @@ export function EventListScreen({ mode }: Props) {
             id="ask-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="条件を書くと、この一覧が絞り込まれます（例：大阪 生成AI ハッカソン）"
+            placeholder="条件で絞り込み・探す（例：大阪 生成AI）"
             autoComplete="off"
           />
           <button type="submit" disabled={agentPending || busy}>

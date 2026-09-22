@@ -170,3 +170,11 @@ def test_injected_instructions_do_not_become_field_values() -> None:
     assert candidate.event.dates.application_deadline is None
     assert candidate.event.validation_status != "verified" or True
     assert "2099" not in str(candidate.event.dates.application_deadline)
+
+
+def test_station_of_strips_line_prefix_and_ignores_missing():
+    from event_agent.extraction.extractor import station_of
+
+    assert station_of("会場: グランフロント大阪\n最寄駅: JR大阪駅から徒歩5分") == "大阪"
+    assert station_of("アクセス: 阪急梅田駅 徒歩3分") == "梅田"
+    assert station_of("会場: グランフロント大阪") is None

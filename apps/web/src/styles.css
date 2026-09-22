@@ -285,7 +285,9 @@ button {
 .topbar-inner {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 0 var(--gutter);
+  /* ホーム画面に追加した PWA では、ノッチや角丸の内側に収める */
+  padding: env(safe-area-inset-top, 0px) calc(var(--gutter) + env(safe-area-inset-right, 0px)) 0
+    calc(var(--gutter) + env(safe-area-inset-left, 0px));
   display: flex;
   align-items: center;
   gap: 16px;
@@ -366,7 +368,8 @@ button {
   width: 100%;
   max-width: var(--max);
   margin: 0 auto;
-  padding: 0 var(--gutter) 80px;
+  padding: 0 calc(var(--gutter) + env(safe-area-inset-right, 0px))
+    calc(80px + env(safe-area-inset-bottom, 0px)) calc(var(--gutter) + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
 }
@@ -795,6 +798,34 @@ button.next-title:hover {
   .row-score {
     flex: 1;
   }
+
+  .row-actions .chip-button {
+    min-height: 36px;
+    padding: 0 14px;
+  }
+
+  .row-meta,
+  .detail-meta {
+    overflow-wrap: anywhere;
+  }
+
+  /* 詳細の操作: 主ボタンを全幅、残りを横並び */
+  .detail-actions .button-primary {
+    width: 100%;
+  }
+
+  .detail-actions .button:not(.button-primary) {
+    flex: 1;
+  }
+
+  .dates-detail .dates-row {
+    flex-wrap: wrap;
+  }
+
+  .ask {
+    padding: 0 10px;
+    gap: 8px;
+  }
 }
 
 /* ---------- 2軸の日付（§3.3） ---------- */
@@ -1031,10 +1062,48 @@ button.next-title:hover {
   padding-top: 16px;
 }
 
+/* ---------- 開催場所（地図） ---------- */
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.place-name {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--hover);
+}
+
+@media (max-width: 479px) {
+  .map {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+.map iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 /* ---------- 経路検索（ADR-001） ---------- */
 .route-panel {
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
   font-size: 13px;
 }
 

@@ -256,15 +256,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // 投稿由来の Event は events には無いので、投稿側も探す（/events/:id を開けるように）
+  // ボット投稿は AI 収集イベントの写しなので「投稿由来」には数えない。
+  // 数えると AI イベントの詳細が投稿扱いになり、根拠が空（投稿は根拠を持たない）になる
   const postByEventId = useCallback(
-    (eventId: string) => posts.find((post) => post.event.eventId === eventId),
+    (eventId: string) =>
+      posts.find((post) => post.origin === 'organizer' && post.event.eventId === eventId),
     [posts],
   )
 
+  // 投稿（ボット投稿を含む）にしか無いイベントも開けるようにする
   const eventById = useCallback(
     (eventId: string) =>
-      events.find((event) => event.eventId === eventId) ?? postByEventId(eventId)?.event,
-    [events, postByEventId],
+      events.find((event) => event.eventId === eventId) ??
+      posts.find((post) => post.event.eventId === eventId)?.event,
+    [events, posts],
   )
 
   const value = useMemo<AppState>(
