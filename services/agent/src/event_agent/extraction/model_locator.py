@@ -30,12 +30,20 @@ from event_agent.extraction.extractor import (
     FieldSource,
     category_of,
     clean_venue,
+    kind_of,
     location_of,
     station_of,
     summary_of,
 )
 from event_agent.extraction.html_text import build_untrusted_block, to_text
-from event_agent.schemas import ApiEvent, EventDates, EventLocation, Evidence, Recommendation
+from event_agent.schemas import (
+    ApiEvent,
+    EventDates,
+    EventLocation,
+    EventMilestone,
+    Evidence,
+    Recommendation,
+)
 from event_agent.security import prompt_guard
 
 logger = logging.getLogger(__name__)
@@ -116,23 +124,31 @@ def candidate_from_lines(
     now: datetime,
     user_id: str,
     source_type: str = "other",
+    kind: str | None = None,
 ) -> ExtractedCandidate | None:
     """特定された行から候補を組み立てる。値の解釈は :mod:`dates` に任せる。"""
     text = d.normalize(to_text(page.text))
     years = d.page_years(text)
     fallback_year = next(iter(years)) if len(years) == 1 else None
 
+    category = category_of(text)
+    resolved_kind = kind or kind_of(category)
+    labels = d.labels_for(resolved_kind)
+
     date_line = lines.get("eventDateLine")
-    if not date_line:
-        return None
-    start, end = d.parse_range(date_line, fallback_year=fallback_year)
-    if start is None:
-        return None  # 年が確定しない等。推測しない（§6.5）
+    start = end = None
+    if date_line:
+        start, end = d.parse_range(date_line, fallback_year=fallback_year)
 
     deadline = None
     deadline_line = lines.get("deadlineLine")
-    if deadline_line and not any(bad in deadline_line for bad in d.NON_APPLICATION_DEADLINE_LABELS):
-        deadline = d.parse_date(deadline_line, fallback_year=fallback_year)
+    if deadline_line and not any(bad in deadline_line for bad in labels.exclude):
+        # 範囲（「募集期間 A〜B締切」）なら終わりが締切
+        deadline = d.deadline_from_fragment(deadline_line, fallback_year=fallback_year)
+
+    # 実施日か締切のどちらかは要る。ハッカソンは実施日が必須のまま（§6.6）
+    if start is None and (resolved_kind == "hackathon" or deadline is None):
+        return None  # 年が確定しない等。推測しない（§6.5）
 
     title = lines.get("title") or (hit.title if hit and hit.title else None)
     if not title:
@@ -140,10 +156,9 @@ def candidate_from_lines(
     # 引用の照合は生のまま行い、表示用の文字列だけ実体参照を戻す（&#x27; など）
     title = html.unescape(title)[:200]
 
-    sources: dict[str, FieldSource] = {
-        "title": FieldSource("title", title, page.final_url),
-        "dates.eventStart": FieldSource("dates.eventStart", date_line, page.final_url),
-    }
+    sources: dict[str, FieldSource] = {"title": FieldSource("title", title, page.final_url)}
+    if start is not None and date_line:
+        sources["dates.eventStart"] = FieldSource("dates.eventStart", date_line, page.final_url)
     if end is not None:
         sources["dates.eventEnd"] = FieldSource("dates.eventEnd", date_line, page.final_url)
     if deadline is not None:
@@ -173,7 +188,8 @@ def candidate_from_lines(
         userId=user_id,
         title=title,
         organizer=organizer,
-        category=category_of(text),
+        category=category,
+        kind=resolved_kind,
         summary=summary_of(text, title),
         location=EventLocation(
             type=location_type, venue=venue, region=venue, nearestStation=station_of(text)
@@ -181,9 +197,16 @@ def candidate_from_lines(
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,
             applicationDeadlinePrecision=deadline.precision if deadline else "unknown",
-            eventStart=start.value,
-            eventStartPrecision=start.precision,
+            eventStart=start.value if start else None,
+            eventStartPrecision=start.precision if start else "unknown",
             eventEnd=end.value if end else None,
+            # 節目は本文から決定論的に拾う（モデルには引用しか求めない）
+            milestones=[
+                EventMilestone(label=label, at=parsed.value, precision=parsed.precision)
+                for label, parsed in d.find_milestones(
+                    text, fallback_year=fallback_year, kind=resolved_kind
+                )
+            ],
         ),
         officialUrl=page.final_url,
         recommendation=Recommendation(score=0, reason=""),
@@ -217,10 +240,18 @@ async def extract_with_model(
     now: datetime,
     user_id: str,
     source_type: str = "other",
+    kind: str | None = None,
 ) -> ExtractedCandidate | None:
     lines = await locate_lines(page)
     if not lines:
         return None
     return candidate_from_lines(
-        page, lines, hit=hit, run_id=run_id, now=now, user_id=user_id, source_type=source_type
+        page,
+        lines,
+        hit=hit,
+        run_id=run_id,
+        now=now,
+        user_id=user_id,
+        source_type=source_type,
+        kind=kind,
     )

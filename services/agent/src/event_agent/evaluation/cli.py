@@ -30,7 +30,9 @@ def _fields_of(result) -> dict[str, dict[str, object]]:
             if field_path == "title":
                 snapshot[key] = event.title
             elif field_path == "dates.eventStart":
-                snapshot[key] = event.dates.event_start.isoformat()
+                snapshot[key] = (
+                    event.dates.event_start.isoformat() if event.dates.event_start else None
+                )
             elif field_path == "dates.eventStartPrecision":
                 snapshot[key] = event.dates.event_start_precision
             elif field_path == "dates.applicationDeadline":

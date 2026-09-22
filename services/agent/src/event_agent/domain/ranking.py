@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from event_agent.domain.confidence import REQUIRED_EVIDENCE_FIELDS
+from event_agent.domain.confidence import required_evidence_fields
 from event_agent.schemas import ApiEvent, Evidence, UserPreferences
 
 
@@ -76,7 +76,7 @@ def score_recommendation(
     supported: set[str] = set()
     for item in evidence:
         supported.update(item.supports)
-    if all(f in supported for f in REQUIRED_EVIDENCE_FIELDS):
+    if all(f in supported for f in required_evidence_fields(event.dates.event_start is not None)):
         score += 3
 
     # 情報完全性: 10

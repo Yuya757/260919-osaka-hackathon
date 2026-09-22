@@ -21,8 +21,10 @@ class CollectionTheme:
     interests_prompt: str
     locations: tuple[str, ...]
     online_only: bool = False
-    # テーマ Run で残すカテゴリ。外れたものは検証前に除外する（ADR-008 / PR-B）
-    allowed_categories: tuple[str, ...] = ("hackathon",)
+    # 抽出のラベル表を切り替える種別（ジャンル拡張計画）
+    kind: str = "hackathon"
+    # テーマ Run で残す kind。外れたものは検証前に除外する
+    allowed_kinds: tuple[str, ...] = ("hackathon",)
 
     def preferences(self, *, now: datetime) -> UserPreferences:
         # 年は固定せず JST の現在年。12 月に翌年の告知を弾かないよう、検証側には年を渡さない

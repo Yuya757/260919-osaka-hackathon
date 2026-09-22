@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # 1.1.0: チャットのシステム命令にサンドイッチ防御とカナリアを追加（§10.1）
     prompt_version: str = "chat-1.1.0"
     extraction_schema_version: str = "extract-1.0.0"
-    validation_rule_version: str = "1.0.0"
+    validation_rule_version: str = "1.1.0"
     # 抽出が0件のときデモカタログで補う。実運用とデモの両立用。評価では False。
     demo_catalog_fallback: bool = True
     # 進捗バナーを見せるためだけの待ち時間。評価では 0 にする。

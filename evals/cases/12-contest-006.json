@@ -1,0 +1,43 @@
+{
+  "caseId": "12-contest-006",
+  "categories": [
+    "contest"
+  ],
+  "note": "早期申込締切はビジコンでも申込締切ではない。締切は未確認のまま。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ビジネスコンテスト ビジコン 起業",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "query": "ビジネスコンテスト 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "body": "<html><head><title>スタートアップピッチコンテスト 2026</title></head><body><h1>スタートアップピッチコンテスト 2026</h1><p>ビジネスプランを募集します。</p><div>早期申込締切: 2026年9月30日</div><div>最終審査会: 2026年12月3日 18:00</div><div>会場: 梅田</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://contest1.example.jp/2026",
+        "kind": "contest",
+        "eventStart": "2026-12-03T18:00:00+09:00",
+        "applicationDeadline": null,
+        "applicationDeadlinePrecision": "unknown",
+        "validationStatus": "partial"
+      }
+    ]
+  }
+}

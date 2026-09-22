@@ -91,7 +91,7 @@ def _filter_catalog(preferences: UserPreferences) -> list[ApiEvent]:
     """Demo catalog fallback, used only when extraction produced nothing."""
     selected: list[ApiEvent] = []
     for event in demo_catalog():
-        if event.dates.event_start.year != preferences.target_year:
+        if event.dates.event_start and event.dates.event_start.year != preferences.target_year:
             continue
         if not preferences.online_allowed and event.location.type == "online":
             continue
@@ -266,14 +266,14 @@ def _split_known_pages(
 def _gate_categories(
     candidates: list, allowed: tuple[str, ...] | None, note: Note
 ) -> tuple[list, int]:
-    """テーマ Run では対象カテゴリ以外を検証前に落とす。検証ルール自体は変えない。"""
+    """テーマ Run では対象の kind 以外を検証前に落とす。検証ルール自体は変えない。"""
     if not allowed:
         return candidates, 0
     kept = []
     dropped = 0
     for candidate in candidates:
         event = candidate.event if hasattr(candidate, "event") else candidate
-        if event.category in allowed:
+        if event.kind in allowed:
             kept.append(candidate)
         else:
             dropped += 1
@@ -315,7 +315,8 @@ def _validate(
             if hasattr(candidate, "evidence")
             else demo_evidence().get(event.event_id, [])
         )
-        if not event.title or not event.dates.event_start:
+        # 実施日が無い告知（ビジコン・補助金）は締切で代用する。どちらも無ければ捨てる
+        if not event.title or not (event.dates.event_start or event.dates.application_deadline):
             continue
         scored = score_event(
             event.model_copy(
@@ -447,6 +448,7 @@ async def execute_collect_workflow(
             for page in pages
             for url in (page.final_url, page.requested_url)
         }
+        theme_kind = theme.kind if theme else None
         candidates = extract_candidates(
             pages,
             hits=hits_by_url,
@@ -454,6 +456,7 @@ async def execute_collect_workflow(
             now=now,
             user_id=run.user_id,
             source_types=source_types,
+            kind=theme_kind,
         )
         if trajectory is not None:
             for candidate in candidates:
@@ -477,6 +480,7 @@ async def execute_collect_workflow(
                         now=now,
                         user_id=run.user_id,
                         source_type=source_types.get(page.final_url, "other"),
+                        kind=theme_kind,
                     )
 
             if leftover:
@@ -499,7 +503,7 @@ async def execute_collect_workflow(
             note("extractor", f"抽出 0 件のためデモカタログ {len(candidates)} 件で補完", level="warn")
 
         candidates, off_category = _gate_categories(
-            candidates, theme.allowed_categories if theme else None, note
+            candidates, theme.allowed_kinds if theme else None, note
         )
         buckets = _validate(
             candidates,

@@ -16,8 +16,9 @@ from event_agent.storage.store import store
 
 
 def _finished(event: ApiEvent, now: datetime) -> bool:
-    end = event.dates.event_end or event.dates.event_start
-    return end < now
+    # 実施日が無い告知（ビジコン・補助金）は締切で判断する
+    end = event.dates.event_end or event.dates.event_start or event.dates.application_deadline
+    return end < now if end else False
 
 
 def candidates(*, now: datetime) -> list[ApiEvent]:

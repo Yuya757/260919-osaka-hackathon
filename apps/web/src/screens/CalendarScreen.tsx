@@ -53,6 +53,8 @@ export function CalendarScreen() {
         deadlines.add(dayKey(event.dates.applicationDeadline, tz))
         items.push({ key: `${event.eventId}-deadline`, date, kind: 'deadline', event })
       }
+      // 実施日が無い告知（ビジコン・補助金）は締切だけを載せる
+      if (!event.dates.eventStart) continue
       const start = dayDate(event.dates.eventStart, tz)
       const end = event.dates.eventEnd ? dayDate(event.dates.eventEnd, tz) : start
       items.push({ key: `${event.eventId}-held`, date: start, kind: 'held', event })

@@ -16,6 +16,7 @@ from datetime import datetime
 from itertools import combinations
 from typing import Iterable
 
+from event_agent.domain.confidence import required_evidence_fields
 from event_agent.domain.normalize import normalize_url
 from event_agent.evaluation.cases import ExpectedEvent
 from event_agent.evaluation.harness import CaseResult
@@ -129,8 +130,13 @@ def evaluate(results: Iterable[CaseResult]) -> Report:
 
         # --- 終了済み誤表示（§13.2） ---
         for event in result.events:
-            end = event.dates.event_end or event.dates.event_start
-            if end < case.clock and event.validation_status in ("verified", "partial"):
+            # 実施日が無い告知は締切で終了を判断する
+            end = (
+                event.dates.event_end
+                or event.dates.event_start
+                or event.dates.application_deadline
+            )
+            if end and end < case.clock and event.validation_status in ("verified", "partial"):
                 shown_finished += 1
                 failures.append(
                     Failure(case.case_id, "finishedShown", "終了済みは非表示", event.title)
@@ -157,6 +163,21 @@ def evaluate(results: Iterable[CaseResult]) -> Report:
                             expected.validation_status, event.validation_status)
                 )
 
+            if expected.kind is not None and event.kind != expected.kind:
+                failures.append(
+                    Failure(case.case_id, "kind", expected.kind, event.kind)
+                )
+            if expected.milestone_labels:
+                got_labels = tuple(m.label for m in event.dates.milestones)
+                if got_labels != expected.milestone_labels:
+                    failures.append(
+                        Failure(
+                            case.case_id,
+                            "milestones",
+                            "・".join(expected.milestone_labels),
+                            "・".join(got_labels) or "（なし）",
+                        )
+                    )
             if expected.event_start is not None:
                 if event.dates.event_start is None:
                     missing_fields += 1
@@ -208,18 +229,22 @@ def evaluate(results: Iterable[CaseResult]) -> Report:
             supports: set[str] = set()
             for item in evidence:
                 supports.update(item.supports)
-            if {"title", "dates.eventStart"} <= supports and all(
+            # 実施日が無い告知（ビジコン・補助金）は、締切の根拠を実施日の代わりに求める
+            required = required_evidence_fields(event.dates.event_start is not None)
+            if set(required) <= supports and all(
                 normalize_url(item.source_url) in page_urls for item in evidence
             ):
                 covered += 1
             else:
                 failures.append(
                     Failure(case.case_id, "evidenceCoverage",
-                            "title と dates.eventStart に根拠", str(sorted(supports)))
+                            "・".join(required) + " に根拠", str(sorted(supports)))
                 )
-            required_total += len(REQUIRED_FIELDS)
-            for required in REQUIRED_FIELDS:
-                if required not in supports:
+            # 実施日が無い告知は締切が必須項目になる（validation と同じ規則）
+            must = (*required_evidence_fields(event.dates.event_start is not None), "officialUrl")
+            required_total += len(must)
+            for field_path in must:
+                if field_path not in supports:
                     ungrounded += 1
 
         # --- Tool逸脱（§13.2） ---

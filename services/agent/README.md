@@ -19,6 +19,14 @@ FastAPI + ADK-style deterministic workflow for event discovery. Uses Vertex AI G
 - `POST /api/events/{eventId}/metrics` — `{ "kind": "calendar" }` を数える（204）
 - `GET /api/organizer-posts/{postId}/metrics` — 投稿の成果（自イベントと結び付いた AI 収集イベント）
 
+## Event kinds
+
+`Event.kind` は機会の種別（`hackathon` / `contest` / `accelerator` / `cocreation` /
+`exhibition` / `subsidy`）で、抽出のラベル表と一覧の絞り込みを切り替える
+（`docs/ジャンル拡張計画.md`）。ハッカソンは実施日が必須のままだが、ビジコンなど
+実施日が書かれない告知は締切だけで載せる（`dates.eventStart` は null）。
+締切と実施日のあいだの節目は `dates.milestones` に持つ。
+
 ## Admin commands
 
 主催者確認・PR 枠・非表示は認証が無い間、管理者が手で行う（ADR-009）:

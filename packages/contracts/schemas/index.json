@@ -32,6 +32,8 @@
       "path": "event.json",
       "definitions": [
         "Event",
+        "EventKind",
+        "EventMilestone",
         "EventLocation",
         "EventDates",
         "EventRecommendation",

@@ -1,0 +1,43 @@
+{
+  "caseId": "12-contest-004",
+  "categories": [
+    "contest"
+  ],
+  "note": "「募集期間 A〜B締切」は終わりが締切。開始日を締切にしてはならない。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ビジネスコンテスト ビジコン 起業",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "query": "ビジネスコンテスト 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "body": "<html><head><title>大阪ビジネスプランコンテスト 2026</title></head><body><h1>大阪ビジネスプランコンテスト 2026</h1><p>ビジネスプランを募集します。</p><div>募集締切: 2026年10月1日(木)~2026年11月6日(金)13:00</div><div>最終審査会: 2027年2月5日 13:00</div><div>会場: 大阪市役所</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://contest1.example.jp/2026",
+        "kind": "contest",
+        "eventStart": "2027-02-05T13:00:00+09:00",
+        "applicationDeadline": "2026-11-06T13:00:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "validationStatus": "verified"
+      }
+    ]
+  }
+}
