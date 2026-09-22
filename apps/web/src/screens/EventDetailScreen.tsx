@@ -220,8 +220,8 @@ export function EventDetailScreen() {
           </p>
           <RoutePanel
             eventId={event.eventId}
-            nearestStation={event.location.nearestStation || event.location.region || ''}
-            stationConfirmed={Boolean(event.location.nearestStation)}
+            nearestStation={event.location.nearestStation || ''}
+            venue={event.location.venue || event.location.region || undefined}
           />
         </section>
       )}

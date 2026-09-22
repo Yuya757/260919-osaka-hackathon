@@ -194,6 +194,10 @@ async def get_event_evidence(event_id: str) -> EvidenceListResponse:
 async def get_event_route(
     event_id: str,
     origin: str = Query(alias="from", min_length=1, max_length=40, description="出発駅名"),
+    destination: str | None = Query(
+        default=None, alias="to", min_length=1, max_length=40,
+        description="到着駅名。省略時はイベントの最寄駅",
+    ),
 ) -> EventRouteResponse:
     event = _find_event(event_id)
     if not event:
@@ -202,9 +206,14 @@ async def get_event_route(
         raise HTTPException(status_code=400, detail="オンライン開催のため経路検索はできません。")
     if event.dates.event_start is None:
         raise HTTPException(status_code=400, detail="実施日が未確認のため経路検索できません。")
-    destination_name = event.location.nearest_station or event.location.region
+    # 会場名（「グランフロント大阪」「大阪市都島区…」）を駅名として渡してはいけない。
+    # 駅すぱあとは当然見つけられず、「駅が見つかりません」になるだけ。
+    destination_name = destination or event.location.nearest_station
     if not destination_name:
-        raise HTTPException(status_code=400, detail="会場の最寄駅が未確認のため経路検索できません。")
+        raise HTTPException(
+            status_code=400,
+            detail="会場の最寄駅が分かりません。到着駅を入力してください。",
+        )
     if not ekispert_client.configured:
         raise HTTPException(status_code=503, detail="経路検索は現在利用できません。")
 

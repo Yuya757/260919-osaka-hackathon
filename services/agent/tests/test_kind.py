@@ -288,3 +288,27 @@ class TestAttributes:
         )
         assert len(event.attributes) == 10
         assert all(len(v) == 60 for v in event.attributes.values())
+
+
+class TestNearestStation:
+    """最寄駅の抽出（経路検索の到着駅に使う）。
+
+    実データではラベル行（最寄駅: …）が無い告知の方が多く、最寄駅が取れないと
+    経路検索が会場名を駅名として送ってしまい「駅が見つかりません」になっていた。
+    """
+
+    def test_labelled_and_unlabelled_access_lines(self):
+        from event_agent.extraction.extractor import station_of
+
+        assert station_of("アクセス: JR大阪駅から徒歩5分") == "大阪"
+        assert station_of("会場: QUINTBRIDGE\n京阪電車「京橋」駅より徒歩5分") == "京橋"
+        assert station_of("最寄駅: Osaka Metro御堂筋線本町駅 3番出口から徒歩2分") == "本町"
+        assert station_of("交通: 阪急「梅田」駅 直結") == "梅田"
+
+    def test_unrelated_sentences_do_not_become_stations(self):
+        from event_agent.extraction.extractor import station_of
+
+        # アクセスの話ではない行から駅名を拾わない（推測しない）
+        assert station_of("大阪駅前の再開発をテーマにしたハッカソンです。") is None
+        assert station_of("各駅停車でお越しください") is None
+        assert station_of("会場: グランフロント大阪") is None

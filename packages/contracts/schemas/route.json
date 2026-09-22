@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://event-agent.local/schemas/route.json",
   "title": "EventRoute",
-  "description": "駅すぱあと API による、イベント開始時刻に到着する経路の要約（GET /api/events/{eventId}/route?from=）",
+  "description": "駅すぱあと API による、イベント開始時刻に到着する経路の要約（GET /api/events/{eventId}/route?from=&to=）。to はイベントの最寄駅が未確認のときに利用者が指定する",
   "$defs": {
     "Station": {
       "type": "object",

@@ -159,3 +159,43 @@ def test_route_endpoint_unavailable_without_key(monkeypatch: pytest.MonkeyPatch)
 def test_route_endpoint_unknown_event() -> None:
     response = TestClient(app).get("/api/events/nope/route", params={"from": "大阪"})
     assert response.status_code == 404
+
+
+def test_route_endpoint_accepts_an_explicit_destination(monkeypatch: pytest.MonkeyPatch) -> None:
+    """最寄駅が未確認のイベントでも、到着駅を渡せば検索できる。"""
+    fake = FakeClient({"/station/light": STATION_RESPONSE, "/search/course/extreme": COURSE_RESPONSE})
+    monkeypatch.setattr("event_agent.entrypoints.service.ekispert_client", fake)
+
+    response = TestClient(app).get(
+        "/api/events/kansai-demoday/route", params={"from": "京都", "to": "大阪"}
+    )
+    assert response.status_code == 200, response.text
+    # 駅名検索に渡ったのは会場名ではなく、指定された駅名だけ
+    names = [params.get("name") for path, params in fake.calls if path == "/station/light"]
+    assert names == ["京都", "大阪"]
+
+
+def test_route_endpoint_never_sends_the_venue_as_a_station(monkeypatch: pytest.MonkeyPatch) -> None:
+    """会場名を駅名として渡すと「駅が見つかりません」になるだけ。先に断る。
+
+    実データではこれが常態で、最寄駅が取れたイベントの方が少ない。
+    """
+    from event_agent.demo.catalog import demo_catalog
+
+    fake = FakeClient({"/station/light": STATION_RESPONSE, "/search/course/extreme": COURSE_RESPONSE})
+    monkeypatch.setattr("event_agent.entrypoints.service.ekispert_client", fake)
+    without_station = demo_catalog()[0].model_copy(
+        update={
+            "location": demo_catalog()[0].location.model_copy(
+                update={"nearest_station": None, "region": "グランフロント大阪"}
+            )
+        }
+    )
+    monkeypatch.setattr(
+        "event_agent.entrypoints.service._find_event", lambda event_id: without_station
+    )
+
+    response = TestClient(app).get("/api/events/gemini-hack/route", params={"from": "京都"})
+    assert response.status_code == 400
+    assert "到着駅" in response.json()["detail"]
+    assert fake.calls == []
