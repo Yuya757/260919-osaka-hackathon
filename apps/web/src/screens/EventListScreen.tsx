@@ -15,6 +15,7 @@ import {
   isUrgent,
   placeLabel,
 } from '../lib/eventView'
+import { isRunning } from '../lib/runSteps'
 import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import type { Event } from '../types/api'
@@ -52,6 +53,7 @@ export function EventListScreen({ mode }: Props) {
     events,
     loadState,
     loadError,
+    run,
     saved,
     calendar,
     query,
@@ -66,6 +68,7 @@ export function EventListScreen({ mode }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
+  const busy = isRunning(run?.status)
 
   const upcoming = useMemo(() => {
     const open = events.filter((event) => !isFinished(event))
@@ -116,8 +119,8 @@ export function EventListScreen({ mode }: Props) {
             placeholder="条件を書くと、この一覧が絞り込まれます（例：大阪 生成AI ハッカソン）"
             autoComplete="off"
           />
-          <button type="submit" disabled={agentPending || !query.trim()}>
-            {agentPending ? '探索中…' : '探す'}
+          <button type="submit" disabled={agentPending || busy}>
+            {agentPending || busy ? '探索中…' : '探す'}
           </button>
         </form>
 

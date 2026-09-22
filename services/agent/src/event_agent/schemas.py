@@ -69,6 +69,8 @@ class ChatResponse(BaseModel):
 
 class AgentRunCreateRequest(BaseModel):
     force_refresh: bool = Field(default=False, alias="forceRefresh")
+    # チャットで更新した関心条件をそのまま使う。無ければ既定の条件で探す
+    session_id: str | None = Field(default=None, alias="sessionId")
 
     model_config = {"populate_by_name": True}
 
@@ -88,6 +90,26 @@ AgentRunStatus = Literal[
     "failed",
     "cancelled",
 ]
+
+
+RunAgent = Literal["planner", "searcher", "extractor", "organizer"]
+
+# Run 文書を小さく保つ。超えたら古い行から捨てる
+RUN_ACTIVITY_MAX = 80
+
+
+class RunActivity(BaseModel):
+    """パイプラインの各役割が何をしたかの1行。UI の「エージェントの動き」に出す。
+
+    ユーザー向けの文だけを入れる。プロンプト・秘密・スタックトレースは禁止（§8.2）。
+    """
+
+    agent: RunAgent
+    message: str = Field(max_length=300)
+    level: Literal["info", "warn"] = "info"
+    at: datetime
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class AgentRun(BaseModel):
@@ -120,8 +142,17 @@ class AgentRun(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc), alias="startedAt"
     )
     completed_at: datetime | None = Field(default=None, alias="completedAt")
+    activity: list[RunActivity] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+    def log(self, agent: RunAgent, message: str, *, level: Literal["info", "warn"] = "info") -> None:
+        """Append one activity line, dropping the oldest beyond the cap."""
+        self.activity.append(
+            RunActivity(agent=agent, message=message[:300], level=level, at=datetime.now(timezone.utc))
+        )
+        if len(self.activity) > RUN_ACTIVITY_MAX:
+            del self.activity[: len(self.activity) - RUN_ACTIVITY_MAX]
 
 
 class HealthResponse(BaseModel):

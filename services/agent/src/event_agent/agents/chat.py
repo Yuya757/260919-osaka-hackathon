@@ -49,10 +49,7 @@ def _demo_reply(preferences: UserPreferences, started_run: bool) -> str:
             f"「{preferences.interests_prompt}」で{preferences.target_year}年の"
             "イベント探索を開始しました。申込締切と開催日を分けて一覧に反映します。"
         )
-    return (
-        f"関心条件を「{preferences.interests_prompt}」に更新しました。"
-        "「イベントを探して」と送ると探索を開始します。"
-    )
+    return f"関心条件を「{preferences.interests_prompt}」に更新しました。この条件で探索します。"
 
 
 async def handle_chat(request: ChatRequest) -> ChatResponse:

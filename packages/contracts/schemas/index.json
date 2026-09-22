@@ -21,6 +21,8 @@
         "AgentRunStatus",
         "AgentRunTriggerType",
         "CreateAgentRunRequest",
+        "RunAgent",
+        "RunActivity",
         "CreateAgentRunResponse",
         "AgentRun"
       ]

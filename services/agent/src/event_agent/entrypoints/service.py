@@ -83,7 +83,7 @@ async def create_agent_run(
     body: AgentRunCreateRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentRunCreateResponse:
-    session = store.get_or_create_session(None)
+    session = store.get_or_create_session(body.session_id)
     run = schedule_collect_run(
         session.preferences,
         force_refresh=body.force_refresh,
