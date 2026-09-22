@@ -138,7 +138,7 @@ export function FeedScreen() {
           <p className="empty">
             まだ投稿はありません。
             <br />
-            最初の告知を投稿するか、ホームで「探す」を押すとAI収集分がボット投稿として並びます。
+            最初の告知を投稿するか、毎朝の自動収集を待つと AI が集めたハッカソンがボット投稿として並びます。
           </p>
         ) : (
           posts.map(renderPost)

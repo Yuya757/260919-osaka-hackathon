@@ -7,13 +7,11 @@
 import type { Profile } from './profile'
 import type { OrganizerPost } from '../types/api'
 
-/** プロフィールのジャンル → イベントの category 識別子 */
-const GENRE_CATEGORIES: Record<string, string[]> = {
-  ハッカソン: ['hackathon'],
-  '勉強会・ミートアップ': ['meetup', 'workshop', 'seminar'],
-  カンファレンス: ['conference'],
-  'LT・登壇': ['meetup', 'pitch'],
-  'ピッチ・アクセラレータ': ['pitch', 'acceleration'],
+/** 「どんなハッカソンに出たいか」→ タイトル・本文に含まれていてほしい語 */
+const HACKATHON_WORDS: Record<string, string[]> = {
+  '学生・初心者歓迎': ['学生', '初心者', 'ビギナー', '未経験', 'student'],
+  'ビジネス・起業': ['ビジネス', '起業', 'スタートアップ', 'startup', '事業'],
+  技術特化: ['api', 'ai', '生成ai', 'llm', 'データ', 'クラウド', 'gcp', 'aws', '開発者'],
 }
 
 /** 「行ける範囲」→ 地域文字列に含まれていてほしい語 */
@@ -35,8 +33,12 @@ export function profileMatches(post: OrganizerPost, profile: Profile | null): st
   const { event } = post
   const text = `${post.title}\n${post.body}`.toLowerCase()
 
-  for (const genre of profile.genres) {
-    if ((GENRE_CATEGORIES[genre] ?? []).includes(event.category)) hits.push(genre)
+  for (const kind of profile.hackathonTypes) {
+    if (kind === 'オンライン参加OK') {
+      if (event.location.type === 'online' || event.location.type === 'hybrid') hits.push(kind)
+    } else if ((HACKATHON_WORDS[kind] ?? []).some((word) => text.includes(word))) {
+      hits.push(kind)
+    }
   }
   for (const skill of profile.skills) {
     if (text.includes(skill.toLowerCase())) hits.push(skill)
