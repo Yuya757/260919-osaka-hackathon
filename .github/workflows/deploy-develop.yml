@@ -160,24 +160,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
         working-directory: apps/web
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Type-check
         working-directory: apps/web
-        run: npm run check
+        run: pnpm run check
 
       - name: Build
         working-directory: apps/web
-        run: npm run build
+        run: pnpm run build
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
