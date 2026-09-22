@@ -125,6 +125,19 @@ def normalize_address(address: str) -> str:
     return " ".join(kept).strip(" 　-")
 
 
+def _error_detail(response: httpx.Response) -> str:
+    """エラー応答から API のメッセージだけを取り出す。URL やキーは含めない。"""
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    error = (payload or {}).get("ResultSet", {}).get("Error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return ""
+    message = str(error.get("Message") or error.get("code") or "").strip()
+    return f": {message[:200]}" if message else ""
+
+
 def _validate_station_name(name: str) -> str:
     cleaned = name.strip()
     if not cleaned or len(cleaned) > _MAX_STATION_NAME_LENGTH:
@@ -159,8 +172,12 @@ class EkispertClient:
                 response = await client.get(url, params=query)
         if response.status_code >= 400:
             # httpx の例外文にはクエリ文字列つきの URL が入る。そこにアクセスキーが
-            # 載っているので、例外もレスポンス本文もログへ出さない（§10.1）
-            raise EkispertError(f"駅すぱあと API がエラーを返しました（HTTP {response.status_code}）")
+            # 載っているので、例外に URL を混ぜない（§10.1）。原因が分からないと
+            # 直せないので、応答本文のエラー文言だけは拾う（URL は入らない）。
+            raise EkispertError(
+                f"駅すぱあと API がエラーを返しました（HTTP {response.status_code}）"
+                f"{_error_detail(response)}"
+            )
         payload = response.json()
         result = payload.get("ResultSet") if isinstance(payload, dict) else None
         if not isinstance(result, dict):

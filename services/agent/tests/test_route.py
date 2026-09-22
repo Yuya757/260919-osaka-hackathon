@@ -334,3 +334,32 @@ async def test_upstream_errors_never_carry_the_api_key() -> None:
         module.httpx.AsyncClient.get = original  # type: ignore[method-assign]
     assert "super-secret-key" not in str(caught.value)
     assert "400" in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_error_message_keeps_the_api_reason_but_not_the_url() -> None:
+    """原因が分からないと直せないので、応答本文のエラー文言だけは残す。"""
+    import httpx as httpx_module
+
+    import event_agent.clients.ekispert as module
+
+    client = EkispertClient(api_key="super-secret-key")
+
+    async def fake_get(self, url, params=None, headers=None):  # type: ignore[no-untyped-def]
+        request = httpx_module.Request("GET", f"{url}?key={params['key']}")
+        return httpx_module.Response(
+            400,
+            request=request,
+            json={"ResultSet": {"Error": {"code": "W100", "Message": "住所が解釈できません"}}},
+        )
+
+    original = module.httpx.AsyncClient.get
+    module.httpx.AsyncClient.get = fake_get  # type: ignore[method-assign]
+    try:
+        with pytest.raises(EkispertError) as caught:
+            await client._get("/address/station", {"address": "大阪市北区1-1"})
+    finally:
+        module.httpx.AsyncClient.get = original  # type: ignore[method-assign]
+    message = str(caught.value)
+    assert "住所が解釈できません" in message
+    assert "super-secret-key" not in message and "http" not in message
