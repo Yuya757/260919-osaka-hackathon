@@ -64,6 +64,7 @@
 - [ADR-002 Firestore永続化](docs/ADR-002-Firestore永続化.md) — コレクション構成と §9.3 の冪等性
 - [ADR-003 定期Runのロックと負荷試験](docs/ADR-003-定期Runのロックと負荷試験.md) — §13.3 Load と §9.2 のRun単位クォータ
 - [ADR-004 プロンプトインジェクション対策](docs/ADR-004-プロンプトインジェクション対策.md) — 検出・デリミタ・カナリアの3層と、ページと発話で扱いを分ける理由
+- [ADR-005 PWA化とキャッシュ方針](docs/ADR-005-PWA化とキャッシュ方針.md) — `/api/` をキャッシュしない理由とアプリシェルだけを持つ Service Worker
 - [ブランチ運用ルール](docs/ブランチ運用ルール.md) — `develop` が本番。作業ブランチは `develop` から切る
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
