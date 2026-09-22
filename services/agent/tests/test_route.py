@@ -229,8 +229,35 @@ async def test_address_lookup_takes_the_nearest_station() -> None:
     assert station is not None and station.name == "京橋(大阪府)"
     path, params = client.calls[0]
     assert path == "/address/station"
-    # 丁目・番・号は落として渡す（漢字混じりのままだと 400 が返る）
-    assert params["address"] == "大阪市都島区東野田町4-15-82,3000"
+    # 丁目・番・号は落とし、都道府県を補って渡す（どちらも無いと 400 が返る）
+    assert params["address"] == "大阪府大阪市都島区東野田町4-15-82,3000"
+
+
+def test_prefecture_is_added_when_missing() -> None:
+    """告知は「大阪市…」と都道府県を省く。そのままでは駅すぱあとが解釈できない。"""
+    from event_agent.clients.ekispert import normalize_address, with_prefecture
+
+    assert with_prefecture(normalize_address(ADDRESS)) == "大阪府大阪市都島区東野田町4-15-82"
+    assert with_prefecture("神戸市中央区東川崎町1-3-3") == "兵庫県神戸市中央区東川崎町1-3-3"
+    # すでに都道府県があるものには足さない。「都島区」の「都」で誤判定しない
+    assert with_prefecture("東京都渋谷区渋谷2-21-1") is None
+    assert with_prefecture("大阪府大阪市都島区東野田町4-15-82") is None
+
+
+@pytest.mark.asyncio
+async def test_address_lookup_tries_the_prefecture_form_first() -> None:
+    tried: list[str] = []
+
+    class Picky(FakeClient):
+        async def _get(self, path: str, params: dict[str, str]):  # type: ignore[override]
+            tried.append(params["address"])
+            if not params["address"].startswith("大阪府"):
+                raise EkispertError("住所が存在しないか、解釈できない住所です。")
+            return ADDRESS_STATION_RESPONSE["ResultSet"]
+
+    station = await Picky({}).find_station_near_address(ADDRESS)
+    assert station is not None and station.name == "京橋(大阪府)"
+    assert tried[0].startswith("大阪府大阪市都島区東野田町4-15-82")
 
 
 def test_address_normalisation_keeps_only_the_address() -> None:
@@ -258,7 +285,8 @@ async def test_address_lookup_falls_back_to_the_raw_address() -> None:
 
     station = await Picky({}).find_station_near_address(ADDRESS)
     assert station is not None and station.name == "京橋(大阪府)"
-    assert len(calls) == 2 and calls[1] == ADDRESS
+    # 都道府県つき → 整えた形 → 素の住所、の順で 3 回目に当たる
+    assert len(calls) == 3 and calls[-1] == ADDRESS
 
 
 @pytest.mark.asyncio
