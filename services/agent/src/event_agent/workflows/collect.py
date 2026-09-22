@@ -17,6 +17,8 @@ from event_agent.domain.dedup import group_duplicates, merge_group
 from event_agent.domain.ranking import score_recommendation
 from event_agent.domain.validation import score_event
 from event_agent.extraction import extract_candidates
+from event_agent.extraction.model_locator import extract_with_model
+from event_agent.extraction.sources import source_type_for
 from event_agent.clients.gemini import gemini_client
 from event_agent.clients.page_fetcher import FetchedPage, SearchHit, page_fetcher
 from event_agent.schemas import (
@@ -331,19 +333,46 @@ async def execute_collect_workflow(
         await _set_step(run, "extract_validate")
         await asyncio.sleep(delay)
         hits_by_url = {hit.url: hit for hit in hits}
+        source_types = {
+            url: source_type_for(url, DEMO_PAGE_SOURCES)
+            for page in pages
+            for url in (page.final_url, page.requested_url)
+        }
         candidates = extract_candidates(
             pages,
             hits=hits_by_url,
             run_id=run.run_id,
             now=now,
             user_id=run.user_id,
-            source_types=DEMO_PAGE_SOURCES,
+            source_types=source_types,
         )
         if trajectory is not None:
             for candidate in candidates:
                 trajectory.record("extract", candidate.event.official_url)
 
         note("extractor", f"{len(pages)} ページから {len(candidates)} 件の候補を抽出")
+
+        # 行ラベルで開催日が取れなかったページは、モデルに該当行を引用させてから
+        # 同じパーサで読む（extraction/model_locator）。デモモードでは呼ばれない。
+        if not gemini_client.demo_mode:
+            extracted_urls = {c.event.official_url for c in candidates}
+            for page in pages:
+                if page.final_url in extracted_urls:
+                    continue
+                located = await extract_with_model(
+                    page,
+                    hit=hits_by_url.get(page.requested_url) or hits_by_url.get(page.final_url),
+                    run_id=run.run_id,
+                    now=now,
+                    user_id=run.user_id,
+                    source_type=source_types.get(page.final_url, "other"),
+                )
+                if trajectory is not None:
+                    trajectory.record(
+                        "locate_with_model", page.final_url, outcome="ok" if located else "none"
+                    )
+                if located is not None:
+                    candidates.append(located)
 
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
         if not candidates and settings.demo_catalog_fallback:
