@@ -76,7 +76,7 @@ jobs:
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --no-invoker-iam-check \
-            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.5-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true|CORS_ORIGINS=https://${{ vars.FIREBASE_SITE_ID }}.web.app,http://localhost:5173|EKISPERT_API_KEY=${{ secrets.EKISPERT_API_KEY }}" \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-3.8-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true|CORS_ORIGINS=https://${{ vars.FIREBASE_SITE_ID }}.web.app,http://localhost:5173|EKISPERT_API_KEY=${{ secrets.EKISPERT_API_KEY }}" \
             --quiet
           URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
@@ -144,7 +144,7 @@ jobs:
             --args="-m,event_agent.entrypoints.job" \
             --max-retries 0 \
             --task-timeout 300s \
-            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.5-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true" \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-3.8-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true" \
             --quiet
 
   web:

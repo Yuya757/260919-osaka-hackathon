@@ -1,7 +1,7 @@
 /** 一覧の1行（画面設計書 S-01）。カードではなく罫線で区切る。 */
 import { useNavigate } from 'react-router-dom'
 import type { Event, GoogleCalendarEventIds } from '../types/api'
-import { formatLocationType, isCalendarRegistered, placeLabel } from '../lib/eventView'
+import { formatLocationType, hostOf, isCalendarRegistered, placeLabel } from '../lib/eventView'
 import { DualDateBlock } from './DualDateBlock'
 
 type Props = {
@@ -35,6 +35,22 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
           {formatLocationType(event.location.type)}
         </p>
         <DualDateBlock event={event} />
+        {/* 根拠（出典と引用）。締切 → 開催日の順で最大2件。全文は詳細で */}
+        {(event.evidencePreview ?? []).slice(0, 2).map((item) => (
+          <p className="row-evidence" key={`${item.sourceUrl}-${item.excerpt}`}>
+            <span className="row-evidence-field">
+              {item.supports.includes('dates.applicationDeadline')
+                ? '締切の根拠'
+                : item.supports.includes('dates.eventStart')
+                  ? '開催日の根拠'
+                  : '根拠'}
+            </span>
+            <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
+              {hostOf(item.sourceUrl)}
+            </a>
+            <span className="row-evidence-quote">「{item.excerpt}」</span>
+          </p>
+        ))}
       </div>
 
       <div className="row-side">

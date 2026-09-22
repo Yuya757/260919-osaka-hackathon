@@ -35,6 +35,7 @@
         "EventLocation",
         "EventDates",
         "EventRecommendation",
+        "EvidencePreview",
         "GoogleCalendarEventIds",
         "EventListResponse"
       ]

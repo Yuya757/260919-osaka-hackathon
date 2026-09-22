@@ -258,6 +258,45 @@ class Recommendation(BaseModel):
     reason: str
 
 
+class EvidencePreview(BaseModel):
+    """一覧に添える根拠の要約（出典と引用）。全文は evidence API で返す。"""
+
+    source_url: str = Field(alias="sourceUrl")
+    source_type: Literal["official", "organizer", "aggregator", "other"] = Field(alias="sourceType")
+    supports: list[SupportedField]
+    excerpt: str = Field(max_length=160)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+PREVIEW_FIELDS = ("dates.applicationDeadline", "dates.eventStart", "dates.eventEnd", "title")
+
+
+def preview_evidence(evidence: list[Evidence], limit: int = 4) -> list[EvidencePreview]:
+    """締切 → 開催日 → タイトルの順に、抜粋のある根拠を最大 limit 件にまとめる。"""
+    picked: list[EvidencePreview] = []
+    seen: set[tuple[str, str]] = set()
+    for field in PREVIEW_FIELDS:
+        for item in evidence:
+            if field not in item.supports or not item.excerpt:
+                continue
+            key = (item.source_url, item.excerpt)
+            if key in seen:
+                continue
+            seen.add(key)
+            picked.append(
+                EvidencePreview(
+                    sourceUrl=item.canonical_url or item.source_url,
+                    sourceType=item.source_type,
+                    supports=list(item.supports),
+                    excerpt=item.excerpt[:160],
+                )
+            )
+            if len(picked) >= limit:
+                return picked
+    return picked
+
+
 class ApiEvent(BaseModel):
     """Event candidate (§7.3). Mirrors packages/contracts/schemas/event.json.
 
@@ -296,6 +335,8 @@ class ApiEvent(BaseModel):
     google_calendar_event_ids: GoogleCalendarEventIds = Field(
         default_factory=GoogleCalendarEventIds, alias="googleCalendarEventIds"
     )
+    # 一覧用の根拠の要約。保存はせず、list 応答でサーバーが添える
+    evidence_preview: list[EvidencePreview] = Field(default_factory=list, alias="evidencePreview")
     # 非推奨。Evidence.sourceType へ統合して廃止する
     source: str = "公式サイトで確認済み"
 

@@ -119,3 +119,20 @@ def test_source_type_for_classifies_hosts():
     assert source_type_for("https://osaka.connpass.com/event/1/") == "aggregator"
     assert source_type_for("https://example.org/event") == "official"
     assert source_type_for("https://agentic.example.jp/meetup/12", {"https://agentic.example.jp/meetup/12": "organizer"}) == "organizer"
+
+
+def test_article_hosts_are_excluded():
+    from event_agent.extraction.sources import is_article_host
+
+    assert is_article_host("https://zenn.dev/naoki_mm/articles/ec230cc6ea33f5")
+    assert is_article_host("https://note.com/someone/n/abc")
+    assert not is_article_host("https://osaka-hackathon.example.jp/2026")
+
+
+def test_clean_venue_rejects_sentences_and_particles():
+    from event_agent.extraction.extractor import clean_venue
+
+    assert clean_venue("で開催") is None
+    assert clean_venue(". If online participation is also difficult, you may simply submit your work.") is None
+    assert clean_venue("グランフロント大阪") == "グランフロント大阪"
+    assert clean_venue("：梅田スカイビル タワーイースト") == "梅田スカイビル タワーイースト"

@@ -62,6 +62,18 @@
       "enum": ["suggested", "bookmarked", "dismissed"],
       "description": "ユーザーによる選別の状態。上位要件 §6.2 が挙げる added_to_calendar は含めない。カレンダー登録状態は詳細要件 §7.3 に従い googleCalendarEventIds で表現し、選別状態と登録状態を独立に保持する。"
     },
+    "EvidencePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUrl", "sourceType", "supports", "excerpt"],
+      "description": "一覧に添える根拠の要約。全文は GET /api/events/{eventId}/evidence（§7.2）",
+      "properties": {
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "sourceType": { "$ref": "evidence.json#/$defs/EvidenceSourceType" },
+        "supports": { "type": "array", "items": { "$ref": "evidence.json#/$defs/SupportedField" } },
+        "excerpt": { "type": "string", "maxLength": 160 }
+      }
+    },
     "GoogleCalendarEventIds": {
       "type": "object",
       "additionalProperties": false,
@@ -120,6 +132,12 @@
         "sourceRunId": { "type": "string", "minLength": 1 },
         "status": { "$ref": "#/$defs/EventLifecycleStatus" },
         "googleCalendarEventIds": { "$ref": "#/$defs/GoogleCalendarEventIds" },
+        "evidencePreview": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/EvidencePreview" },
+          "description": "一覧用。締切・開催日・タイトルの根拠を最大4件。サーバーが list 応答で添える"
+        },
         "source": {
           "type": "string",
           "deprecated": true,

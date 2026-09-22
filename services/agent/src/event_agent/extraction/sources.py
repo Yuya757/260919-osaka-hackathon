@@ -23,6 +23,26 @@ AGGREGATOR_HOSTS = (
 )
 
 
+# 記事・ブログの投稿基盤。イベント告知ではなく「まとめ記事」が多く、
+# 記事中の日付を開催日と取り違えるので抽出対象から外す。
+ARTICLE_HOSTS = (
+    "zenn.dev",
+    "qiita.com",
+    "note.com",
+    "medium.com",
+    "hatenablog.com",
+    "hatenablog.jp",
+    "hateblo.jp",
+    "wikipedia.org",
+    "prtimes.jp",
+)
+
+
+def is_article_host(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").casefold()
+    return any(host == h or host.endswith("." + h) for h in ARTICLE_HOSTS)
+
+
 def source_type_for(url: str, known: dict[str, str] | None = None) -> str:
     known = known or {}
     if url in known:

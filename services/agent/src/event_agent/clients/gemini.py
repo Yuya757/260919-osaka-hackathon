@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -12,6 +14,9 @@ from event_agent.schemas import UserPreferences
 from event_agent.security import prompt_guard
 
 logger = logging.getLogger(__name__)
+# 3.x 系は thought_signature パーツを返し、genai が text 連結のたびに警告を出す。
+# 本文だけ使うので抑える。
+logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 
 
 @dataclass
@@ -54,7 +59,7 @@ class GeminiClient:
                 self._client = genai.Client(
                     vertexai=True,
                     project=settings.gcp_project_id,
-                    location=settings.gcp_region,
+                    location=settings.gemini_location,
                 )
             except Exception as exc:
                 logger.warning("Gemini client unavailable: %s", exc)
@@ -87,7 +92,12 @@ class GeminiClient:
             _call_budget.set(budget)
         return budget.take()
 
-    async def generate_text(self, prompt: str, system: str | None = None) -> str | None:
+    async def generate_text(
+        self, prompt: str, system: str | None = None, *, thinking: bool = False
+    ) -> str | None:
+        """One text call. ``thinking=False`` turns reasoning off (thinking_budget=0):
+        the extraction asks the model to *quote* lines, which needs no deliberation
+        and with reasoning on takes minutes per page on the 3.x models."""
         if not self._client or not self._take_call():
             return None
         try:
@@ -96,29 +106,59 @@ class GeminiClient:
             config = types.GenerateContentConfig(
                 system_instruction=system,
                 temperature=0.2,
-            ) if system else types.GenerateContentConfig(temperature=0.2)
-            response = self._client.models.generate_content(
-                model=settings.gemini_model,
-                contents=prompt,
-                config=config,
+                thinking_config=None if thinking else types.ThinkingConfig(thinking_budget=0),
+            )
+            # 同期版は event loop を塞ぐ。並列に呼ぶために aio を使い、上限時間も切る
+            response = await asyncio.wait_for(
+                self._client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=prompt,
+                    config=config,
+                ),
+                timeout=settings.model_call_timeout_seconds,
             )
             return (getattr(response, "text", None) or "").strip() or None
         except Exception as exc:
             logger.warning("generate_text failed: %s", exc)
             return None
 
-    async def search_with_grounding(self, query: str) -> list[dict[str, str]]:
-        """Grounding-only call (no tools mixed with other function calling)."""
+    async def search_with_grounding(
+        self,
+        query: str,
+        *,
+        since: datetime | None = None,
+        exclude_domains: tuple[str, ...] = (),
+    ) -> list[dict[str, str]]:
+        """Grounding-only call (no tools mixed with other function calling).
+
+        ``since`` narrows the search to pages from that time on (Google Search
+        の期間指定), and ``exclude_domains`` drops hosts that are never event
+        pages (まとめ記事など). Both are search-side filters, so they cost no
+        extra model calls.
+        """
         if not self._client or not self._take_call():
             return []
         try:
             from google.genai import types
 
-            tool = types.Tool(google_search=types.GoogleSearch())
-            response = self._client.models.generate_content(
-                model=settings.gemini_model,
-                contents=f"日本のイベント情報: {query}",
-                config=types.GenerateContentConfig(tools=[tool], temperature=0.1),
+            search = types.GoogleSearch(
+                time_range_filter=types.Interval(start_time=since, end_time=datetime.now(timezone.utc))
+                if since
+                else None,
+                exclude_domains=list(exclude_domains) or None,
+            )
+            tool = types.Tool(google_search=search)
+            response = await asyncio.wait_for(
+                self._client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=f"日本のイベント情報: {query}",
+                    config=types.GenerateContentConfig(
+                        tools=[tool],
+                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_budget=0),
+                    ),
+                ),
+                timeout=settings.model_call_timeout_seconds,
             )
             hits: list[dict[str, str]] = []
             candidates = getattr(response, "candidates", None) or []

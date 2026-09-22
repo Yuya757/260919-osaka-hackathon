@@ -762,6 +762,35 @@ button.next-title:hover {
   line-height: 1.5;
 }
 
+.row-evidence {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1.6;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.row-evidence-field {
+  flex: none;
+  color: var(--dim);
+}
+
+.row-evidence a {
+  flex: none;
+  color: var(--dim);
+}
+
+.row-evidence-quote {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 .row-side {
   flex: none;
   display: flex;

@@ -16,6 +16,7 @@ Gemini に**ページ本文からの引用**を返させる。モデルが返す
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -28,6 +29,7 @@ from event_agent.extraction.extractor import (
     ExtractedCandidate,
     FieldSource,
     category_of,
+    clean_venue,
     location_of,
     station_of,
     summary_of,
@@ -135,7 +137,8 @@ def candidate_from_lines(
     title = lines.get("title") or (hit.title if hit and hit.title else None)
     if not title:
         return None
-    title = title[:200]
+    # 引用の照合は生のまま行い、表示用の文字列だけ実体参照を戻す（&#x27; など）
+    title = html.unescape(title)[:200]
 
     sources: dict[str, FieldSource] = {
         "title": FieldSource("title", title, page.final_url),
@@ -150,9 +153,10 @@ def candidate_from_lines(
 
     venue_line = lines.get("venueLine")
     location_type, venue, location_snippet = location_of(text)
-    if venue_line:
-        venue = venue or venue_line[:120]
-        location_snippet = venue_line
+    quoted_venue = clean_venue(html.unescape(venue_line) if venue_line else None)
+    if quoted_venue:
+        venue = venue or quoted_venue
+        location_snippet = venue_line or location_snippet
         if location_type == "unknown":
             location_type = "offline"
     if location_snippet:
@@ -160,7 +164,7 @@ def candidate_from_lines(
 
     organizer = lines.get("organizerLine")
     if organizer:
-        organizer = organizer[:120]
+        organizer = html.unescape(organizer)[:120]
         sources["organizer"] = FieldSource("organizer", organizer, page.final_url)
     sources["officialUrl"] = FieldSource("officialUrl", page.final_url, page.final_url)
 
