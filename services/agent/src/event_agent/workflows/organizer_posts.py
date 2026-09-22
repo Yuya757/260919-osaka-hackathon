@@ -187,10 +187,11 @@ def _bot_body(event: ApiEvent) -> str:
         return base if precision == "date" else f"{base} {local:%H:%M}"
 
     lines = [event.summary] if event.summary else []
-    held = fmt(event.dates.event_start, event.dates.event_start_precision)
-    if event.dates.event_end:
-        held += f" 〜 {fmt(event.dates.event_end, 'date')}"
-    lines.append(f"開催日: {held}")
+    if event.dates.event_start is not None:
+        held = fmt(event.dates.event_start, event.dates.event_start_precision)
+        if event.dates.event_end:
+            held += f" 〜 {fmt(event.dates.event_end, 'date')}"
+        lines.append(f"開催日: {held}")
     if event.dates.application_deadline is not None:
         lines.append(
             "申込締切: "

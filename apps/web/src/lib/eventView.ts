@@ -78,16 +78,25 @@ export function deadlineLabel(event: Event): string {
   return `${formatDate(iso, tz)} ${formatTime(iso, tz)}`
 }
 
-/** 開催日のラベル。複数日開催は「M月D日 — M月D日」。 */
+/**
+ * 実施日のラベル。複数日開催は「M月D日 — M月D日」。
+ * 実施日が無い告知（ビジコン・補助金）は「未確認」。「なし」とは書かない（§6.6）。
+ */
 export function heldLabel(event: Event): string {
   const { eventStart, eventEnd, timezone } = event.dates
+  if (!eventStart) return '未確認'
   if (eventEnd && dayKey(eventEnd, timezone) !== dayKey(eventStart, timezone)) {
     return `${formatDate(eventStart, timezone)} — ${formatDate(eventEnd, timezone)}`
   }
   const base = formatDate(eventStart, timezone)
-  return event.dates.eventStartPrecision === 'date'
-    ? base
-    : `${base} ${formatTime(eventStart, timezone)}`
+  return event.dates.eventStartPrecision === 'datetime'
+    ? `${base} ${formatTime(eventStart, timezone)}`
+    : base
+}
+
+/** 実施（開始）日と終了日から、終了済み判定などに使う日付を決める。 */
+export function anchorDate(event: Event): string | null {
+  return event.dates.eventEnd ?? event.dates.eventStart ?? event.dates.applicationDeadline ?? null
 }
 
 /** 残り日数。暦日どうしの差で数え、時刻の端数で1日ずれないようにする。 */
@@ -115,7 +124,8 @@ export function isUrgent(event: Event, thresholdDays = 5): boolean {
 }
 
 export function isFinished(event: Event): boolean {
-  const end = event.dates.eventEnd ?? event.dates.eventStart
+  // 実施日が無い告知は締切で判断する
+  const end = anchorDate(event)
   const n = daysUntil(end, event.dates.timezone)
   return n !== null && n < 0
 }
@@ -123,7 +133,7 @@ export function isFinished(event: Event): boolean {
 /** 申込締切と開催日のあいだの日数。締切が不明なら null。 */
 export function gapDays(event: Event): number | null {
   const { applicationDeadline, eventStart, timezone } = event.dates
-  if (!applicationDeadline) return null
+  if (!applicationDeadline || !eventStart) return null
   return dayIndex(eventStart, timezone) - dayIndex(applicationDeadline, timezone)
 }
 
@@ -145,6 +155,7 @@ export function placeLabel(event: Event): string {
  */
 const CATEGORY_LABEL: Record<string, string> = {
   hackathon: 'ハッカソン',
+  contest: 'ビジネスコンテスト',
   conference: 'カンファレンス',
   meetup: 'ミートアップ',
   acceleration: 'アクセラレーター',
@@ -200,4 +211,18 @@ export function isCalendarRegistered(ids?: {
   mainEventId?: string | null
 }): boolean {
   return Boolean(ids?.deadlineEventId || ids?.mainEventId)
+}
+
+/** 機会の種別のラベル。一覧のチップと詳細に出す */
+const KIND_LABEL: Record<string, string> = {
+  hackathon: 'ハッカソン',
+  contest: 'ビジコン',
+  accelerator: 'アクセラ',
+  cocreation: '共創',
+  exhibition: '展示会',
+  subsidy: '補助金',
+}
+
+export function kindLabel(kind: string | undefined): string {
+  return KIND_LABEL[kind ?? 'hackathon'] ?? 'ハッカソン'
 }

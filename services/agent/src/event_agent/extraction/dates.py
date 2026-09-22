@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from typing import NamedTuple
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -22,6 +23,7 @@ JST = timezone(timedelta(hours=9))
 APPLICATION_LABELS = (
     "申込締切", "申込み締切", "申し込み締切", "応募締切", "エントリー締切",
     "参加申込締切", "申込期限", "応募期限", "エントリー期限", "申込〆切", "参加登録締切",
+    "募集締切", "募集期限", "応募・提出締切", "出展申込締切",
 )
 # 締切ではあるが「申込締切」ではないラベル。混同すると §13.2 の締切正確率が落ちる。
 NON_APPLICATION_DEADLINE_LABELS = (
@@ -29,6 +31,44 @@ NON_APPLICATION_DEADLINE_LABELS = (
     "予稿締切", "原稿締切", "登壇応募", "スポンサー申込", "支払期限", "キャンセル期限",
 )
 EVENT_DATE_LABELS = ("開催日", "開催日時", "会期", "日程", "開催期間", "イベント日")
+
+# 締切と実施日のあいだの節目（ジャンル拡張計画）。値が取れたものだけ持つ
+MILESTONE_LABELS = (
+    "エントリー開始", "募集開始", "受付開始",
+    "書類選考結果通知", "一次選考通過", "一次審査", "二次審査",
+    "プレゼン審査", "最終審査会", "最終審査", "結果発表", "表彰式", "審査結果",
+)
+
+
+class LabelSet(NamedTuple):
+    """ジャンルごとのラベル表（ジャンル拡張計画の事前調査）。
+
+    「提出締切」はハッカソンでは作品提出であって申込締切ではないが、ビジコンでは
+    「ビジネスプランシート応募・提出締切」が本物の応募締切である。同じ語で扱いが
+    逆になるので、除外語は kind ごとに持つ。
+    """
+
+    deadline: tuple[str, ...]
+    exclude: tuple[str, ...]
+    event_dates: tuple[str, ...]
+    milestones: tuple[str, ...]
+
+
+_CONTEST_EXCLUDE = tuple(
+    label
+    for label in NON_APPLICATION_DEADLINE_LABELS
+    # ビジコンでは「提出締切」は応募そのもの。早割と支払いだけ除く
+    if label not in ("作品提出", "作品提出締切", "提出締切", "予稿締切", "原稿締切", "登壇応募")
+)
+
+LABEL_SETS: dict[str, LabelSet] = {
+    "hackathon": LabelSet(APPLICATION_LABELS, NON_APPLICATION_DEADLINE_LABELS, EVENT_DATE_LABELS, MILESTONE_LABELS),
+    "contest": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS + ("最終審査会", "最終審査"), MILESTONE_LABELS),
+}
+
+
+def labels_for(kind: str) -> LabelSet:
+    return LABEL_SETS.get(kind, LABEL_SETS["hackathon"])
 
 _YEAR = r"(?P<year>20\d{2})\s*[年/\-\.]"
 _MD = r"(?P<month>\d{1,2})\s*[月/\-\.]\s*(?P<day>\d{1,2})\s*日?"
@@ -136,23 +176,58 @@ def find_labelled(text: str, labels: tuple[str, ...]) -> list[tuple[str, str, st
     return found
 
 
-def find_application_deadline(text: str, *, fallback_year: int | None) -> ParsedDate | None:
-    """Pick the 申込締切 only, ignoring 早割 / 作品提出 and friends (§6.5)."""
-    for _label, rest, line in find_labelled(text, APPLICATION_LABELS):
+def deadline_from_fragment(fragment: str, *, fallback_year: int | None) -> ParsedDate | None:
+    """締切の値を読む。範囲（「募集期間 A〜B締切」）なら終わりが締切。
+
+    開始日を締切として登録すると、まだ応募できるものを「終了」に見せてしまう。
+    """
+    start, end = parse_range(fragment, fallback_year=fallback_year)
+    if end is not None:
+        return end
+    return start
+
+
+def find_application_deadline(
+    text: str, *, fallback_year: int | None, kind: str = "hackathon"
+) -> ParsedDate | None:
+    """Pick the 申込締切 only, ignoring 早割 / 作品提出 and friends (§6.5).
+
+    除外語は ``kind`` で変わる（ジャンル拡張計画）。
+    """
+    labels = labels_for(kind)
+    for _label, rest, line in find_labelled(text, labels.deadline):
         # 行全体で判定する。「早期申込締切」「スポンサー申込締切」は
         # 「申込締切」を含むので、接頭辞まで見ないと除外できない。
-        if any(bad in line for bad in NON_APPLICATION_DEADLINE_LABELS):
+        if any(bad in line for bad in labels.exclude):
             continue
-        parsed = parse_date(rest, fallback_year=fallback_year)
+        parsed = deadline_from_fragment(rest, fallback_year=fallback_year)
         if parsed is not None:
             return parsed
     return None
 
 
+def find_milestones(
+    text: str, *, fallback_year: int | None, kind: str = "hackathon", limit: int = 5
+) -> list[tuple[str, ParsedDate]]:
+    """節目（一次選考通過、最終審査会、結果発表…）を拾う。値が読めたものだけ。"""
+    found: list[tuple[str, ParsedDate]] = []
+    seen: set[str] = set()
+    for label, rest, _line in find_labelled(text, labels_for(kind).milestones):
+        if label in seen:
+            continue
+        parsed = parse_date(rest, fallback_year=fallback_year)
+        if parsed is not None:
+            seen.add(label)
+            found.append((label, parsed))
+            if len(found) >= limit:
+                break
+    return found
+
+
 def find_event_dates(
-    text: str, *, fallback_year: int | None
+    text: str, *, fallback_year: int | None, kind: str = "hackathon"
 ) -> tuple[ParsedDate | None, ParsedDate | None]:
-    for _label, rest, _line in find_labelled(text, EVENT_DATE_LABELS):
+    for _label, rest, _line in find_labelled(text, labels_for(kind).event_dates):
         start, end = parse_range(rest, fallback_year=fallback_year)
         if start is not None:
             return start, end

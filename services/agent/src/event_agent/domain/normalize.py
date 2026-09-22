@@ -45,19 +45,22 @@ def normalize_url(url: str) -> str:
 def compute_dedup_key(
     official_url: str,
     normalized_title: str,
-    event_start: datetime,
+    event_start: datetime | None,
     organizer: str | None,
+    deadline: datetime | None = None,
 ) -> str:
     """Stable identity per §9.3: normalized URL, title, start date and organizer.
 
     The same event in a different year must produce a different key, so the
-    start *date* participates rather than only the month.
+    start *date* participates rather than only the month. 実施日が無い告知
+    （ビジコン・補助金）は締切の日付で代用し、どちらも無ければ日付なしで束ねる。
     """
+    anchor = event_start or deadline
     material = "|".join(
         [
             normalize_url(official_url),
             normalized_title,
-            event_start.date().isoformat(),
+            anchor.date().isoformat() if anchor else "",
             normalize_title(organizer or ""),
         ]
     )

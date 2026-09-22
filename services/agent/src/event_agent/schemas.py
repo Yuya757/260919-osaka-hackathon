@@ -193,6 +193,25 @@ class EventLocation(BaseModel):
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
+EventKind = Literal[
+    "hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"
+]
+
+
+class EventMilestone(BaseModel):
+    """締切と実施日のあいだの節目（一次選考通過発表、最終審査会、結果発表など）。
+
+    ビジコンやアクセラは「締切 → 実施」の 2 軸に潰すと時系列が落ちるので、
+    残りをここに持つ。2 軸表示そのものは変えない。
+    """
+
+    label: str = Field(min_length=1, max_length=40)
+    at: datetime
+    precision: Literal["datetime", "date"] = "date"
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
 class EventDates(BaseModel):
     application_deadline: datetime | None = Field(
         default=None, alias="applicationDeadline"
@@ -201,17 +220,23 @@ class EventDates(BaseModel):
     application_deadline_precision: Literal["datetime", "date", "unknown"] = Field(
         default="unknown", alias="applicationDeadlinePrecision"
     )
-    event_start: datetime = Field(alias="eventStart")
-    event_start_precision: Literal["datetime", "date"] = Field(
+    # 実施（開始）日時。締切だけが分かっている告知では None（ビジコン・補助金）
+    event_start: datetime | None = Field(default=None, alias="eventStart")
+    event_start_precision: Literal["datetime", "date", "unknown"] = Field(
         default="datetime", alias="eventStartPrecision"
     )
     event_end: datetime | None = Field(default=None, alias="eventEnd")
+    milestones: list[EventMilestone] = Field(default_factory=list)
     timezone: str = "Asia/Tokyo"
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
     @model_validator(mode="after")
-    def _default_deadline_precision(self) -> "EventDates":
+    def _default_precisions(self) -> "EventDates":
+        if self.event_start is None:
+            object.__setattr__(self, "event_start_precision", "unknown")
+        elif self.event_start_precision == "unknown":
+            object.__setattr__(self, "event_start_precision", "datetime")
         if self.application_deadline is None:
             object.__setattr__(self, "application_deadline_precision", "unknown")
         elif self.application_deadline_precision == "unknown":
@@ -333,6 +358,8 @@ class ApiEvent(BaseModel):
     normalized_title: str = Field(default="", alias="normalizedTitle")
     organizer: str | None = None
     category: str
+    # 機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画）
+    kind: EventKind = "hackathon"
     summary: str
     location: EventLocation
     dates: EventDates
@@ -387,6 +414,7 @@ class ApiEvent(BaseModel):
                     self.normalized_title,
                     self.dates.event_start,
                     self.organizer,
+                    self.dates.application_deadline,
                 ),
             )
         return self

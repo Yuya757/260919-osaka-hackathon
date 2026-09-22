@@ -24,6 +24,7 @@ from event_agent.extraction.extractor import (
     _ORGANIZER_LABELS,
     _labelled_value,
     category_of,
+    kind_of,
     location_of,
     station_of,
     summary_of,
@@ -34,6 +35,7 @@ from event_agent.schemas import (
     ApiEvent,
     EventDates,
     EventLocation,
+    EventMilestone,
     Evidence,
     OrganizerPostRequest,
     PostIssue,
@@ -110,7 +112,9 @@ def derive_event_from_post(
     # 年は本文で一意に確定できるときだけ補完する（§6.5）
     fallback_year = next(iter(years)) if len(years) == 1 else None
 
-    start, end = d.find_event_dates(text, fallback_year=fallback_year)
+    category = category_of(text)
+    kind = kind_of(category)
+    start, end = d.find_event_dates(text, fallback_year=fallback_year, kind=kind)
     if start is None:
         if _year_ambiguous(text, years):
             return PostDraft(
@@ -134,7 +138,7 @@ def derive_event_from_post(
             ],
         )
 
-    deadline = d.find_application_deadline(text, fallback_year=fallback_year)
+    deadline = d.find_application_deadline(text, fallback_year=fallback_year, kind=kind)
     location_type, venue, location_snippet = location_of(text)
     organizer_in_body = _labelled_value(text, _ORGANIZER_LABELS)
     organizer = organizer_in_body or request.organizer_name
@@ -179,7 +183,8 @@ def derive_event_from_post(
         userId=user_id,
         title=request.title,
         organizer=organizer,
-        category=category_of(text),
+        category=category,
+        kind=kind,
         summary=summary_of(request.body, request.title) or request.title,
         location=EventLocation(
             type=location_type, venue=venue, region=venue, nearestStation=station_of(text)
@@ -190,6 +195,12 @@ def derive_event_from_post(
             eventStart=start.value,
             eventStartPrecision=start.precision,
             eventEnd=end.value if end else None,
+            milestones=[
+                EventMilestone(label=label, at=parsed.value, precision=parsed.precision)
+                for label, parsed in d.find_milestones(
+                    text, fallback_year=fallback_year, kind=kind
+                )
+            ],
         ),
         officialUrl=request.contact_url,
         recommendation=None,

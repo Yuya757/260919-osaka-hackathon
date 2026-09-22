@@ -15,6 +15,12 @@ _W_DATE_COMPLETENESS = 0.15
 _W_NO_CONFLICT = 0.10
 
 REQUIRED_EVIDENCE_FIELDS = ("title", "dates.eventStart")
+# 実施日が無い告知（ビジコン・補助金）は、締切の根拠を実施日の代わりに求める
+REQUIRED_EVIDENCE_FIELDS_NO_START = ("title", "dates.applicationDeadline")
+
+
+def required_evidence_fields(has_event_start: bool) -> tuple[str, ...]:
+    return REQUIRED_EVIDENCE_FIELDS if has_event_start else REQUIRED_EVIDENCE_FIELDS_NO_START
 
 
 def compute_confidence(
@@ -36,8 +42,9 @@ def compute_confidence(
         # 集約サイトのみを根拠とする場合は満点を与えない（§6.6 公式性）
         score += _W_OFFICIAL / 3
 
-    covered = sum(1 for f in REQUIRED_EVIDENCE_FIELDS if f in supported_fields)
-    score += _W_EVIDENCE * covered / len(REQUIRED_EVIDENCE_FIELDS)
+    required = required_evidence_fields("dates.eventStart" in supported_fields)
+    covered = sum(1 for f in required if f in supported_fields)
+    score += _W_EVIDENCE * covered / len(required)
 
     if distinct_hosts >= 2:
         score += _W_CORROBORATION

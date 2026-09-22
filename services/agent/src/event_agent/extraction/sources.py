@@ -20,6 +20,10 @@ AGGREGATOR_HOSTS = (
     "kokuchpro.com",
     "eventregist.com",
     "compass.jp",
+    # コンペ・コンテストの情報集約サイト
+    "compe.japandesign.ne.jp",
+    "koubo.jp",
+    "compe-navi.com",
 )
 
 
@@ -35,6 +39,7 @@ ARTICLE_HOSTS = (
     "hateblo.jp",
     "wikipedia.org",
     "prtimes.jp",
+    "startuplist.jp",
 )
 
 

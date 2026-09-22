@@ -96,14 +96,32 @@ export type EventLocation = {
 
 export type DatePrecision = 'datetime' | 'date' | 'unknown'
 
+/** 機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画） */
+export type EventKind =
+  | 'hackathon'
+  | 'contest'
+  | 'accelerator'
+  | 'cocreation'
+  | 'exhibition'
+  | 'subsidy'
+
+/** 締切と実施日のあいだの節目（一次選考通過、最終審査会、結果発表など） */
+export type EventMilestone = {
+  label: string
+  at: string
+  precision: 'datetime' | 'date'
+}
+
 export type EventDates = {
   /** null は「未確認」。UIで「締切なし」と表現してはならない（§6.6）。 */
   applicationDeadline?: string | null
   /** 'date' のとき時刻を表示してはならない */
   applicationDeadlinePrecision?: DatePrecision
-  eventStart: string
-  eventStartPrecision?: 'datetime' | 'date'
+  /** 実施（開始）日時。締切だけが分かっている告知では null（ビジコン・補助金） */
+  eventStart?: string | null
+  eventStartPrecision?: DatePrecision
   eventEnd?: string | null
+  milestones?: EventMilestone[]
   /** IANA timezone。表示は必ずこのタイムゾーンで解釈する。 */
   timezone: string
 }
@@ -183,6 +201,7 @@ export type Event = {
   normalizedTitle: string
   summary: string
   category: string
+  kind?: EventKind
   organizer?: string | null
   location: EventLocation
   dates: EventDates

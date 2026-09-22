@@ -911,6 +911,19 @@ button.next-title:hover {
   background: var(--held);
 }
 
+/* 節目（ジャンル拡張計画）。2軸より控えめに出す */
+.dates-row.is-milestone .dates-node {
+  background: var(--line-strong);
+  border-radius: 999px;
+  width: 4px;
+  height: 4px;
+}
+
+.dates-row.is-milestone .dates-value {
+  font-size: 12px;
+  color: var(--dim);
+}
+
 .dates-label {
   font-size: 11px;
   color: var(--faint);

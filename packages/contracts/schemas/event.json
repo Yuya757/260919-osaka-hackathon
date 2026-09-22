@@ -25,19 +25,44 @@
       "type": "string",
       "enum": ["datetime", "date", "unknown"]
     },
+    "EventKind": {
+      "type": "string",
+      "description": "機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画）",
+      "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
+    },
+    "EventMilestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "at", "precision"],
+      "description": "締切と実施日のあいだの節目（一次選考通過発表、最終審査会、結果発表など）",
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "at": { "type": "string", "format": "date-time" },
+        "precision": { "type": "string", "enum": ["datetime", "date"] }
+      }
+    },
     "EventDates": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eventStart", "eventStartPrecision", "timezone"],
+      "required": ["eventStartPrecision", "timezone"],
       "properties": {
         "applicationDeadline": { "type": ["string", "null"], "format": "date-time" },
         "applicationDeadlinePrecision": { "$ref": "#/$defs/DatePrecision" },
-        "eventStart": { "type": "string", "format": "date-time" },
+        "eventStart": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "実施（開始）日時。締切だけが分かっている告知では null（ビジコン・補助金）"
+        },
         "eventStartPrecision": {
           "type": "string",
-          "enum": ["datetime", "date"]
+          "enum": ["datetime", "date", "unknown"]
         },
         "eventEnd": { "type": ["string", "null"], "format": "date-time" },
+        "milestones": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/EventMilestone" }
+        },
         "timezone": {
           "type": "string",
           "description": "IANA timezone identifier (e.g. Asia/Tokyo)"
@@ -93,6 +118,7 @@
         "normalizedTitle",
         "summary",
         "category",
+        "kind",
         "location",
         "dates",
         "officialUrl",
@@ -112,6 +138,7 @@
         "normalizedTitle": { "type": "string", "minLength": 1 },
         "summary": { "type": "string" },
         "category": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/EventKind" },
         "organizer": { "type": ["string", "null"] },
         "location": { "$ref": "#/$defs/EventLocation" },
         "dates": { "$ref": "#/$defs/EventDates" },

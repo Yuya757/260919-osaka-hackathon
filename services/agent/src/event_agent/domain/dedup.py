@@ -12,6 +12,12 @@ from event_agent.domain.normalize import (
 from event_agent.schemas import ApiEvent
 
 
+def _anchor_date(event: ApiEvent):
+    """束ねるときの日付。実施日が無ければ締切で代用する。"""
+    anchor = event.dates.event_start or event.dates.application_deadline
+    return anchor.date() if anchor else None
+
+
 def _pairs(items: list[ApiEvent]) -> Iterator[tuple[ApiEvent, ApiEvent]]:
     for i in range(len(items)):
         for j in range(i + 1, len(items)):
@@ -75,7 +81,8 @@ def group_duplicates(
             else:
                 by_application[akey] = event.event_id
 
-        start = event.dates.event_start.date().isoformat()
+        anchor = event.dates.event_start or event.dates.application_deadline
+        start = anchor.date().isoformat() if anchor else ""
         triple = (event.normalized_title, start, normalize_title(event.organizer or ""))
         if triple in by_triple:
             _union(parent, by_triple[triple], event.event_id)
@@ -113,7 +120,9 @@ def group_duplicates(
             if not _same_region(left, right) or not _compatible_organizer(left, right):
                 continue
             gap = abs(
-                (left.dates.event_start.date() - right.dates.event_start.date()).days
+                (_anchor_date(left) - _anchor_date(right)).days
+                if _anchor_date(left) and _anchor_date(right)
+                else 10**6
             )
             if 0 < gap <= date_window_days and (
                 title_similarity(left.normalized_title, right.normalized_title)
@@ -151,7 +160,7 @@ def merge_group(group: list[ApiEvent]) -> ApiEvent:
         dict.fromkeys(eid for event in group for eid in event.evidence_ids)
     )
     disagreement = any(
-        event.dates.event_start.date() != survivor.dates.event_start.date()
+        _anchor_date(event) != _anchor_date(survivor)
         for event in group
     )
     update = {

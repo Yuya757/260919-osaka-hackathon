@@ -200,6 +200,8 @@ async def get_event_route(
         raise HTTPException(status_code=404, detail="Event not found")
     if event.location.type == "online":
         raise HTTPException(status_code=400, detail="オンライン開催のため経路検索はできません。")
+    if event.dates.event_start is None:
+        raise HTTPException(status_code=400, detail="実施日が未確認のため経路検索できません。")
     destination_name = event.location.nearest_station or event.location.region
     if not destination_name:
         raise HTTPException(status_code=400, detail="会場の最寄駅が未確認のため経路検索できません。")

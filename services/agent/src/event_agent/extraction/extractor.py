@@ -19,6 +19,7 @@ from event_agent.schemas import (
     ApiEvent,
     EventDates,
     EventLocation,
+    EventMilestone,
     Evidence,
     Recommendation,
 )
@@ -34,8 +35,21 @@ _ACCESS_LABELS = ("最寄駅", "最寄り駅", "アクセス", "交通")
 _STATION = re.compile(r"([一-龥ぁ-んァ-ヶA-Za-z0-9ー]{1,12}?)駅")
 _ORGANIZER_LABELS = ("主催", "主催者", "organizer", "運営")
 
+# category（表示用の細分）→ kind（絞り込みとラベル表の切り替え）
+_KIND_BY_CATEGORY = {
+    "hackathon": "hackathon",
+    "contest": "contest",
+    "acceleration": "accelerator",
+    "pitch": "contest",
+    "conference": "hackathon",
+    "meetup": "hackathon",
+    "workshop": "hackathon",
+    "other": "hackathon",
+}
+
 _CATEGORY_WORDS = (
     ("hackathon", ("ハッカソン", "hackathon")),
+    ("contest", ("ビジネスコンテスト", "ビジコン", "ビジネスプラン", "アイデアコンテスト", "コンテスト", "グランプリ", "contest")),
     ("conference", ("カンファレンス", "conference", "サミット")),
     ("meetup", ("ミートアップ", "meetup", "勉強会", "もくもく")),
     ("acceleration", ("アクセラレ", "accelerat")),
@@ -147,6 +161,11 @@ def category_of(text: str) -> str:
     return "other"
 
 
+def kind_of(category: str) -> str:
+    """category から kind を決める。未知の category はハッカソン扱い（既定）。"""
+    return _KIND_BY_CATEGORY.get(category, "hackathon")
+
+
 def summary_of(text: str, title: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
@@ -163,6 +182,7 @@ def extract_candidate(
     now: datetime,
     user_id: str,
     source_type: str = "other",
+    kind: str | None = None,
 ) -> ExtractedCandidate | None:
     """Extract one candidate from one page, or None when it is not an event."""
     text = to_text(page.text)
@@ -178,18 +198,24 @@ def extract_candidate(
     years = d.page_years(d.normalize(text))
     fallback_year = next(iter(years)) if len(years) == 1 else None
 
-    start, end = d.find_event_dates(text, fallback_year=fallback_year)
-    if start is None:
-        return None  # 開催日が取れないものは候補にしない（§6.6 必須項目）
-    sources["dates.eventStart"] = FieldSource(
-        "dates.eventStart", start.snippet, page.final_url
+    category = category_of(text)
+    resolved_kind = kind or kind_of(category)
+    start, end = d.find_event_dates(text, fallback_year=fallback_year, kind=resolved_kind)
+    deadline = d.find_application_deadline(
+        text, fallback_year=fallback_year, kind=resolved_kind
     )
+    # 実施日か締切のどちらかは要る。ハッカソンは実施日が必須のまま（§6.6）
+    if start is None and (resolved_kind == "hackathon" or deadline is None):
+        return None
+    if start is not None:
+        sources["dates.eventStart"] = FieldSource(
+            "dates.eventStart", start.snippet, page.final_url
+        )
     if end is not None:
         sources["dates.eventEnd"] = FieldSource(
             "dates.eventEnd", end.snippet, page.final_url
         )
 
-    deadline = d.find_application_deadline(text, fallback_year=fallback_year)
     if deadline is not None:
         sources["dates.applicationDeadline"] = FieldSource(
             "dates.applicationDeadline", deadline.snippet, page.final_url
@@ -210,7 +236,8 @@ def extract_candidate(
         userId=user_id,
         title=title,
         organizer=organizer,
-        category=category_of(text),
+        category=category,
+        kind=resolved_kind,
         summary=summary_of(text, title),
         location=EventLocation(
             type=location_type, venue=venue, region=venue, nearestStation=station_of(text)
@@ -218,9 +245,15 @@ def extract_candidate(
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,
             applicationDeadlinePrecision=deadline.precision if deadline else "unknown",
-            eventStart=start.value,
-            eventStartPrecision=start.precision,
+            eventStart=start.value if start else None,
+            eventStartPrecision=start.precision if start else "unknown",
             eventEnd=end.value if end else None,
+            milestones=[
+                EventMilestone(label=label, at=parsed.value, precision=parsed.precision)
+                for label, parsed in d.find_milestones(
+                    text, fallback_year=fallback_year, kind=resolved_kind
+                )
+            ],
         ),
         officialUrl=page.final_url,
         recommendation=Recommendation(score=0, reason=""),
@@ -266,6 +299,7 @@ def extract_candidates(
     now: datetime,
     user_id: str,
     source_types: dict[str, str] | None = None,
+    kind: str | None = None,
 ) -> list[ExtractedCandidate]:
     hits = hits or {}
     source_types = source_types or {}
@@ -280,6 +314,7 @@ def extract_candidates(
             source_type=source_types.get(page.final_url)
             or source_types.get(page.requested_url)
             or "other",
+            kind=kind,
         )
         if candidate is not None:
             out.append(candidate)

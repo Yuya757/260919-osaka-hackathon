@@ -203,7 +203,11 @@ def apply_filters(pool: list[ApiEvent], intent: SearchIntent, *, trace: Trace) -
         trace.note("filter", f"{'・'.join(intent.locations)} かオンラインに絞る → {len(kept)} 件")
     if intent.date_from or intent.date_to:
         def in_window(e: ApiEvent) -> bool:
-            d = e.dates.event_start.astimezone(JST).date()
+            # 実施日が無い告知は締切の日で期間判定する
+            anchor = e.dates.event_start or e.dates.application_deadline
+            if anchor is None:
+                return False
+            d = anchor.astimezone(JST).date()
             return (not intent.date_from or d >= intent.date_from) and (not intent.date_to or d <= intent.date_to)
         kept = [e for e in kept if in_window(e)]
         trace.note("filter", f"開催日 {intent.date_from or ''}〜{intent.date_to or ''} に絞る → {len(kept)} 件")
@@ -216,7 +220,11 @@ def apply_filters(pool: list[ApiEvent], intent: SearchIntent, *, trace: Trace) -
 
 
 def _candidate_line(e: ApiEvent) -> str:
-    start = e.dates.event_start.astimezone(JST).strftime("%m/%d")
+    start = (
+        e.dates.event_start.astimezone(JST).strftime("%m/%d")
+        if e.dates.event_start
+        else "未定"
+    )
     deadline = (
         e.dates.application_deadline.astimezone(JST).strftime("%m/%d")
         if e.dates.application_deadline

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from event_agent.domain.confidence import REQUIRED_EVIDENCE_FIELDS, compute_confidence
+from event_agent.domain.confidence import compute_confidence, required_evidence_fields
 from event_agent.schemas import ApiEvent, Evidence
 
 
@@ -72,9 +72,10 @@ def score_event(
 
     dates = event.dates
     deadline_known = dates.application_deadline is not None
+    # 実施日が無い告知（ビジコン・補助金）は、締切と実施日の前後関係を問えない
     has_conflict = bool(
-        deadline_known and dates.application_deadline > dates.event_start
-    ) or bool(dates.event_end and dates.event_end < dates.event_start)
+        deadline_known and dates.event_start and dates.application_deadline > dates.event_start
+    ) or bool(dates.event_end and dates.event_start and dates.event_end < dates.event_start)
 
     confidence = compute_confidence(
         source_types=source_types,
@@ -89,18 +90,28 @@ def score_event(
     # 呼ぶと、同じ入力でも時間の経過で結果が変わり §13.2 の再現性が測れない。
     is_finished = False
     if now is not None:
-        end = dates.event_end or dates.event_start
-        is_finished = end < now
+        # 実施日が無ければ締切で終了を判断する。どちらも無ければ終了とみなさない
+        end = dates.event_end or dates.event_start or dates.application_deadline
+        is_finished = end < now if end else False
+    # 対象年（§6.6）。ビジコンは「2026年に応募 → 2027年に最終審査」が普通なので、
+    # 締切か実施日のどちらかが対象年なら対象とみなす。どちらも無ければ問わない
     in_target_year = True
     if target_year is not None:
-        in_target_year = dates.event_start.year == target_year
+        years = {
+            value.year
+            for value in (dates.event_start, dates.application_deadline)
+            if value is not None
+        }
+        in_target_year = target_year in years if years else True
 
     status = derive_validation_status(
         confidence=confidence,
         threshold=threshold,
         deadline_known=deadline_known,
         has_conflict=has_conflict,
-        has_required_evidence=all(f in supported for f in REQUIRED_EVIDENCE_FIELDS),
+        has_required_evidence=all(
+            f in supported for f in required_evidence_fields(dates.event_start is not None)
+        ),
         is_finished=is_finished,
         in_target_year=in_target_year,
         url_safe=url_safe,
