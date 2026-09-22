@@ -153,7 +153,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     runningRef.current = true
     setRunPending(false)
     try {
-      const created = await startAgentRun(true)
+      const created = await startAgentRun(true, undefined, sessionRef.current)
       setRun({ ...created, status: 'queued', currentStep: 'queued' })
       const finished = await pollAgentRun(created.runId, (progress) => setRun(progress))
       setRun(finished)
@@ -192,10 +192,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [refreshPosts],
   )
 
+  /**
+   * 「探す」= 必ず探索を始める。文に「探して」と書かなくてもよい。
+   * 文があれば先にチャットへ送って関心条件を更新し、チャット側が Run を
+   * 始めなかったときはこちらから始める。空なら条件そのままで探索する。
+   */
   const ask = useCallback(
     async (message: string) => {
       const trimmed = message.trim()
-      if (!trimmed || agentPending) return
+      if (agentPending) return
+      if (!trimmed) {
+        void startRun()
+        return
+      }
       setAgentPending(true)
       try {
         const response = await sendChat({ sessionId: sessionRef.current, message: trimmed })
@@ -204,11 +213,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           text: response.reply,
           searchSuggestionsHtml: response.searchSuggestionsHtml,
         })
+        let started = false
         for (const action of response.actions ?? []) {
-          // Run の完了は待たない。進捗は全画面共通のバナーで見せる
-          if (action.type === 'agent_run_started') void startRun()
+          // Run の完了は待たない。進捗は全画面共通のパネルで見せる
+          if (action.type === 'agent_run_started') {
+            started = true
+            void startRun()
+          }
           if (action.type === 'events_ready') await refresh()
         }
+        if (!started) void startRun()
       } catch (error) {
         setAgentReply({
           text:

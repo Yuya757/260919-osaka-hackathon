@@ -22,7 +22,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "forceRefresh": { "type": "boolean", "default": false }
+        "forceRefresh": { "type": "boolean", "default": false },
+        "sessionId": {
+          "type": "string",
+          "description": "Chat session whose preferences the run should use. Omitted: default preferences"
+        }
       }
     },
     "CreateAgentRunResponse": {
@@ -37,11 +41,33 @@
         }
       }
     },
+    "RunAgent": {
+      "type": "string",
+      "description": "Which role of the pipeline produced an activity line (section 6 steps grouped for display)",
+      "enum": ["planner", "searcher", "extractor", "organizer"]
+    },
+    "RunActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "message", "at"],
+      "properties": {
+        "agent": { "$ref": "#/$defs/RunAgent" },
+        "message": { "type": "string", "maxLength": 300, "description": "User-facing line; never a prompt, a secret or a stack trace (section 8.2)" },
+        "level": { "type": "string", "enum": ["info", "warn"] },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
     "AgentRun": {
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "userId", "triggerType", "idempotencyKey", "status", "startedAt"],
       "properties": {
+        "activity": {
+          "type": "array",
+          "maxItems": 80,
+          "items": { "$ref": "#/$defs/RunActivity" },
+          "description": "What each role did, in order. Bounded so the run document stays small"
+        },
         "runId": { "type": "string", "minLength": 1 },
         "userId": { "type": "string", "minLength": 1 },
         "triggerType": { "$ref": "#/$defs/AgentRunTriggerType" },

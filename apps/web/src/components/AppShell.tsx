@@ -3,7 +3,7 @@
  * 幅は 760px に収め、スマホでは横 20px の余白だけを残す。
  */
 import { NavLink, Outlet } from 'react-router-dom'
-import { RunProgressBanner } from './RunProgressBanner'
+import { AgentActivityPanel } from './AgentActivityPanel'
 
 const NAV: [string, string][] = [
   ['/', 'ホーム'],
@@ -33,7 +33,7 @@ export function AppShell() {
         </div>
       </header>
       <main className="page">
-        <RunProgressBanner />
+        <AgentActivityPanel />
         <Outlet />
       </main>
     </div>

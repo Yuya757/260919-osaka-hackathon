@@ -48,6 +48,16 @@ export type CreateAgentRunResponse = {
   status: 'queued'
 }
 
+/** パイプラインの役割。UI の「エージェントの動き」で列にする */
+export type RunAgent = 'planner' | 'searcher' | 'extractor' | 'organizer'
+
+export type RunActivity = {
+  agent: RunAgent
+  message: string
+  level?: 'info' | 'warn'
+  at: string
+}
+
 /** GET /api/agent-runs/{runId} — subset of Firestore agentRuns/{runId} (§7.1, §8.2) */
 export type AgentRun = {
   runId: string
@@ -70,6 +80,8 @@ export type AgentRun = {
   startedAt?: string
   completedAt?: string | null
   expiresAt?: string
+  /** 各役割が何をしたか。古い行から捨てられ、最大80行 */
+  activity?: RunActivity[]
 }
 
 export type EventLocationType = 'online' | 'offline' | 'hybrid' | 'unknown'

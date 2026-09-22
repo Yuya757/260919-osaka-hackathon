@@ -49,12 +49,14 @@ export function sendChat(body: ChatRequest): Promise<ChatResponse> {
 export function startAgentRun(
   forceRefresh = false,
   idempotencyKey?: string,
+  sessionId?: string,
 ): Promise<AgentRun> {
   return request<AgentRun>('/api/agent-runs', {
     method: 'POST',
     // 同一操作の二重実行を防ぐ（§9.3）。未指定ならサーバが発行する。
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
-    body: JSON.stringify({ forceRefresh }),
+    // チャットで更新した関心条件を Run に引き継ぐ
+    body: JSON.stringify({ forceRefresh, sessionId }),
   })
 }
 

@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from event_agent.config import settings
@@ -36,6 +38,17 @@ async def _set_step(run: AgentRun, step: str) -> AgentRun:
     run.current_step = step
     run.status = "running"
     return store.update_run(run)
+
+
+Note = Callable[..., None]
+
+
+def _noop_note(agent: str, message: str, *, level: str = "info") -> None:
+    del agent, message, level
+
+
+def _host(url: str) -> str:
+    return urlsplit(url).netloc or url
 
 
 def _normalize_preferences(preferences: UserPreferences) -> UserPreferences:
@@ -104,7 +117,9 @@ def _rank(
 
 
 async def _search_step(
-    queries: list[str], trajectory: ToolTrajectory | None = None
+    queries: list[str],
+    trajectory: ToolTrajectory | None = None,
+    note: Note = _noop_note,
 ) -> list[SearchHit]:
     """Collect search hits (§6.4).
 
@@ -123,15 +138,20 @@ async def _search_step(
         if trajectory is not None:
             for query in queries:
                 trajectory.record("search_with_grounding", query)
+        for query in queries:
+            note("searcher", f"「{query}」を検索（デモ用の固定結果）")
+        note("searcher", f"検索結果 {len(hits)} 件")
         return hits[: settings.max_candidates]
 
     for query in queries:
         if trajectory is not None:
             trajectory.record("search_with_grounding", query)
+        found = 0
         for raw in await gemini_client.search_with_grounding(query):
             url = raw.get("url", "")
             if url and url not in seen:
                 seen.add(url)
+                found += 1
                 hits.append(
                     SearchHit(
                         url=url,
@@ -140,12 +160,16 @@ async def _search_step(
                         query=query,
                     )
                 )
+        note("searcher", f"「{query}」を検索 → 新規 {found} 件")
         await asyncio.sleep(0.05)
+    note("searcher", f"検索結果 {len(hits)} 件")
     return hits[: settings.max_candidates]
 
 
 async def _fetch_step(
-    hits: list[SearchHit], trajectory: ToolTrajectory | None = None
+    hits: list[SearchHit],
+    trajectory: ToolTrajectory | None = None,
+    note: Note = _noop_note,
 ) -> tuple[list[FetchedPage], list[str]]:
     """Fetch each hit. Rejected URLs are reported, not raised (§9.1 候補単位)."""
     pages: list[FetchedPage] = []
@@ -155,8 +179,10 @@ async def _fetch_step(
         if isinstance(result, FetchedPage):
             _note_injection_attempt(result, trajectory)
             pages.append(result)
+            note("searcher", f"ページ取得: {_host(result.final_url)}")
         else:
             rejected.append(f"{result.reason}:{hit.url}")
+            note("searcher", f"取得を見送り（{result.reason}）: {_host(hit.url)}", level="warn")
     return pages, rejected
 
 
@@ -274,19 +300,33 @@ async def execute_collect_workflow(
     # §9.2 の「1 Run最大15回」はRunごと。シングルトンの積算を毎回戻す。
     gemini_client.reset_call_budget()
 
+    def note(agent: str, message: str, *, level: str = "info") -> None:
+        """UI の「エージェントの動き」に出す1行。行ごとに保存し、ポーリングで追える。"""
+        run.log(agent, message, level=level)  # type: ignore[arg-type]
+        store.update_run(run)
+
     try:
         await _set_step(run, "normalize")
         await asyncio.sleep(delay)
         normalized = _normalize_preferences(preferences)
+        note(
+            "planner",
+            "関心条件を整理: "
+            f"{normalized.interests_prompt} / {'・'.join(normalized.locations) or '地域指定なし'}"
+            f" / {normalized.target_year}年 / オンライン{'可' if normalized.online_allowed else '不可'}",
+        )
 
         await _set_step(run, "plan")
         await asyncio.sleep(delay)
         queries = _plan_queries(normalized)
+        note("planner", f"検索クエリを {len(queries)} 件作成")
+        for query in queries:
+            note("planner", f"クエリ: {query}")
 
         await _set_step(run, "search")
-        hits = await _search_step(queries, trajectory)
+        hits = await _search_step(queries, trajectory, note)
 
-        pages, fetch_rejected = await _fetch_step(hits, trajectory)
+        pages, fetch_rejected = await _fetch_step(hits, trajectory, note)
 
         await _set_step(run, "extract_validate")
         await asyncio.sleep(delay)
@@ -303,27 +343,39 @@ async def execute_collect_workflow(
             for candidate in candidates:
                 trajectory.record("extract", candidate.event.official_url)
 
+        note("extractor", f"{len(pages)} ページから {len(candidates)} 件の候補を抽出")
+
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
         if not candidates and settings.demo_catalog_fallback:
             candidates = _filter_catalog(normalized)
+            note("extractor", f"抽出 0 件のためデモカタログ {len(candidates)} 件で補完", level="warn")
 
         buckets = _validate(
             candidates, run.run_id, now=now, target_year=normalized.target_year
+        )
+        note(
+            "extractor",
+            f"日程を検証: 確認済み {len(buckets.verified)} / 要確認 {len(buckets.partial)}"
+            f" / 保留 {len(buckets.quarantined)} / 除外 {len(buckets.rejected)}",
         )
 
         await _set_step(run, "dedupe")
         await asyncio.sleep(delay)
         events, duplicate_count = _dedupe(buckets.displayable())
+        note("organizer", f"重複 {duplicate_count} 件を統合 → {len(events)} 件")
 
         await _set_step(run, "rank")
         events = _rank(events, normalized, run_id=run.run_id, now=now)
+        note("organizer", "関心との適合でおすすめ順に並べ替え")
 
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
+        note("organizer", f"{len(events)} 件を保存")
         # 収集したイベントをボット投稿としてフィードへ流す（F-06）。失敗しても
         # Run 自体は成功で、フィードが埋まらないだけ。
         try:
-            seed_bot_posts(events, now=now)
+            seeded = seed_bot_posts(events, now=now)
+            note("organizer", f"フィードへ {len(seeded)} 件を投稿")
         except Exception:  # noqa: BLE001
             logger.exception("bot seeding failed for run %s", run.run_id)
         if trajectory is not None:
@@ -346,6 +398,7 @@ async def execute_collect_workflow(
         run.completed_at = datetime.now(timezone.utc)
         store.update_run(run)
     except Exception as exc:
+        run.log("organizer", "エラーで中断しました", level="warn")
         run.status = "failed"
         run.error_message = "イベント収集中にエラーが発生しました。"
         run.current_step = "failed"
