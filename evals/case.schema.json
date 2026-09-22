@@ -36,7 +36,8 @@
           "conflicting_sources",
           "prompt_injection",
           "aggregator_only",
-          "contest"
+          "contest",
+          "program"
         ]
       }
     },

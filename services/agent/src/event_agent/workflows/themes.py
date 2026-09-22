@@ -31,6 +31,8 @@ class CollectionTheme:
         "site:peatix.com",
         "site:doorkeeper.jp OR site:techplay.jp",
     )
+    # 先頭の一般検索の語尾。ジャンルで告知の言い回しが違う
+    lead_query: str = "イベント 申込"
 
     def preferences(self, *, now: datetime) -> UserPreferences:
         # 年は固定せず JST の現在年。12 月に翌年の告知を弾かないよう、検証側には年を渡さない
@@ -49,6 +51,18 @@ _CONTEST_SITES = (
     "site:go.jp OR site:ac.jp",
 )
 
+# アクセラ・共創はプラットフォームに集まる。事前調査（2026-09-22）で
+# AUBA（eiicon）の公募プログラムと Creww Growth のプログラム一覧を実際に取得し、
+# 詳細ページから締切が取れることを確認した。
+_ACCELERATOR_SITES = (
+    "site:growth.creww.me OR site:creww.me",
+    "site:auba.eiicon.net",
+)
+_COCREATION_SITES = (
+    "site:auba.eiicon.net",
+    "site:growth.creww.me OR site:eiicon.net",
+)
+
 COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme("hackathon-kansai", "ハッカソン", ("関西", "大阪", "京都", "神戸")),
     CollectionTheme("hackathon-kanto", "ハッカソン", ("関東", "東京")),
@@ -57,14 +71,47 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme(
         "contest-kansai", "ビジネスコンテスト", ("関西", "大阪", "京都", "神戸"),
         kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+        lead_query="応募 締切",
     ),
     CollectionTheme(
         "contest-kanto", "ビジネスコンテスト", ("関東", "東京"),
         kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+        lead_query="応募 締切",
     ),
     CollectionTheme(
         "contest-online", "ビジネスコンテスト", ("オンライン", "全国"),
         online_only=False, kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+        lead_query="応募 締切",
+    ),
+    CollectionTheme(
+        "accelerator-kansai", "アクセラレータープログラム", ("関西", "大阪", "京都", "神戸"),
+        kind="accelerator", allowed_kinds=("accelerator", "cocreation"),
+        site_queries=_ACCELERATOR_SITES, lead_query="募集 締切",
+    ),
+    CollectionTheme(
+        "accelerator-kanto", "アクセラレータープログラム", ("関東", "東京"),
+        kind="accelerator", allowed_kinds=("accelerator", "cocreation"),
+        site_queries=_ACCELERATOR_SITES, lead_query="募集 締切",
+    ),
+    CollectionTheme(
+        "accelerator-online", "アクセラレータープログラム", ("オンライン", "全国"),
+        kind="accelerator", allowed_kinds=("accelerator", "cocreation"),
+        site_queries=_ACCELERATOR_SITES, lead_query="募集 締切",
+    ),
+    CollectionTheme(
+        "cocreation-kansai", "オープンイノベーション 共創プログラム", ("関西", "大阪", "京都", "神戸"),
+        kind="cocreation", allowed_kinds=("cocreation", "accelerator"),
+        site_queries=_COCREATION_SITES, lead_query="パートナー募集 締切",
+    ),
+    CollectionTheme(
+        "cocreation-kanto", "オープンイノベーション 共創プログラム", ("関東", "東京"),
+        kind="cocreation", allowed_kinds=("cocreation", "accelerator"),
+        site_queries=_COCREATION_SITES, lead_query="パートナー募集 締切",
+    ),
+    CollectionTheme(
+        "cocreation-online", "オープンイノベーション 共創プログラム", ("オンライン", "全国"),
+        kind="cocreation", allowed_kinds=("cocreation", "accelerator"),
+        site_queries=_COCREATION_SITES, lead_query="パートナー募集 締切",
     ),
 )
 

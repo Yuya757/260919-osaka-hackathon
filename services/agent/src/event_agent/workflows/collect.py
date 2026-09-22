@@ -80,8 +80,10 @@ def _plan_queries(
     # connpass / Peatix / Doorkeeper（ハッカソン）や公募情報サイト・自治体・大学
     # （ビジコン）に集まっており、一般検索だとまとめ記事に押されて出てこない。
     # クエリ数は §9.2 の呼び出し予算（1 Run 15回）の中で、抽出の呼び出し分を残すために抑える。
-    sites = theme.site_queries if theme else CollectionTheme.__dataclass_fields__["site_queries"].default
-    lead = f"{year} {location} {base} 応募 締切" if theme and theme.kind == "contest" else f"{year} {location} {base} イベント 申込"
+    fields = CollectionTheme.__dataclass_fields__
+    sites = theme.site_queries if theme else fields["site_queries"].default
+    tail = theme.lead_query if theme else fields["lead_query"].default
+    lead = f"{year} {location} {base} {tail}"
     queries = [lead, *(f"{site} {location} {base} {year}" for site in sites)]
     return queries[: settings.max_search_queries]
 
@@ -265,18 +267,25 @@ def _split_known_pages(
 def _gate_categories(
     candidates: list, allowed: tuple[str, ...] | None, note: Note
 ) -> tuple[list, int]:
-    """テーマ Run では対象の kind 以外を検証前に落とす。検証ルール自体は変えない。"""
+    """テーマ Run では対象の kind 以外を検証前に落とす。検証ルール自体は変えない。
+
+    `event.kind` はテーマの種別をそのまま写したもの（ラベル表の切り替えに使う）なので、
+    ここで見てもテーマの種別に一致するだけで何も落ちない。判定には見出し付近から
+    読めたジャンル（`headline_kind`）を使い、読めなければ落とさない。確信が無いときに
+    落とすと、ジャンルを名乗らない告知（事前調査の AUBA の共創プログラム）が全部消える。
+    """
     if not allowed:
         return candidates, 0
     kept = []
     dropped = 0
     for candidate in candidates:
         event = candidate.event if hasattr(candidate, "event") else candidate
-        if event.kind in allowed:
+        page_kind = getattr(candidate, "headline_kind", None)
+        if page_kind is None or page_kind in allowed:
             kept.append(candidate)
         else:
             dropped += 1
-            note("extractor", f"対象カテゴリ外のため除外: {_host(event.official_url)}", level="warn")
+            note("extractor", f"対象ジャンル外のため除外: {_host(event.official_url)}", level="warn")
     return kept, dropped
 
 

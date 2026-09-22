@@ -96,12 +96,14 @@ See [ADR-004](../../docs/ADR-004-プロンプトインジェクション対策.m
 ## Scheduled collection
 
 `entrypoints/job.py` is the Cloud Run Job entry point for the daily run
-(§14 Phase 2, ADR-008). It is deployed as `event-agent-daily` with 7 tasks run
-one at a time — one theme per task (`hackathon-kansai` / `-kanto` / `-chubu` /
-`-online`, `contest-kansai` / `-kanto` / `-online`) — and Cloud Scheduler
+(§14 Phase 2, ADR-008). It is deployed as `event-agent-daily` with 13 tasks run
+one at a time — one theme per task (`hackathon-*` 4, `contest-*` 3,
+`accelerator-*` 3, `cocreation-*` 3) — and Cloud Scheduler
 `event-agent-daily-0700` starts it every morning at 07:00 JST. Each theme
-carries its own `kind` and `site:` queries, so the contest themes search
-koubo.jp / 公募サイトと go.jp / ac.jp and reject non-contest candidates.
+carries its own `kind`, lead query and `site:` queries: contests search
+公募サイト / go.jp / ac.jp, accelerators and co-creation search Creww Growth and
+AUBA (eiicon). Candidates whose own page says a different genre are dropped
+before validation.
 
 ```bash
 PYTHONPATH=src python -m event_agent.entrypoints.job                  # all themes, in order
@@ -112,7 +114,7 @@ Its idempotency key is `theme:<id> + JST date + RUN_SCHEDULE_VERSION`, so a
 retried execution finds the day already claimed and exits without collecting
 again. Pages extracted within `KNOWN_URL_REFRESH_DAYS` (7) are not sent to the
 model again, and the day's Grounding searches are capped by
-`DAILY_GROUNDING_CAP` (60) via the `usage/{jstDate}` document.
+`DAILY_GROUNDING_CAP` (90) via the `usage/{jstDate}` document.
 
 ## Docker
 

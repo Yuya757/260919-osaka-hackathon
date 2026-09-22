@@ -156,3 +156,96 @@ class TestDatesModel:
             milestones=[EventMilestone(label="結果発表", at=datetime(2027, 1, 20, tzinfo=JST))],
         )
         assert withm.event_start_precision == "datetime" and withm.milestones[0].precision == "date"
+
+
+# ---- 段階2: アクセラ・共創（事前調査 2026-09-22 に AUBA と Creww の実ページで確認）
+
+# Creww Growth のプログラムページの書き方。締切は「募集期間」の終わり
+CREWW_HTML = """<html><body>
+<h1>ANA Xオープンイノベーションプログラム2026(秋)</h1>
+<p>ANAグループのプラットフォーム事業会社として、新規事業の共創パートナーを募集します。</p>
+<p>募集期間：2026年 9月 14日～10月 4日</p>
+<p>選考期間：2026年 10月 5日～10月 30日</p>
+<p>面談期間：2026年 11月以降順次実施</p>
+</body></html>"""
+
+# AUBA（eiicon）の公募プログラム。実施日は書かれず、締切だけがある
+AUBA_HTML = """<html><body>
+<h1>【青森県2026】ヤマモト食品株式会社 - プログラム応募</h1>
+<p>応募期間</p>
+<p>2026年09月09日〜2026年10月18日</p>
+<p>■応募締切：2026年10月18日（日）23:59まで</p>
+<p>10月29日に青森市内で開催されるワークショップへの参加が必須です。</p>
+</body></html>"""
+
+
+class TestProgramGenres:
+    def test_period_labels_give_the_end_as_the_deadline(self):
+        """「募集期間 A〜B」は B が締切。開始日を締切にすると応募できるものが終了に見える。"""
+        got = extract_candidate(
+            page(CREWW_HTML), hit=None, run_id="r", now=NOW, user_id="u", kind="accelerator"
+        )
+        assert got is not None
+        e = got.event
+        assert e.kind == "accelerator"
+        assert e.dates.application_deadline.date().isoformat() == "2026-10-04"
+        assert ("選考期間", "2026-10-05") in [
+            (m.label, m.at.date().isoformat()) for m in e.dates.milestones
+        ]
+
+    def test_cocreation_without_an_event_date_is_kept(self):
+        got = extract_candidate(
+            page(AUBA_HTML), hit=None, run_id="r", now=NOW, user_id="u", kind="cocreation"
+        )
+        assert got is not None
+        e = got.event
+        assert e.dates.event_start is None
+        assert e.dates.application_deadline.isoformat() == "2026-10-18T23:59:00+09:00"
+        # ページはジャンルを名乗っていない。本文の「ワークショップ」で分類しない
+        assert got.headline_kind is None
+        assert e.category == "cocreation"
+
+    def test_bare_deadline_label_is_a_last_resort(self):
+        """一覧ページの「締切2026.09.27」のような書き方も読む。"""
+        line = "締切2026.09.27"
+        got = d.find_application_deadline(line, fallback_year=None, kind="accelerator")
+        assert got is not None and got.value.date().isoformat() == "2026-09-27"
+        # ラベルが具体的なときはそちらが勝つ（早期申込は締切ではない）
+        early = "早期申込締切: 2026年9月30日"
+        assert d.find_application_deadline(early, fallback_year=None, kind="accelerator") is None
+
+    def test_headline_kind_only_reads_the_title(self):
+        from event_agent.extraction.extractor import headline_kind
+
+        assert headline_kind("生成AIハッカソン 2026") == "hackathon"
+        assert headline_kind("Kansai Accelerator Program") == "accelerator"
+        assert headline_kind("ANA Xオープンイノベーションプログラム2026") == "cocreation"
+        # 名乗っていないタイトルでは判定しない（本文の一語で決めない）
+        assert headline_kind("【青森県2026】ヤマモト食品株式会社 - プログラム応募") is None
+
+
+def test_theme_gate_drops_only_confident_mismatches():
+    """テーマのゲートは見出しで名乗っているときだけ落とす（ADR-008）。"""
+    from event_agent.extraction.extractor import ExtractedCandidate
+    from event_agent.workflows.collect import _gate_categories
+
+    def candidate(kind: str | None) -> ExtractedCandidate:
+        got = extract_candidate(
+            page(AUBA_HTML), hit=None, run_id="r", now=NOW, user_id="u", kind="cocreation"
+        )
+        assert got is not None
+        got.headline_kind = kind
+        return got
+
+    notes: list[str] = []
+
+    def note(agent: str, message: str, *, level: str = "info") -> None:
+        notes.append(message)
+
+    kept, dropped = _gate_categories(
+        [candidate("hackathon"), candidate(None), candidate("cocreation")],
+        ("cocreation", "accelerator"),
+        note,
+    )
+    assert len(kept) == 2 and dropped == 1
+    assert notes and "対象ジャンル外" in notes[0]

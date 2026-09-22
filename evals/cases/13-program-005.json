@@ -1,0 +1,48 @@
+{
+  "caseId": "13-program-005",
+  "categories": [
+    "program"
+  ],
+  "note": "早期申込は締切ではない。アクセラでも「募集期間」の終わりを採る。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "アクセラレータープログラム オープンイノベーション 共創",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://program5.example.jp/2026",
+      "query": "アクセラレータープログラム 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://program5.example.jp/2026",
+      "body": "<html><head><title>Osaka Incubation Program 2026</title></head><body><h1>Osaka Incubation Program 2026</h1><p>スタートアップを募集します。</p><div>早期申込締切: 2026年9月30日</div><div>募集期間: 2026年9月1日〜2026年10月31日</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://program5.example.jp/2026",
+        "kind": "accelerator",
+        "eventStart": null,
+        "eventStartPrecision": "unknown",
+        "applicationDeadline": "2026-10-31T00:00:00+09:00",
+        "applicationDeadlinePrecision": "date",
+        "validationStatus": "partial",
+        "evidenceRequired": [
+          "title",
+          "dates.applicationDeadline"
+        ]
+      }
+    ]
+  }
+}

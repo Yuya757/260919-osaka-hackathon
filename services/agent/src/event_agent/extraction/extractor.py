@@ -40,6 +40,7 @@ _KIND_BY_CATEGORY = {
     "hackathon": "hackathon",
     "contest": "contest",
     "acceleration": "accelerator",
+    "cocreation": "cocreation",
     "pitch": "contest",
     "conference": "hackathon",
     "meetup": "hackathon",
@@ -52,7 +53,8 @@ _CATEGORY_WORDS = (
     ("contest", ("ビジネスコンテスト", "ビジコン", "ビジネスプラン", "アイデアコンテスト", "コンテスト", "グランプリ", "contest")),
     ("conference", ("カンファレンス", "conference", "サミット")),
     ("meetup", ("ミートアップ", "meetup", "勉強会", "もくもく")),
-    ("acceleration", ("アクセラレ", "accelerat")),
+    ("acceleration", ("アクセラレ", "accelerat", "インキュベーション", "incubation")),
+    ("cocreation", ("オープンイノベーション", "open innovation", "共創", "マッチングプログラム", "公募プログラム")),
     ("pitch", ("ピッチ", "pitch", "demo day", "デモデイ")),
     ("workshop", ("ワークショップ", "workshop")),
 )
@@ -73,6 +75,8 @@ class ExtractedCandidate:
     evidence: list[Evidence]
     field_sources: dict[str, FieldSource] = field(default_factory=dict)
     conflicts: list[str] = field(default_factory=list)
+    # 見出し付近から読めたジャンル。読めなければ None（テーマのゲートが判定しない）
+    headline_kind: str | None = None
 
     def grounded(self, field_path: str) -> bool:
         return field_path in self.field_sources
@@ -154,16 +158,46 @@ def station_of(text: str) -> str | None:
 
 
 def category_of(text: str) -> str:
+    """ページの主題に近いカテゴリを選ぶ。
+
+    どのカテゴリの語も本文のどこかには出るので、**最初に現れた語**のカテゴリを採る。
+    表の順に舐めると、本題が共創でも本文の隅の「ワークショップ」で workshop になる
+    （事前調査で AUBA の共創プログラムがそうなった）。
+    """
     lowered = text.casefold()
+    best: tuple[int, str] | None = None
     for category, words in _CATEGORY_WORDS:
-        if any(word in lowered for word in words):
-            return category
-    return "other"
+        for word in words:
+            index = lowered.find(word)
+            if index >= 0 and (best is None or index < best[0]):
+                best = (index, category)
+    return best[1] if best else "other"
 
 
 def kind_of(category: str) -> str:
     """category から kind を決める。未知の category はハッカソン扱い（既定）。"""
     return _KIND_BY_CATEGORY.get(category, "hackathon")
+
+
+# kind → 表示用 category。ページからジャンルが読めないときの既定
+_CATEGORY_BY_KIND = {
+    "hackathon": "hackathon",
+    "contest": "contest",
+    "accelerator": "acceleration",
+    "cocreation": "cocreation",
+}
+
+
+def headline_kind(title: str) -> str | None:
+    """タイトルがジャンルを名乗っていれば、その kind。名乗っていなければ None。
+
+    本文は当てにならない。事前調査で読んだ AUBA の共創プログラムは、本文に一度
+    出る「ワークショップ」でワークショップ扱いになった。逆にハッカソンやビジコンは
+    ほぼ必ずタイトルで名乗る。テーマのゲートはこの強い signal のときだけ効かせ、
+    名乗っていないページは落とさない。
+    """
+    category = category_of(title)
+    return None if category == "other" else kind_of(category)
 
 
 def summary_of(text: str, title: str) -> str:
@@ -200,6 +234,10 @@ def extract_candidate(
 
     category = category_of(text)
     resolved_kind = kind or kind_of(category)
+    from_headline = headline_kind(title)
+    if kind and from_headline is None and kind_of(category) != kind:
+        # ページがジャンルを名乗っていない。テーマの種別で表示も揃える
+        category = _CATEGORY_BY_KIND.get(kind, category)
     start, end = d.find_event_dates(text, fallback_year=fallback_year, kind=resolved_kind)
     deadline = d.find_application_deadline(
         text, fallback_year=fallback_year, kind=resolved_kind
@@ -288,7 +326,9 @@ def extract_candidate(
         }
     ]
 
-    return ExtractedCandidate(event=event, evidence=evidence, field_sources=sources)
+    return ExtractedCandidate(
+        event=event, evidence=evidence, field_sources=sources, headline_kind=from_headline
+    )
 
 
 def extract_candidates(
