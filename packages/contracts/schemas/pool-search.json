@@ -16,7 +16,7 @@
     "SearchIntent": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["interestsPrompt", "locations", "onlineOnly", "keywords"],
+      "required": ["interestsPrompt", "locations", "onlineOnly", "keywords", "kinds"],
       "description": "問いかけの構造化。モデルが返した値は選択肢・日付形式で検証してから使う",
       "properties": {
         "interestsPrompt": { "type": "string" },
@@ -24,7 +24,12 @@
         "onlineOnly": { "type": "boolean" },
         "dateFrom": { "type": ["string", "null"], "format": "date" },
         "dateTo": { "type": ["string", "null"], "format": "date" },
-        "keywords": { "type": "array", "items": { "type": "string" } }
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "kinds": {
+          "type": "array",
+          "description": "問いかけが指す機会の種別（ジャンル拡張計画）。空なら種別で絞らない",
+          "items": { "$ref": "event.json#/$defs/EventKind" }
+        }
       }
     },
     "SearchAgent": {

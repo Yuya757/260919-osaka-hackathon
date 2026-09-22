@@ -579,6 +579,8 @@ class SearchIntent(BaseModel):
     date_from: date | None = Field(default=None, alias="dateFrom")
     date_to: date | None = Field(default=None, alias="dateTo")
     keywords: list[str] = Field(default_factory=list)
+    # 機会の種別（ジャンル拡張計画）。空なら種別では絞らない
+    kinds: list[EventKind] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
