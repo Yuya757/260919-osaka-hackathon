@@ -29,7 +29,7 @@ class FakeSearch:
     def reset_call_budget(self) -> None:
         return
 
-    async def search_with_grounding(self, query: str) -> list[dict[str, str]]:
+    async def search_with_grounding(self, query: str, **_filters: object) -> list[dict[str, str]]:
         return [
             {"url": hit.url, "title": hit.title, "excerpt": hit.excerpt}
             for hit in self._hits

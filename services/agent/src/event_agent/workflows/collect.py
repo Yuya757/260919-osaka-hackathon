@@ -17,6 +17,8 @@ from event_agent.domain.dedup import group_duplicates, merge_group
 from event_agent.domain.ranking import score_recommendation
 from event_agent.domain.validation import score_event
 from event_agent.extraction import extract_candidates
+from event_agent.extraction.model_locator import extract_with_model
+from event_agent.extraction.sources import ARTICLE_HOSTS, is_article_host, source_type_for
 from event_agent.clients.gemini import gemini_client
 from event_agent.clients.page_fetcher import FetchedPage, SearchHit, page_fetcher
 from event_agent.schemas import (
@@ -69,10 +71,15 @@ def _plan_queries(preferences: UserPreferences) -> list[str]:
     base = preferences.interests_prompt
     year = preferences.target_year
     location = " ".join(preferences.locations) if preferences.locations else "日本"
+    # 一般検索と、イベントサイトを指名した検索を混ぜる。告知ページは
+    # connpass / Peatix / Doorkeeper に集まっており、一般検索だとまとめ記事に
+    # 押されて出てこないことが多い。クエリ数は §9.2 の呼び出し予算（1 Run 15回）
+    # の中で、抽出の呼び出し分を残すために抑える。
     queries = [
-        f"{year} {location} {base} イベント 応募締切",
-        f"{year} {base} ハッカソン",
-        f"{year} {base} ミートアップ",
+        f"{year} {location} {base} イベント 申込",
+        f"site:connpass.com {location} {base} {year}",
+        f"site:peatix.com {location} {base} {year}",
+        f"site:doorkeeper.jp OR site:techplay.jp {location} {base} {year}",
     ]
     return queries[: settings.max_search_queries]
 
@@ -143,11 +150,21 @@ async def _search_step(
         note("searcher", f"検索結果 {len(hits)} 件")
         return hits[: settings.max_candidates]
 
+    since = datetime.now(timezone.utc) - timedelta(days=settings.search_recency_days)
     for query in queries:
         if trajectory is not None:
             trajectory.record("search_with_grounding", query)
+    # 検索は互いに独立なので並列に投げる（1回 10〜30 秒かかる）
+    results = await asyncio.gather(
+        *(
+            # 半年より古いページは今年の告知ではない。まとめ記事の基盤は検索段階で外す
+            gemini_client.search_with_grounding(query, since=since, exclude_domains=ARTICLE_HOSTS)
+            for query in queries
+        )
+    )
+    for query, raws in zip(queries, results):
         found = 0
-        for raw in await gemini_client.search_with_grounding(query):
+        for raw in raws:
             url = raw.get("url", "")
             if url and url not in seen:
                 seen.add(url)
@@ -161,7 +178,6 @@ async def _search_step(
                     )
                 )
         note("searcher", f"「{query}」を検索 → 新規 {found} 件")
-        await asyncio.sleep(0.05)
     note("searcher", f"検索結果 {len(hits)} 件")
     return hits[: settings.max_candidates]
 
@@ -174,8 +190,15 @@ async def _fetch_step(
     """Fetch each hit. Rejected URLs are reported, not raised (§9.1 候補単位)."""
     pages: list[FetchedPage] = []
     rejected: list[str] = []
-    for hit in hits[: settings.max_candidates]:
-        result = await page_fetcher.fetch(hit.url, trajectory)
+    # 直列だと候補30件 × タイムアウト10秒で数分かかる。同時数を絞って並列に取る
+    semaphore = asyncio.Semaphore(settings.fetch_concurrency)
+
+    async def fetch_one(hit: SearchHit):
+        async with semaphore:
+            return await page_fetcher.fetch(hit.url, trajectory)
+
+    results = await asyncio.gather(*(fetch_one(hit) for hit in hits[: settings.max_candidates]))
+    for hit, result in zip(hits, results):
         if isinstance(result, FetchedPage):
             _note_injection_attempt(result, trajectory)
             pages.append(result)
@@ -327,23 +350,65 @@ async def execute_collect_workflow(
         hits = await _search_step(queries, trajectory, note)
 
         pages, fetch_rejected = await _fetch_step(hits, trajectory, note)
+        # まとめ記事やブログは告知ページではない。記事中の日付を開催日にしない
+        articles = [p for p in pages if is_article_host(p.final_url)]
+        pages = [p for p in pages if not is_article_host(p.final_url)]
+        fetch_rejected.extend(f"article-host:{p.final_url}" for p in articles)
+        for article in articles:
+            note("searcher", f"記事サイトのため対象外: {_host(article.final_url)}", level="warn")
 
         await _set_step(run, "extract_validate")
         await asyncio.sleep(delay)
         hits_by_url = {hit.url: hit for hit in hits}
+        source_types = {
+            url: source_type_for(url, DEMO_PAGE_SOURCES)
+            for page in pages
+            for url in (page.final_url, page.requested_url)
+        }
         candidates = extract_candidates(
             pages,
             hits=hits_by_url,
             run_id=run.run_id,
             now=now,
             user_id=run.user_id,
-            source_types=DEMO_PAGE_SOURCES,
+            source_types=source_types,
         )
         if trajectory is not None:
             for candidate in candidates:
                 trajectory.record("extract", candidate.event.official_url)
 
-        note("extractor", f"{len(pages)} ページから {len(candidates)} 件の候補を抽出")
+        note("extractor", f"{len(pages)} ページから {len(candidates)} 件の候補を行ラベルで抽出")
+
+        # 行ラベルで開催日が取れなかったページは、モデルに該当行を引用させてから
+        # 同じパーサで読む（extraction/model_locator）。デモモードでは呼ばれない。
+        if not gemini_client.demo_mode:
+            extracted_urls = {c.event.official_url for c in candidates}
+            leftover = [p for p in pages if p.final_url not in extracted_urls]
+            semaphore = asyncio.Semaphore(settings.locate_concurrency)
+
+            async def locate(page: FetchedPage):
+                async with semaphore:
+                    return await extract_with_model(
+                        page,
+                        hit=hits_by_url.get(page.requested_url) or hits_by_url.get(page.final_url),
+                        run_id=run.run_id,
+                        now=now,
+                        user_id=run.user_id,
+                        source_type=source_types.get(page.final_url, "other"),
+                    )
+
+            if leftover:
+                note("extractor", f"{len(leftover)} ページはモデルに該当行の引用を依頼")
+            for page, located in zip(leftover, await asyncio.gather(*(locate(p) for p in leftover))):
+                if trajectory is not None:
+                    trajectory.record(
+                        "locate_with_model", page.final_url, outcome="ok" if located else "none"
+                    )
+                if located is not None:
+                    candidates.append(located)
+                    note("extractor", f"引用から日程を確認: {_host(page.final_url)}")
+                else:
+                    note("extractor", f"日程を特定できず: {_host(page.final_url)}", level="warn")
 
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
         if not candidates and settings.demo_catalog_fallback:

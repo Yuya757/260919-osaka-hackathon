@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from event_agent.agents.chat import handle_chat
 from event_agent.config import get_settings
 from event_agent.demo.catalog import demo_catalog
+from event_agent.demo.evidence import demo_evidence
 from event_agent.clients.ekispert import (
     EkispertError,
     EkispertNotConfigured,
@@ -32,6 +33,7 @@ from event_agent.schemas import (
     OrganizerPostListResponse,
     OrganizerPostPreviewResponse,
     OrganizerPostRequest,
+    preview_evidence,
 )
 from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
@@ -113,7 +115,19 @@ async def list_events(
         for e in store.list_events(sourceRunId)
         if e.validation_status in ("verified", "partial")
     ]
-    return EventsResponse(events=events)
+    # 一覧の行に根拠（出典と引用）を添える。全文は evidence API
+    with_preview = [
+        e.model_copy(
+            update={
+                "evidence_preview": preview_evidence(
+                    store.get_evidence(e.source_run_id, e.evidence_ids)
+                    or demo_evidence().get(e.event_id, [])
+                )
+            }
+        )
+        for e in events
+    ]
+    return EventsResponse(events=with_preview)
 
 
 def _find_event(event_id: str) -> ApiEvent | None:

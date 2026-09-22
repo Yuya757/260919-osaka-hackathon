@@ -88,10 +88,29 @@ def _labelled_value(text: str, labels: tuple[str, ...]) -> str | None:
     return None
 
 
+_VENUE_BAD_START = ("で", "に", "は", "が", "を", "の", "、", "。", "と", "も")
+
+
+def clean_venue(value: str | None) -> str | None:
+    """会場名として通せる文字列だけ返す。
+
+    「会場で開催します」の行から「で開催します」を拾うと会場名になってしまう。
+    助詞で始まるもの、短すぎるもの、文になっているものは捨てる。推測はしない。
+    """
+    if not value:
+        return None
+    cleaned = value.strip(" :：　-ー")
+    if len(cleaned) < 2 or len(cleaned) > 60:
+        return None
+    if cleaned.startswith(_VENUE_BAD_START) or cleaned.endswith(("。", "ます", "です")):
+        return None
+    return cleaned
+
+
 def location_of(text: str) -> tuple[str, str | None, str]:
     """Return ``(type, venue, snippet)``."""
     lowered = text.casefold()
-    venue = _labelled_value(text, _VENUE_LABELS)
+    venue = clean_venue(_labelled_value(text, _VENUE_LABELS))
     if any(word in lowered for word in _HYBRID_WORDS):
         return "hybrid", venue, "ハイブリッド"
     online = any(word in lowered for word in _ONLINE_WORDS)

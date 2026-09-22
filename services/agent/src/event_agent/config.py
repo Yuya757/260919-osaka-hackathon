@@ -12,7 +12,10 @@ class Settings(BaseSettings):
 
     gcp_project_id: str | None = None
     gcp_region: str = "asia-northeast1"
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.8-flash"
+    # Gemini の呼び出し先。Cloud Run のリージョン（gcp_region）とは別で、
+    # 最新モデルは global エンドポイントにしか無い
+    gemini_location: str = "global"
     agent_demo_mode: bool = True
     cors_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"
@@ -26,6 +29,11 @@ class Settings(BaseSettings):
     max_search_queries: int = 8
     max_candidates: int = 30
     max_model_calls: int = 15
+    # 検索の期間指定（この日数より新しいページ）と、ページ取得の同時数
+    search_recency_days: int = 180
+    fetch_concurrency: int = 6
+    model_call_timeout_seconds: float = 60.0
+    locate_concurrency: int = 4
     verified_confidence_threshold: float = 0.8
     # 公式・主催者の根拠が無く集約サイトだけを出典とするイベントを表示する下限
     # （画面設計書§8-2）。compute_confidence の重み上、集約サイト単独ホストの

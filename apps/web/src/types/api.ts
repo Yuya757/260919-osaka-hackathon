@@ -167,6 +167,14 @@ export type EvidenceListResponse = {
   evidence: Evidence[]
 }
 
+/** 一覧に添える根拠の要約。全文は GET /api/events/{eventId}/evidence */
+export type EvidencePreview = {
+  sourceUrl: string
+  sourceType: EvidenceSourceType
+  supports: SupportedField[]
+  excerpt: string
+}
+
 /** Event candidate / persisted event (§7.3) */
 export type Event = {
   eventId: string
@@ -191,6 +199,8 @@ export type Event = {
   sourceRunId: string
   status: EventLifecycleStatus
   googleCalendarEventIds?: GoogleCalendarEventIds
+  /** 一覧用の根拠（サーバーが list 応答で添える）。最大4件 */
+  evidencePreview?: EvidencePreview[]
   /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */
   source?: string
 }
