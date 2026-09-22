@@ -11,6 +11,8 @@ import type {
   OrganizerPostRequest,
   PoolSearchRequest,
   PoolSearchResponse,
+  GoKind,
+  PostMetricsResponse,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -128,6 +130,27 @@ export function createOrganizerPost(
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/**
+ * 外部リンクは計測付きリダイレクト（ADR-009）を経由する。サーバーが保存済みの URL へ
+ * 302 で送り、utm を付ける。href にそのまま使う。
+ */
+export function goUrl(eventId: string, kind: GoKind): string {
+  return `/api/go/${encodeURIComponent(eventId)}/${kind}`
+}
+
+/** カレンダー登録の計測。登録自体は端末側で済んでいるので、失敗しても呼び出し側は無視する。 */
+export function postEventMetric(eventId: string, kind: 'calendar'): Promise<void> {
+  return fetch(`/api/events/${encodeURIComponent(eventId)}/metrics`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind }),
+  }).then(() => undefined)
+}
+
+export function getPostMetrics(postId: string): Promise<PostMetricsResponse> {
+  return request<PostMetricsResponse>(`/api/organizer-posts/${encodeURIComponent(postId)}/metrics`)
 }
 
 /** Runが時間内に終わらなかったことを表す。失敗とは区別して扱う。 */

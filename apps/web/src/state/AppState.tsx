@@ -19,6 +19,7 @@ import {
   createOrganizerPost,
   getHealth,
   listEvents,
+  postEventMetric,
   listOrganizerPosts,
   pollAgentRun,
   poolSearch,
@@ -249,6 +250,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (event: Event, selection: CalendarSelection) => {
     const ids = await registerToCalendar(event, selection)
     setCalendar((current) => ({ ...current, [event.eventId]: ids }))
+    // 成果の計測（ADR-009）。計測に失敗しても登録は済んでいるので無視する
+    postEventMetric(event.eventId, 'calendar').catch(() => undefined)
   }, [])
 
   const unregister = useCallback(async (eventId: string) => {

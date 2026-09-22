@@ -296,8 +296,32 @@ export type OrganizerPost = {
   linkedEventId?: string | null
   linkedDedupKey?: string | null
   injectionFlags: string[]
+  /** 管理者が主催者の本人性を確認済み（ADR-009）。再投稿で戻らない */
+  organizerConfirmed: boolean
+  confirmedAt?: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** 計測付きリダイレクトの種別（ADR-009） */
+export type GoKind = 'official' | 'application' | 'contact'
+
+export type MetricCounts = { clicks: number; calendar: number }
+
+export type EventMetrics = {
+  eventId: string
+  clicks: { official: number; application: number; contact: number }
+  calendar: number
+  daily: Record<string, MetricCounts>
+  updatedAt?: string | null
+}
+
+export type PostMetricsResponse = {
+  postId: string
+  eventId: string
+  linkedEventId?: string | null
+  metrics: EventMetrics
+  linkedMetrics?: EventMetrics | null
 }
 
 export type OrganizerPostPreviewResponse = {

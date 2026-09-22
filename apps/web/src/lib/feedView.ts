@@ -57,8 +57,16 @@ export function originLabel(post: OrganizerPost): string {
   return post.origin === 'bot' ? 'ボット投稿' : '主催者投稿'
 }
 
+/** PR 枠の表示（ADR-009）。期限つきの固定は「PR · 10/15まで」 */
 export function placementLabel(post: OrganizerPost): string | null {
-  if (post.placement.kind === 'pinned') return '固定'
+  const until = post.placement.until
+    ? new Date(post.placement.until).toLocaleDateString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        month: 'numeric',
+        day: 'numeric',
+      })
+    : null
+  if (post.placement.kind === 'pinned') return until ? `PR · ${until}まで` : 'PR'
   if (post.placement.kind === 'priority') return '優先'
   return null
 }
