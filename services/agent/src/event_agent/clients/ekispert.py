@@ -102,6 +102,39 @@ _POSTAL = re.compile(r"〒?\s*\d{3}-\d{4}")
 _BANCHI = re.compile(r"(\d+)\s*(?:丁目|番地|番|号)")
 
 
+# 告知は都道府県を省いて「大阪市…」と書くことが多いが、駅すぱあとの住所検索は
+# それを解釈できない（「住所が存在しないか、解釈できない住所です」）。
+# 市名から都道府県を補うための表。政令指定都市と県庁所在地くらいで足りる。
+_PREFECTURE_BY_CITY: dict[str, str] = {
+    "札幌市": "北海道", "仙台市": "宮城県", "さいたま市": "埼玉県", "千葉市": "千葉県",
+    "横浜市": "神奈川県", "川崎市": "神奈川県", "相模原市": "神奈川県",
+    "新潟市": "新潟県", "静岡市": "静岡県", "浜松市": "静岡県", "名古屋市": "愛知県",
+    "京都市": "京都府", "大阪市": "大阪府", "堺市": "大阪府", "神戸市": "兵庫県",
+    "岡山市": "岡山県", "広島市": "広島県", "北九州市": "福岡県", "福岡市": "福岡県",
+    "熊本市": "熊本県", "金沢市": "石川県", "長野市": "長野県", "岐阜市": "岐阜県",
+    "奈良市": "奈良県", "大津市": "滋賀県", "和歌山市": "和歌山県", "那覇市": "沖縄県",
+}
+# 「都島区」のように区名に「都」が入るので、正規表現ではなく実際の名前で判定する
+_PREFECTURES = (
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県",
+    "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県", "新潟県", "富山県",
+    "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県", "三重県",
+    "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県", "鳥取県", "島根県",
+    "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県",
+    "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+)
+
+
+def with_prefecture(address: str) -> str | None:
+    """都道府県が無い住所に補う。補えないときは None。"""
+    if not address or address.startswith(_PREFECTURES):
+        return None
+    for city, prefecture in _PREFECTURE_BY_CITY.items():
+        if address.startswith(city):
+            return f"{prefecture}{address}"
+    return None
+
+
 def normalize_address(address: str) -> str:
     """住所検索に渡す形に整える。
 
@@ -246,10 +279,13 @@ class EkispertClient:
         # 書式で弾かれることがあるので、整えた形 → 素の形の順に 1 回ずつ試す
         attempts: list[dict[str, str]] = []
         normalized = normalize_address(cleaned)
-        if normalized:
-            attempts.append(
-                {"address": f"{normalized},{radius_m}", "type": "train", "stationCount": "3"}
-            )
+        for candidate in (with_prefecture(normalized), normalized):
+            # 都道府県つきを先に試す。告知は「大阪市…」と省いて書くことが多く、
+            # そのままでは「解釈できない住所」で弾かれる
+            if candidate:
+                attempts.append(
+                    {"address": f"{candidate},{radius_m}", "type": "train", "stationCount": "3"}
+                )
         if normalized != cleaned:
             attempts.append({"address": cleaned})
 
