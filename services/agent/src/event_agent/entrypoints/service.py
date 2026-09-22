@@ -16,9 +16,11 @@ from event_agent.clients.ekispert import (
     EkispertError,
     EkispertNotConfigured,
     RouteNotFound,
+    Station,
     StationNotFound,
     ekispert_client,
 )
+from event_agent.extraction.extractor import looks_like_address
 from event_agent.schemas import (
     AgentRun,
     AgentRunCreateRequest,
@@ -206,20 +208,27 @@ async def get_event_route(
         raise HTTPException(status_code=400, detail="オンライン開催のため経路検索はできません。")
     if event.dates.event_start is None:
         raise HTTPException(status_code=400, detail="実施日が未確認のため経路検索できません。")
-    # 会場名（「グランフロント大阪」「大阪市都島区…」）を駅名として渡してはいけない。
-    # 駅すぱあとは当然見つけられず、「駅が見つかりません」になるだけ。
+    # 会場名（「グランフロント大阪」）を駅名として渡してはいけない。駅すぱあとは
+    # 当然見つけられず「駅が見つかりません」になるだけ。住所なら住所検索に回す。
     destination_name = destination or event.location.nearest_station
+    if not ekispert_client.configured:
+        raise HTTPException(status_code=503, detail="経路検索は現在利用できません。")
+
+    destination_station: Station | None = None
     if not destination_name:
+        venue = event.location.venue or event.location.region
+        if looks_like_address(venue):
+            destination_station = await ekispert_client.find_station_near_address(venue or "")
+    if destination_station is None and not destination_name:
         raise HTTPException(
             status_code=400,
             detail="会場の最寄駅が分かりません。到着駅を入力してください。",
         )
-    if not ekispert_client.configured:
-        raise HTTPException(status_code=503, detail="経路検索は現在利用できません。")
 
     try:
         origin_station = await ekispert_client.find_station(origin)
-        destination_station = await ekispert_client.find_station(destination_name)
+        if destination_station is None:
+            destination_station = await ekispert_client.find_station(destination_name or "")
         route = await ekispert_client.search_route_arriving_by(
             origin_station, destination_station, event.dates.event_start
         )

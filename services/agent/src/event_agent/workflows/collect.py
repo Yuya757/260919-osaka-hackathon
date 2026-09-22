@@ -17,7 +17,9 @@ from event_agent.domain.dedup import group_duplicates, merge_group
 from event_agent.domain.normalize import normalize_url
 from event_agent.domain.ranking import score_recommendation
 from event_agent.domain.validation import score_event
+from event_agent.clients.ekispert import ekispert_client
 from event_agent.extraction import extract_candidates
+from event_agent.extraction.extractor import looks_like_address
 from event_agent.extraction.model_locator import extract_with_model
 from event_agent.extraction.sources import ARTICLE_HOSTS, is_article_host, source_type_for
 from event_agent.clients.gemini import gemini_client
@@ -565,6 +567,12 @@ async def execute_collect_workflow(
             events = _rank(events, normalized, run_id=run.run_id, now=now)
             note("organizer", "関心との適合でおすすめ順に並べ替え")
 
+        # 住所しか書かれていない告知の最寄駅を、駅すぱあとの住所検索で補う。
+        # ここで入れておけば、一覧にも詳細にも出て、経路検索も入力なしで動く
+        resolved = await _fill_nearest_stations(events, note)
+        if resolved:
+            events = resolved
+
         await _set_step(run, "save")
         store.save_events(run.run_id, events)
         note("organizer", f"{len(events)} 件を保存")
@@ -612,6 +620,53 @@ async def execute_collect_workflow(
 
 
 JST = timezone(timedelta(hours=9))
+
+
+async def _fill_nearest_stations(
+    events: list[ApiEvent], note: Note, *, limit: int = 20
+) -> list[ApiEvent] | None:
+    """最寄駅が無いイベントに、会場の住所から引いた駅を入れる。
+
+    補助なので、駅すぱあとが使えない・住所を解釈できないときは黙って諦める
+    （利用者が到着駅を入力すれば経路検索はできる）。呼び出し数は上限で抑える。
+    """
+    if not ekispert_client.configured:
+        return None
+    targets = [
+        event
+        for event in events
+        if event.location.type != "online"
+        and not event.location.nearest_station
+        and looks_like_address(event.location.venue or event.location.region)
+    ][:limit]
+    if not targets:
+        return None
+
+    filled: dict[str, str] = {}
+    for event in targets:
+        address = event.location.venue or event.location.region or ""
+        try:
+            station = await ekispert_client.find_station_near_address(address)
+        except Exception:  # noqa: BLE001 — 最寄駅は補助。Run を落とさない
+            logger.exception("nearest station lookup failed for %s", event.event_id)
+            continue
+        if station is not None:
+            filled[event.event_id] = station.name
+    if not filled:
+        return None
+    note("organizer", f"会場の住所から最寄駅を {len(filled)} 件補完")
+    return [
+        event.model_copy(
+            update={
+                "location": event.location.model_copy(
+                    update={"nearest_station": filled[event.event_id]}
+                )
+            }
+        )
+        if event.event_id in filled
+        else event
+        for event in events
+    ]
 
 
 def _new_run(

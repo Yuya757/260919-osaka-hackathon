@@ -138,6 +138,25 @@ def clean_venue(value: str | None) -> str | None:
     return cleaned
 
 
+# 住所らしさの判定。市区町村と番地の両方がある文字列だけを住所として扱う。
+# 「グランフロント大阪」「大阪イノベーションハブ」は建物名であって住所ではない
+_ADDRESS_AREA = re.compile(r"[都道府県市区町村]")
+_ADDRESS_NUMBER = re.compile(r"\d+\s*(?:丁目|番地|番|-|−|ー)")
+
+
+def looks_like_address(text: str | None) -> bool:
+    """住所検索（駅すぱあと `/address/station`）に渡してよい文字列か。
+
+    建物名を渡しても解釈できず、呼び出しを無駄にするだけなので絞る。
+    """
+    if not text:
+        return False
+    cleaned = text.strip()
+    if not 6 <= len(cleaned) <= 100:
+        return False
+    return bool(_ADDRESS_AREA.search(cleaned) and _ADDRESS_NUMBER.search(cleaned))
+
+
 def location_of(text: str) -> tuple[str, str | None, str]:
     """Return ``(type, venue, snippet)``."""
     lowered = text.casefold()
