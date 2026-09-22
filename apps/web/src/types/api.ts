@@ -222,3 +222,73 @@ export type EventRouteResponse = {
   arriveBy: string
   route: RouteSummary
 }
+
+// ---- 主催者投稿フィード（F-06）— packages/contracts/schemas/organizer-post.json
+
+export type PostOrigin = 'organizer' | 'bot'
+export type PostStatus = 'published' | 'hidden'
+export type PlacementKind = 'normal' | 'pinned' | 'priority'
+
+export type PostPlacement = {
+  kind: PlacementKind
+  until?: string | null
+}
+
+export type PostIssueCode =
+  | 'EVENT_DATE_MISSING'
+  | 'YEAR_AMBIGUOUS'
+  | 'EVENT_FINISHED'
+  | 'DATE_CONFLICT'
+  | 'DEADLINE_MISSING'
+  | 'DUPLICATE_OF_EVENT'
+
+export type PostIssue = {
+  code: PostIssueCode
+  severity: 'error' | 'warning'
+  message: string
+}
+
+export type OrganizerPostRequest = {
+  organizerName: string
+  contactUrl: string
+  title: string
+  body: string
+}
+
+/**
+ * 投稿は派生した Event と根拠を埋め込む。Event そのものではなく、`events/` にも
+ * 載らない（ADR-006）。`linkedEventId` は AI 収集イベントと同じと判定された相手。
+ */
+export type OrganizerPost = {
+  postId: string
+  userId: string
+  origin: PostOrigin
+  organizerName: string
+  contactUrl: string
+  title: string
+  body: string
+  event: Event
+  evidence: Evidence[]
+  status: PostStatus
+  placement: PostPlacement
+  linkedEventId?: string | null
+  linkedDedupKey?: string | null
+  injectionFlags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type OrganizerPostPreviewResponse = {
+  event: Event | null
+  linkedEvent: Event | null
+  issues: PostIssue[]
+}
+
+export type OrganizerPostCreateResponse = {
+  post: OrganizerPost
+  warnings: PostIssue[]
+}
+
+export type OrganizerPostListResponse = {
+  posts: OrganizerPost[]
+}

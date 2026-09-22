@@ -45,12 +45,14 @@ function groupEvidence(items: Evidence[]): EvidenceGroup[] {
 export function EventDetailScreen() {
   const { eventId = '' } = useParams()
   const navigate = useNavigate()
-  const { eventById, loadState, saved, calendar, toggleSaved, register } = useAppState()
+  const { eventById, postByEventId, loadState, saved, calendar, toggleSaved, register } =
+    useAppState()
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const [evidence, setEvidence] = useState<Evidence[] | null>(null)
   const [evidenceError, setEvidenceError] = useState<string | null>(null)
 
   const event = eventById(eventId)
+  const post = postByEventId(eventId)
   const found = event !== undefined
   const evidenceGroups = useMemo(() => (evidence ? groupEvidence(evidence) : []), [evidence])
   const evidenceCount = event?.evidenceIds.length ?? 0
@@ -60,6 +62,11 @@ export function EventDetailScreen() {
     let cancelled = false
     setEvidence(null)
     setEvidenceError(null)
+    // 投稿由来のイベントは根拠を投稿に埋め込んでいる（ADR-006）。API には無い
+    if (post) {
+      setEvidence(post.evidence)
+      return
+    }
     if (evidenceCount === 0) {
       setEvidence([])
       return
@@ -77,7 +84,7 @@ export function EventDetailScreen() {
       cancelled = true
     }
     // イベントが差し替わったとき、または一覧の再読込で根拠の件数が変わったときだけ取り直す
-  }, [eventId, found, evidenceCount])
+  }, [eventId, found, evidenceCount, post])
 
   // 直接URLで開いたときは履歴が無いので、戻る先を一覧に固定する
   const goBack = () => {
@@ -122,7 +129,10 @@ export function EventDetailScreen() {
       </button>
 
       <div className="detail-title">
-        <p className="eyebrow">{categoryLabel(event.category)}</p>
+        <p className="eyebrow">
+          {categoryLabel(event.category)}
+          {post && ` · ${post.origin === 'bot' ? 'ボット投稿' : '主催者投稿'}`}
+        </p>
         <h1>{event.title}</h1>
         <p className="detail-meta">
           {event.organizer || '主催者未確認'} · {placeLabel(event)} ·{' '}

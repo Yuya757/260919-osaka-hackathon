@@ -5,6 +5,10 @@ import type {
   ChatResponse,
   EventRouteResponse,
   EvidenceListResponse,
+  OrganizerPostCreateResponse,
+  OrganizerPostListResponse,
+  OrganizerPostPreviewResponse,
+  OrganizerPostRequest,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -73,6 +77,30 @@ export function listEvidence(eventId: string): Promise<EvidenceListResponse> {
 export function getEventRoute(eventId: string, from: string): Promise<EventRouteResponse> {
   const query = `?from=${encodeURIComponent(from)}`
   return request<EventRouteResponse>(`/api/events/${encodeURIComponent(eventId)}/route${query}`)
+}
+
+/** 主催者投稿フィード（F-06）。 */
+export function listOrganizerPosts(): Promise<OrganizerPostListResponse> {
+  return request<OrganizerPostListResponse>('/api/organizer-posts')
+}
+
+/** 投稿前の確認。何も保存しない。 */
+export function previewOrganizerPost(
+  body: OrganizerPostRequest,
+): Promise<OrganizerPostPreviewResponse> {
+  return request<OrganizerPostPreviewResponse>('/api/organizer-posts/preview', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function createOrganizerPost(
+  body: OrganizerPostRequest,
+): Promise<OrganizerPostCreateResponse> {
+  return request<OrganizerPostCreateResponse>('/api/organizer-posts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 /** Runが時間内に終わらなかったことを表す。失敗とは区別して扱う。 */
