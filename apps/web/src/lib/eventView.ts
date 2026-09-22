@@ -84,7 +84,8 @@ export function deadlineLabel(event: Event): string {
  */
 export function heldLabel(event: Event): string {
   const { eventStart, eventEnd, timezone } = event.dates
-  if (!eventStart) return '未確認'
+  // 補助金に実施日（会場に集まる日）は無い。「未確認」だと探し損ねたように見える
+  if (!eventStart) return event.kind === 'subsidy' ? 'なし' : '未確認'
   if (eventEnd && dayKey(eventEnd, timezone) !== dayKey(eventStart, timezone)) {
     return `${formatDate(eventStart, timezone)} — ${formatDate(eventEnd, timezone)}`
   }
@@ -137,6 +138,13 @@ export function gapDays(event: Event): number | null {
   return dayIndex(eventStart, timezone) - dayIndex(applicationDeadline, timezone)
 }
 
+/** 2 軸の間隔を出せない理由。補助金は実施日が無いのが正しい状態 */
+export function gapNote(event: Event): string {
+  if (event.kind === 'subsidy') return '補助金に実施日はありません。締切までに申請します。'
+  if (!event.dates.applicationDeadline) return '締切が未確認のため間隔を出せません'
+  return '実施日が未確認のため間隔を出せません'
+}
+
 export function formatLocationType(type: EventLocationType): string {
   if (type === 'online') return 'オンライン'
   if (type === 'hybrid') return 'ハイブリッド'
@@ -160,6 +168,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   meetup: 'ミートアップ',
   acceleration: 'アクセラレーター',
   cocreation: '共創プログラム',
+  subsidy: '補助金',
   pitch: 'ピッチ',
   workshop: 'ワークショップ',
   seminar: 'セミナー',
@@ -189,6 +198,8 @@ export function missingFields(event: Event): string[] {
   const missing: string[] = []
   if (!event.dates.applicationDeadline) missing.push('申込締切')
   if (!event.organizer) missing.push('主催者')
+  // 補助金に会場も開催形式も無い。「未確認」と並べると探し損ねたように見える
+  if (event.kind === 'subsidy') return missing
   if (event.location.type === 'unknown') missing.push('開催形式')
   if (!event.location.venue && !event.location.region) missing.push('開催場所')
   return missing
@@ -241,5 +252,6 @@ export function heldMilestone(event: Event): EventMilestone | null {
 
 /** 実施日の行の見出し。ハッカソンは「開催日」、種別が違えば「実施日」 */
 export function heldRowLabel(event: Event): string {
+  if (event.kind === 'subsidy') return '実施日'
   return heldMilestone(event)?.label ?? (event.kind === 'hackathon' ? '開催日' : '実施日')
 }

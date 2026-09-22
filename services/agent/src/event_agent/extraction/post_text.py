@@ -115,7 +115,10 @@ def derive_event_from_post(
     category = category_of(text)
     kind = kind_of(category)
     start, end = d.find_event_dates(text, fallback_year=fallback_year, kind=kind)
-    if start is None:
+    deadline = d.find_application_deadline(text, fallback_year=fallback_year, kind=kind)
+    # 実施日を書かない告知がある（ビジコン・補助金）。締切だけでも載せる。
+    # ハッカソンは実施日が必須のまま（§6.6、ジャンル拡張計画 段階1）
+    if start is None and (kind == "hackathon" or deadline is None):
         if _year_ambiguous(text, years):
             return PostDraft(
                 event=None,
@@ -133,26 +136,28 @@ def derive_event_from_post(
                 _issue(
                     "EVENT_DATE_MISSING",
                     "error",
-                    "開催日が見つかりませんでした。" + EVENT_DATE_HINT,
+                    "開催日か申込締切が見つかりませんでした。" + EVENT_DATE_HINT,
                 )
             ],
         )
 
-    deadline = d.find_application_deadline(text, fallback_year=fallback_year, kind=kind)
     location_type, venue, location_snippet = location_of(text)
     organizer_in_body = _labelled_value(text, _ORGANIZER_LABELS)
     organizer = organizer_in_body or request.organizer_name
     dedup_key = compute_dedup_key(
-        request.contact_url, normalize_title(request.title), start.value, organizer
+        request.contact_url,
+        normalize_title(request.title),
+        start.value if start else None,
+        organizer,
+        deadline.value if deadline else None,
     )
     post_id = post_id_for("organizer", dedup_key)
 
     # 根拠は「本文のどの行から取ったか」を項目ごとに残す。出典URLは主催者の申告URL。
-    snippets: dict[str, str] = {
-        "title": request.title,
-        "dates.eventStart": start.snippet,
-        "officialUrl": request.contact_url,
-    }
+    snippets: dict[str, str] = {"title": request.title}
+    if start is not None:
+        snippets["dates.eventStart"] = start.snippet
+    snippets["officialUrl"] = request.contact_url
     if end is not None:
         snippets["dates.eventEnd"] = end.snippet
     if deadline is not None:
@@ -192,8 +197,8 @@ def derive_event_from_post(
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,
             applicationDeadlinePrecision=deadline.precision if deadline else "unknown",
-            eventStart=start.value,
-            eventStartPrecision=start.precision,
+            eventStart=start.value if start else None,
+            eventStartPrecision=start.precision if start else "unknown",
             eventEnd=end.value if end else None,
             milestones=[
                 EventMilestone(label=label, at=parsed.value, precision=parsed.precision)

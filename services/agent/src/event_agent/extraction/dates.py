@@ -51,6 +51,7 @@ MILESTONE_LABELS = (
 # 値は行をそのまま持ち、構造化はしない。日付のラベルはここに入れない。
 COMMON_ATTRIBUTE_LABELS = ("参加費", "対象", "応募資格", "参加資格", "定員")
 CONTEST_ATTRIBUTE_LABELS = ("賞金", "副賞", "最優秀賞", "表彰")
+SUBSIDY_ATTRIBUTE_LABELS = ("補助率", "上限額", "補助上限", "対象経費", "対象事業者", "対象地域")
 PROGRAM_ATTRIBUTE_LABELS = (
     "支援内容", "提供リソース", "出資", "出資額", "募集テーマ", "募集企業",
     "対象ステージ", "採択予定数", "活動場所",
@@ -91,6 +92,11 @@ LABEL_SETS: dict[str, LabelSet] = {
     "contest": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS + ("最終審査会", "最終審査"), MILESTONE_LABELS, _CONTEST_ATTRIBUTES),
     "accelerator": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS, _PROGRAM_ATTRIBUTES),
     "cocreation": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS, _PROGRAM_ATTRIBUTES),
+    # 補助金は jGrants から取るのが本筋（ADR-011）だが、主催者が本文で告知することもある
+    "subsidy": LabelSet(
+        APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS, MILESTONE_LABELS,
+        SUBSIDY_ATTRIBUTE_LABELS + COMMON_ATTRIBUTE_LABELS,
+    ),
 }
 
 

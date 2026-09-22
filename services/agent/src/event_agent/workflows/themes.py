@@ -33,6 +33,12 @@ class CollectionTheme:
     )
     # 先頭の一般検索の語尾。ジャンルで告知の言い回しが違う
     lead_query: str = "イベント 申込"
+    # 収集元。"search" は Grounding 検索、"jgrants" は jGrants の公開 API（段階4）
+    source: str = "search"
+    # jGrants のキーワード（API の制約で 2 文字以上）。source="jgrants" のときだけ使う
+    keywords: tuple[str, ...] = ()
+    # 対象地域の絞り込み（jGrants の target_area_search と前方一致）。空なら絞らない
+    target_areas: tuple[str, ...] = ()
 
     def preferences(self, *, now: datetime) -> UserPreferences:
         # 年は固定せず JST の現在年。12 月に翌年の告知を弾かないよう、検証側には年を渡さない
@@ -113,9 +119,37 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         kind="cocreation", allowed_kinds=("cocreation", "accelerator"),
         site_queries=_COCREATION_SITES, lead_query="パートナー募集 締切",
     ),
+    # 補助金は Web を検索せず jGrants の公開 API から貰う（ADR-011）。検索代ゼロ。
+    # キーワードは API の制約で 2 文字以上。「全件ください」はできないので巡回する
+    CollectionTheme(
+        "subsidy-startup", "創業・スタートアップの補助金", ("全国",),
+        kind="subsidy", allowed_kinds=("subsidy",),
+        source="jgrants", keywords=("創業", "スタートアップ"),
+    ),
+    CollectionTheme(
+        "subsidy-dx", "DX・IT導入の補助金", ("全国",),
+        kind="subsidy", allowed_kinds=("subsidy",),
+        source="jgrants", keywords=("DX", "IT導入"),
+    ),
+    CollectionTheme(
+        "subsidy-monozukuri", "ものづくり・設備投資の補助金", ("全国",),
+        kind="subsidy", allowed_kinds=("subsidy",),
+        source="jgrants", keywords=("ものづくり", "設備投資"),
+    ),
+    CollectionTheme(
+        "subsidy-kansai", "関西の補助金", ("関西", "大阪"),
+        kind="subsidy", allowed_kinds=("subsidy",),
+        source="jgrants", keywords=("補助金", "助成金"),
+        target_areas=("大阪", "京都", "兵庫", "奈良", "滋賀", "和歌山", "全国"),
+    ),
 )
 
 _BY_ID = {theme.id: theme for theme in COLLECTION_THEMES}
+
+
+def search_themes() -> tuple[CollectionTheme, ...]:
+    """Grounding 検索を使うテーマだけ。検索上限の見積もりに使う。"""
+    return tuple(theme for theme in COLLECTION_THEMES if theme.source == "search")
 
 
 def theme_by_id(theme_id: str) -> CollectionTheme:
