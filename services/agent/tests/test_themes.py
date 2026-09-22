@@ -149,3 +149,51 @@ def test_task_count_matches_the_deployed_job():
     match = re.search(r"--tasks (\d+)", workflow.read_text(encoding="utf-8"))
     assert match, "deploy-develop.yml に --tasks が見つからない"
     assert int(match.group(1)) == len(COLLECTION_THEMES)
+
+
+@pytest.mark.asyncio
+async def test_collection_fills_nearest_station_from_the_address(store_backend, monkeypatch):
+    """会場が住所のイベントは、収集時に最寄駅まで入れておく。
+
+    入れておけば一覧にも詳細にも出て、経路検索が到着駅の入力なしで動く。
+    駅すぱあとが使えないときは何もしない（収集自体は続ける）。
+    """
+    from event_agent.clients.ekispert import Station
+    from event_agent.schemas import EventLocation, UserPreferences
+    from event_agent.workflows import collect as collect_module
+
+    asked: list[str] = []
+
+    class FakeEkispert:
+        configured = True
+
+        async def find_station_near_address(self, address: str, **_: object) -> Station | None:
+            asked.append(address)
+            return Station(code="22828", name="京橋(大阪府)") if "都島区" in address else None
+
+    monkeypatch.setattr(collect_module, "ekispert_client", FakeEkispert())
+
+    events = [
+        e.model_copy(
+            update={
+                "location": EventLocation(
+                    type="offline", venue="大阪市都島区東野田町4丁目15番82号", region="大阪"
+                )
+            }
+        )
+        for e in [collect_module.demo_catalog()[0]]
+    ]
+    filled = await collect_module._fill_nearest_stations(events, lambda *a, **k: None)
+    assert filled is not None
+    assert filled[0].location.nearest_station == "京橋(大阪府)"
+    assert asked == ["大阪市都島区東野田町4丁目15番82号"]
+
+    # 建物名しか無いイベントには問い合わせない（無駄な呼び出しをしない）
+    asked.clear()
+    building = [
+        events[0].model_copy(
+            update={"location": EventLocation(type="offline", venue="グランフロント大阪")}
+        )
+    ]
+    assert await collect_module._fill_nearest_stations(building, lambda *a, **k: None) is None
+    assert asked == []
