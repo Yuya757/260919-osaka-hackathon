@@ -182,6 +182,11 @@
                 "type": "string",
                 "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
               },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "期待するジャンル固有の値（部分一致で照合する）"
+              },
               "milestoneLabels": {
                 "type": "array",
                 "items": { "type": "string" },

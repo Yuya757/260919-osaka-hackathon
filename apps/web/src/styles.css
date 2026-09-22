@@ -988,6 +988,32 @@ button.next-title:hover {
   color: var(--faint);
 }
 
+/* ---------- ジャンル固有の値（段階2） ---------- */
+.attribute-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attribute-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.attribute-row dt {
+  flex: none;
+  min-width: 5.5em;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.attribute-row dd {
+  margin: 0;
+  font-size: 13px;
+}
+
 /* ---------- 空状態・スケルトン ---------- */
 .empty {
   margin: 0;

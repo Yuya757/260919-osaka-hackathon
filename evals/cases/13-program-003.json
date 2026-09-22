@@ -3,7 +3,7 @@
   "categories": [
     "program"
   ],
-  "note": "プログラム期間が書かれたアクセラ。実施日は期間の開始、Demo Day は節目。",
+  "note": "プログラム期間が書かれたアクセラ。実施日は期間の開始、Demo Day は節目。 募集要項の値は attributes に入れ、文章の行は拾わない。",
   "clock": "2026-09-21T09:00:00+09:00",
   "preferences": {
     "interestsPrompt": "アクセラレータープログラム オープンイノベーション 共創",
@@ -24,7 +24,7 @@
   "pages": [
     {
       "url": "https://program3.example.jp/2026",
-      "body": "<html><head><title>Kansai Accelerator Program 2026</title></head><body><h1>Kansai Accelerator Program 2026</h1><p>スタートアップを募集します。</p><div>応募締切: 2026年10月20日</div><div>プログラム期間: 2026年11月10日〜2027年2月10日</div><div>Demo Day: 2027年2月20日</div></body></html>",
+      "body": "<html><head><title>Kansai Accelerator Program 2026</title></head><body><h1>Kansai Accelerator Program 2026</h1><p>スタートアップを募集します。</p><div>応募締切: 2026年10月20日</div><div>プログラム期間: 2026年11月10日〜2027年2月10日</div><div>Demo Day: 2027年2月20日</div><div>支援内容: メンタリングと実証フィールドの提供</div><div>対象ステージ: シード〜シリーズA</div><div>賞金については後日お知らせします。</div></body></html>",
       "sourceType": "official"
     }
   ],
@@ -46,7 +46,11 @@
         "evidenceRequired": [
           "title",
           "dates.eventStart"
-        ]
+        ],
+        "attributes": {
+          "支援内容": "メンタリングと実証フィールドの提供",
+          "対象ステージ": "シード〜シリーズA"
+        }
       }
     ]
   }

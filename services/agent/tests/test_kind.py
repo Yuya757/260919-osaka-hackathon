@@ -249,3 +249,42 @@ def test_theme_gate_drops_only_confident_mismatches():
     )
     assert len(kept) == 2 and dropped == 1
     assert notes and "対象ジャンル外" in notes[0]
+
+
+class TestAttributes:
+    """ジャンル固有の値（ジャンル拡張計画 段階2）。構造化せず行のまま持つ。"""
+
+    def test_program_attributes_are_picked_by_label(self):
+        html = """<html><body><h1>Kansai Accelerator Program 2026</h1>
+        <p>応募締切: 2026年10月20日</p>
+        <p>支援内容: メンタリングと実証フィールドの提供</p>
+        <p>対象ステージ: シード〜シリーズA</p>
+        <p>出資: 最大1,000万円</p>
+        <p>支援内容については別途ご説明します。</p>
+        </body></html>"""
+        got = extract_candidate(
+            page(html), hit=None, run_id="r", now=NOW, user_id="u", kind="accelerator"
+        )
+        assert got is not None
+        assert got.event.attributes == {
+            "支援内容": "メンタリングと実証フィールドの提供",
+            "対象ステージ": "シード〜シリーズA",
+            "出資": "最大1,000万円",
+        }
+
+    def test_sentences_and_longer_labels_are_not_values(self):
+        text = "対象ステージ: シード\n賞金については後日お知らせします。\n参加費: 無料"
+        # ハッカソンの表に「対象ステージ」は無い。「対象」で途中から拾わない
+        assert d.find_attributes(text, kind="hackathon") == {"参加費": "無料"}
+
+    def test_attributes_stay_within_the_contract(self):
+        from event_agent.schemas import ApiEvent
+
+        event = ApiEvent(
+            eventId="e", title="t", category="contest", summary="",
+            location={"type": "online"}, dates=EventDates(),
+            officialUrl="https://example.jp/e",
+            attributes={f"k{i}": "v" * 80 for i in range(12)},
+        )
+        assert len(event.attributes) == 10
+        assert all(len(v) == 60 for v in event.attributes.values())
