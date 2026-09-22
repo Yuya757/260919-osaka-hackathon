@@ -25,6 +25,12 @@ class CollectionTheme:
     kind: str = "hackathon"
     # テーマ Run で残す kind。外れたものは検証前に除外する
     allowed_kinds: tuple[str, ...] = ("hackathon",)
+    # 検索クエリに使うイベントサイト。ジャンルで告知の集まる場所が違う
+    site_queries: tuple[str, ...] = (
+        "site:connpass.com",
+        "site:peatix.com",
+        "site:doorkeeper.jp OR site:techplay.jp",
+    )
 
     def preferences(self, *, now: datetime) -> UserPreferences:
         # 年は固定せず JST の現在年。12 月に翌年の告知を弾かないよう、検証側には年を渡さない
@@ -36,11 +42,30 @@ class CollectionTheme:
         )
 
 
+# ビジコンは connpass ではなく公募情報サイトと主催者（自治体・金融機関・大学）の
+# ページに集まる。事前調査（ジャンル拡張計画）で読んだ告知もそうだった。
+_CONTEST_SITES = (
+    "site:koubo.jp OR site:compe.japandesign.ne.jp",
+    "site:go.jp OR site:ac.jp",
+)
+
 COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme("hackathon-kansai", "ハッカソン", ("関西", "大阪", "京都", "神戸")),
     CollectionTheme("hackathon-kanto", "ハッカソン", ("関東", "東京")),
     CollectionTheme("hackathon-chubu", "ハッカソン", ("中部", "名古屋")),
     CollectionTheme("hackathon-online", "ハッカソン", ("オンライン",), online_only=True),
+    CollectionTheme(
+        "contest-kansai", "ビジネスコンテスト", ("関西", "大阪", "京都", "神戸"),
+        kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+    ),
+    CollectionTheme(
+        "contest-kanto", "ビジネスコンテスト", ("関東", "東京"),
+        kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+    ),
+    CollectionTheme(
+        "contest-online", "ビジネスコンテスト", ("オンライン", "全国"),
+        online_only=False, kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
+    ),
 )
 
 _BY_ID = {theme.id: theme for theme in COLLECTION_THEMES}

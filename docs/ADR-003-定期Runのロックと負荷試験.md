@@ -87,7 +87,7 @@ Cloud Run Job の作成、Cloud Scheduler の登録、デプロイワークフ�
 
 | 対象 | 状態 |
 | --- | --- |
-| Cloud Run Job `event-agent-daily` | `deploy-develop.yml` からデプロイする。4 タスク直列（1 タスク 1 テーマ、ADR-008） |
+| Cloud Run Job `event-agent-daily` | `deploy-develop.yml` からデプロイする。7 タスク直列（1 タスク 1 テーマ、ADR-008） |
 | Cloud Scheduler `event-agent-daily-0700` | `deploy-develop.yml` が作成・更新する（毎朝 07:00 JST、`event-agent-scheduler` SA） |
 
 Job は同じコンテナイメージを `python -m event_agent.entrypoints.job` で起動し、

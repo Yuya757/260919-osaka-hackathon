@@ -70,20 +70,19 @@ def _normalize_preferences(preferences: UserPreferences) -> UserPreferences:
     )
 
 
-def _plan_queries(preferences: UserPreferences) -> list[str]:
+def _plan_queries(
+    preferences: UserPreferences, theme: CollectionTheme | None = None
+) -> list[str]:
     base = preferences.interests_prompt
     year = preferences.target_year
     location = " ".join(preferences.locations) if preferences.locations else "日本"
     # 一般検索と、イベントサイトを指名した検索を混ぜる。告知ページは
-    # connpass / Peatix / Doorkeeper に集まっており、一般検索だとまとめ記事に
-    # 押されて出てこないことが多い。クエリ数は §9.2 の呼び出し予算（1 Run 15回）
-    # の中で、抽出の呼び出し分を残すために抑える。
-    queries = [
-        f"{year} {location} {base} イベント 申込",
-        f"site:connpass.com {location} {base} {year}",
-        f"site:peatix.com {location} {base} {year}",
-        f"site:doorkeeper.jp OR site:techplay.jp {location} {base} {year}",
-    ]
+    # connpass / Peatix / Doorkeeper（ハッカソン）や公募情報サイト・自治体・大学
+    # （ビジコン）に集まっており、一般検索だとまとめ記事に押されて出てこない。
+    # クエリ数は §9.2 の呼び出し予算（1 Run 15回）の中で、抽出の呼び出し分を残すために抑える。
+    sites = theme.site_queries if theme else CollectionTheme.__dataclass_fields__["site_queries"].default
+    lead = f"{year} {location} {base} 応募 締切" if theme and theme.kind == "contest" else f"{year} {location} {base} イベント 申込"
+    queries = [lead, *(f"{site} {location} {base} {year}" for site in sites)]
     return queries[: settings.max_search_queries]
 
 
@@ -402,7 +401,7 @@ async def execute_collect_workflow(
 
         await _set_step(run, "plan")
         await asyncio.sleep(delay)
-        queries = _plan_queries(normalized)
+        queries = _plan_queries(normalized, theme)
         note("planner", f"検索クエリを {len(queries)} 件作成")
         for query in queries:
             note("planner", f"クエリ: {query}")

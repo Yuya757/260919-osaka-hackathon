@@ -95,6 +95,21 @@ def demo_evidence() -> dict[str, list[Evidence]]:
                 groundingMetadata=GroundingMetadata(chunkIndex=0, supportScore=0.87),
             ),
         ],
+        "kansai-bizcon": [
+            Evidence(
+                evidenceId="ev-bizcon-001",
+                query="関西 ビジネスプランコンテスト 2027 応募 締切",
+                sourceUrl="https://example.com/kansai-bizcon-2027",
+                sourceType="official",
+                title="関西ビジネスプランコンテスト 2027 募集要項",
+                # 実施日（会場に集まる日）は書かれていない。最終審査会の日付を
+                # 実施日に流用せず、milestones に置く（§6.5）。
+                excerpt="応募締切: 2026年11月28日(金)17:00 / 一次審査結果発表: 12月18日 / 最終審査会: 2027年2月6日",
+                supports=["title", "dates.applicationDeadline"],
+                retrievedAt=_RETRIEVED,
+                groundingMetadata=GroundingMetadata(chunkIndex=0, supportScore=0.91),
+            ),
+        ],
         "startup-accel": [
             Evidence(
                 evidenceId="ev-accel-001",

@@ -282,6 +282,24 @@ def test_feed_order_and_visibility(store_backend):
     assert ids.index(expired.post_id) >= 2
 
 
+def test_posts_without_an_event_date_stay_in_the_feed(store_backend):
+    """実施日の無い告知（ビジコン）は締切で終わりを判定する。
+
+    以前は `eventEnd or eventStart` を now と比べていたので、実施日が無い
+    イベントのボット投稿があるだけでフィード全体が落ちた。
+    """
+    from event_agent.demo.catalog import demo_catalog
+
+    contest = next(e for e in demo_catalog() if e.kind == "contest")
+    assert contest.dates.event_start is None
+    seed_bot_posts([contest], now=FROZEN_NOW)
+
+    assert [p.event.title for p in list_feed(now=FROZEN_NOW)] == [contest.title]
+    # 締切を過ぎたら消える
+    after = contest.dates.application_deadline + timedelta(days=1)
+    assert list_feed(now=after) == []
+
+
 def test_rejected_message_is_generic():
     with pytest.raises(PostRejected) as caught:
         create_post(request(FULL_BODY, organizerName=ATTACK), now=FROZEN_NOW)

@@ -7,11 +7,11 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
-import { daysUntil, isFinished, isUrgent } from '../lib/eventView'
+import { daysUntil, isFinished, isUrgent, kindLabel } from '../lib/eventView'
 import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import { SearchActivityPanel } from '../components/SearchActivityPanel'
-import type { Event } from '../types/api'
+import type { Event, EventKind } from '../types/api'
 
 type Filter = 'all' | 'soon' | 'online' | 'check'
 
@@ -20,6 +20,16 @@ const FILTERS: [Filter, string][] = [
   ['soon', '締切間近'],
   ['online', 'オンライン'],
   ['check', '要確認'],
+]
+
+// ジャンルのチップは実際に集まっている種別だけを出す。空のチップを押させない
+const KIND_ORDER: EventKind[] = [
+  'hackathon',
+  'contest',
+  'accelerator',
+  'cocreation',
+  'exhibition',
+  'subsidy',
 ]
 
 type Props = { mode: 'home' | 'saved' }
@@ -42,6 +52,7 @@ export function EventListScreen({ mode }: Props) {
     refresh,
   } = useAppState()
   const [filter, setFilter] = useState<Filter>('all')
+  const [kind, setKind] = useState<EventKind | 'all'>('all')
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
 
@@ -50,14 +61,22 @@ export function EventListScreen({ mode }: Props) {
     return mode === 'saved' ? open.filter((event) => saved[event.eventId]) : open
   }, [events, mode, saved])
 
+  // 2 種類以上あるときだけジャンルの行を出す。ハッカソンだけなら意味が無い
+  const kinds = useMemo(() => {
+    const present = new Set(upcoming.map((event) => event.kind))
+    const ordered = KIND_ORDER.filter((value) => present.has(value))
+    return ordered.length > 1 ? ordered : []
+  }, [upcoming])
+
   const visible = useMemo(() => {
     // 問いかけの解釈と絞り込みはプール探索エージェントが行う。ここではチップだけ
     let pool = upcoming
+    if (kind !== 'all' && kinds.includes(kind)) pool = pool.filter((event) => event.kind === kind)
     if (filter === 'soon') pool = pool.filter((event) => isUrgent(event))
     if (filter === 'online') pool = pool.filter((event) => event.location.type !== 'offline')
     if (filter === 'check') pool = pool.filter((event) => event.validationStatus === 'partial')
     return pool
-  }, [upcoming, filter])
+  }, [upcoming, filter, kind, kinds])
 
   // 締切が確認できているものの中で、いちばん近いもの。不明な締切は候補にしない
   const nextDeadline = useMemo(() => {
@@ -92,13 +111,31 @@ export function EventListScreen({ mode }: Props) {
             id="ask-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="どんなハッカソン？（例：京都で来月 学生向け 生成AI）"
+            placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
             autoComplete="off"
           />
           <button type="submit" disabled={agentPending}>
             {agentPending ? '探索中…' : '探す'}
           </button>
         </form>
+
+        {kinds.length > 0 && (
+          <div className="filters" role="group" aria-label="ジャンルの絞り込み">
+            <button type="button" aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
+              すべて
+            </button>
+            {kinds.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={kind === value}
+                onClick={() => setKind(value)}
+              >
+                {kindLabel(value)}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="filters" role="group" aria-label="イベントの絞り込み">
           {FILTERS.map(([value, label]) => (
@@ -189,7 +226,7 @@ export function EventListScreen({ mode }: Props) {
               <>
                 条件に合うイベントはありません。
                 <br />
-                上の入力欄に問いかけると、収集済みのハッカソンから探し直します。
+                上の入力欄に問いかけると、収集済みのイベントから探し直します。
               </>
             )}
           </p>

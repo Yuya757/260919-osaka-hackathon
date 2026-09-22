@@ -1,7 +1,13 @@
 /** 一覧の1行（画面設計書 S-01）。カードではなく罫線で区切る。 */
 import { useNavigate } from 'react-router-dom'
 import type { Event, GoogleCalendarEventIds } from '../types/api'
-import { formatLocationType, hostOf, isCalendarRegistered, placeLabel } from '../lib/eventView'
+import {
+  formatLocationType,
+  hostOf,
+  isCalendarRegistered,
+  kindLabel,
+  placeLabel,
+} from '../lib/eventView'
 import { DualDateBlock } from './DualDateBlock'
 
 type Props = {
@@ -28,6 +34,8 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
           >
             {event.title}
           </button>
+          {/* 既定はハッカソン。混ざったときだけ種別を出す */}
+          {event.kind !== 'hackathon' && <span className="tag">{kindLabel(event.kind)}</span>}
           {partial && <span className="tag">要確認</span>}
         </div>
         <p className="row-meta">
