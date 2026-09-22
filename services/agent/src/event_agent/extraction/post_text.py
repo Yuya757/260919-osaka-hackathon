@@ -25,6 +25,7 @@ from event_agent.extraction.extractor import (
     _labelled_value,
     category_of,
     location_of,
+    station_of,
     summary_of,
 )
 from event_agent.schemas import (
@@ -180,7 +181,9 @@ def derive_event_from_post(
         organizer=organizer,
         category=category_of(text),
         summary=summary_of(request.body, request.title) or request.title,
-        location=EventLocation(type=location_type, venue=venue, region=venue),
+        location=EventLocation(
+            type=location_type, venue=venue, region=venue, nearestStation=station_of(text)
+        ),
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,
             applicationDeadlinePrecision=deadline.precision if deadline else "unknown",

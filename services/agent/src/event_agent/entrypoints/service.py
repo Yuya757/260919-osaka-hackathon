@@ -120,6 +120,10 @@ def _find_event(event_id: str) -> ApiEvent | None:
     stored = store.get_event(event_id)
     if stored:
         return stored
+    # 主催者投稿由来のイベントは events/ に無い。投稿に埋め込まれた写しを使う（ADR-006）
+    for post in store.list_organizer_posts(status="published"):
+        if post.event.event_id == event_id:
+            return post.event
     # デモカタログは保存されないことがあるため、最後に見る。
     for event in demo_catalog():
         if event.event_id == event_id:

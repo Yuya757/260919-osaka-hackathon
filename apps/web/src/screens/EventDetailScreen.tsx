@@ -18,6 +18,7 @@ import {
 } from '../lib/eventView'
 import { DualDateBlock } from '../components/DualDateBlock'
 import { CalendarSheet } from '../components/CalendarSheet'
+import { EventMap, mapsSearchUrl } from '../components/EventMap'
 import { RoutePanel } from '../components/RoutePanel'
 import type { Event, Evidence } from '../types/api'
 
@@ -121,6 +122,10 @@ export function EventDetailScreen() {
   const showApplication = Boolean(
     event.applicationUrl && event.applicationUrl !== event.officialUrl,
   )
+  // 会場名と地域を並べて検索語にする。座標は持たないので、地図側の検索に任せる
+  const placeQuery = [event.location.venue, event.location.region]
+    .filter((part, index, parts) => part && parts.indexOf(part) === index)
+    .join(' ')
 
   return (
     <div className="detail">
@@ -131,7 +136,7 @@ export function EventDetailScreen() {
       <div className="detail-title">
         <p className="eyebrow">
           {categoryLabel(event.category)}
-          {post && ` · ${post.origin === 'bot' ? 'ボット投稿' : '主催者投稿'}`}
+          {post && ' · 主催者投稿'}
         </p>
         <h1>{event.title}</h1>
         <p className="detail-meta">
@@ -180,9 +185,29 @@ export function EventDetailScreen() {
         ))}
       </section>
 
-      {/* 駅すぱあと経路検索（ADR-001）。オンライン開催では出さない。 */}
-      {event.location.type !== 'online' && event.location.nearestStation && (
-        <RoutePanel eventId={event.eventId} nearestStation={event.location.nearestStation} />
+      {/* 開催場所: 地図 + 駅すぱあと経路（ADR-001）。オンライン開催では出さない。 */}
+      {event.location.type !== 'online' && (event.location.venue || event.location.region) && (
+        <section className="place">
+          <p className="eyebrow">開催場所</p>
+          <p className="place-name">
+            {event.location.venue || event.location.region}
+            {event.location.type === 'hybrid' && <span className="tag">オンライン併催</span>}
+          </p>
+          <EventMap query={placeQuery} />
+          <p className="fine">
+            <a href={mapsSearchUrl(placeQuery)} target="_blank" rel="noopener noreferrer">
+              Google マップで開く
+            </a>
+            {event.location.nearestStation
+              ? ` · 最寄駅: ${event.location.nearestStation}`
+              : ' · 最寄駅は未確認'}
+          </p>
+          <RoutePanel
+            eventId={event.eventId}
+            nearestStation={event.location.nearestStation || event.location.region || ''}
+            stationConfirmed={Boolean(event.location.nearestStation)}
+          />
+        </section>
       )}
 
       <div className="detail-actions">

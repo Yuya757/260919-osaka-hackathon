@@ -30,6 +30,8 @@ _TAGS = re.compile(r"<[^>]+>")
 _ONLINE_WORDS = ("オンライン", "online", "リモート", "配信", "zoom", "google meet")
 _HYBRID_WORDS = ("ハイブリッド", "hybrid", "現地とオンライン", "オンライン併催")
 _VENUE_LABELS = ("会場", "開催場所", "場所", "venue")
+_ACCESS_LABELS = ("最寄駅", "最寄り駅", "アクセス", "交通")
+_STATION = re.compile(r"([一-龥ぁ-んァ-ヶA-Za-z0-9ー]{1,12}?)駅")
 _ORGANIZER_LABELS = ("主催", "主催者", "organizer", "運営")
 
 _CATEGORY_WORDS = (
@@ -100,6 +102,22 @@ def location_of(text: str) -> tuple[str, str | None, str]:
     if venue:
         return "offline", venue, venue
     return "unknown", None, ""
+
+
+def station_of(text: str) -> str | None:
+    """「最寄駅: JR大阪駅から徒歩5分」→「大阪」。経路検索の到着駅に使う。
+
+    路線名の接頭辞（JR / 阪急 など）は駅名検索の妨げになるので落とす。
+    見つからなければ None。推測しない。
+    """
+    value = _labelled_value(text, _ACCESS_LABELS)
+    if not value:
+        return None
+    match = _STATION.search(value)
+    if not match:
+        return None
+    name = re.sub(r"^(JR|ＪＲ|阪急|阪神|京阪|近鉄|南海|地下鉄|Osaka Metro|大阪メトロ|市営)", "", match.group(1))
+    return name or None
 
 
 def category_of(text: str) -> str:
@@ -175,7 +193,9 @@ def extract_candidate(
         organizer=organizer,
         category=category_of(text),
         summary=summary_of(text, title),
-        location=EventLocation(type=location_type, venue=venue, region=venue),
+        location=EventLocation(
+            type=location_type, venue=venue, region=venue, nearestStation=station_of(text)
+        ),
         dates=EventDates(
             applicationDeadline=deadline.value if deadline else None,
             applicationDeadlinePrecision=deadline.precision if deadline else "unknown",
