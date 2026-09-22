@@ -8,6 +8,7 @@ Collection layout, taken from the data requirements:
 ``agentRunKeys/{hash(idempotencyKey)}``     §9.3 run idempotency index
 ``sessions/{hash(sessionId)}``              chat session state
 ``appState/latestRun``                      pointer used by ``list_events(None)``
+``organizerPosts/{postId}``                 F-06 organizer post (ADR-006)
 
 Two of those collections are not in §7. ``agentRunKeys`` exists because §9.3
 requires a manual run to be idempotent on the client's ``Idempotency-Key``, and
@@ -30,8 +31,21 @@ from typing import Any
 from uuid import uuid4
 
 from event_agent.config import get_settings
-from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
-from event_agent.storage.store import SessionState, display_order, merge_saved_event
+from event_agent.schemas import (
+    AgentRun,
+    ApiEvent,
+    Evidence,
+    OrganizerPost,
+    PostPlacement,
+    UserPreferences,
+)
+from event_agent.storage.store import (
+    SessionState,
+    _with_state,
+    display_order,
+    merge_saved_event,
+    merge_saved_post,
+)
 
 RUNS = "agentRuns"
 RUN_KEYS = "agentRunKeys"
@@ -40,6 +54,7 @@ EVENTS = "events"
 SESSIONS = "sessions"
 APP_STATE = "appState"
 LATEST_RUN_DOC = "latestRun"
+ORGANIZER_POSTS = "organizerPosts"
 
 
 def _path_id(raw: str) -> str:
@@ -88,7 +103,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -253,3 +268,46 @@ class FirestoreStore:
                 by_id[item.evidence_id] = item
         # get_all does not preserve request order, so restore the caller's.
         return [by_id[eid] for eid in evidence_ids if eid in by_id]
+
+    # ------------------------------------------------------- organizer posts
+
+    def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
+        ref = self._db.collection(ORGANIZER_POSTS).document(post.post_id)
+        snapshot = ref.get()
+        existing = OrganizerPost(**(snapshot.to_dict() or {})) if snapshot.exists else None
+        merged = merge_saved_post(post, existing)
+        ref.set(_dump(merged))
+        return merged
+
+    def get_organizer_post(self, post_id: str) -> OrganizerPost | None:
+        snapshot = self._db.collection(ORGANIZER_POSTS).document(post_id).get()
+        if not snapshot.exists:
+            return None
+        return OrganizerPost(**(snapshot.to_dict() or {}))
+
+    def list_organizer_posts(self, status: str | None = None) -> list[OrganizerPost]:
+        # 並び順はクエリに持たせない。単一フィールドの等価条件だけなら
+        # composite index が要らず、ADR-002 の運用（rules しか deploy しない）で済む。
+        query = (
+            self._where_eq(ORGANIZER_POSTS, "status", status)
+            if status
+            else self._db.collection(ORGANIZER_POSTS)
+        )
+        return [OrganizerPost(**(s.to_dict() or {})) for s in query.stream()]
+
+    def update_post_state(
+        self,
+        post_id: str,
+        *,
+        status: str | None = None,
+        placement: PostPlacement | None = None,
+    ) -> OrganizerPost | None:
+        ref = self._db.collection(ORGANIZER_POSTS).document(post_id)
+        snapshot = ref.get()
+        if not snapshot.exists:
+            return None
+        updated = _with_state(
+            OrganizerPost(**(snapshot.to_dict() or {})), status=status, placement=placement
+        )
+        ref.set(_dump(updated))
+        return updated

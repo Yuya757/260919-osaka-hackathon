@@ -24,6 +24,8 @@ from event_agent.schemas import (
     EventLocation,
     Evidence,
     GoogleCalendarEventIds,
+    OrganizerPost,
+    PostPlacement,
     Recommendation,
     UserPreferences,
 )
@@ -113,6 +115,24 @@ def make_evidence(evidence_id: str = "ev-1", **overrides) -> Evidence:
     }
     fields.update(overrides)
     return Evidence(**fields)
+
+
+def make_post(post_id: str = "post-1", *, origin: str = "organizer", **overrides) -> OrganizerPost:
+    event = make_event(post_id, run_id="organizer-posts", url="https://example.com/post")
+    fields = {
+        "postId": post_id,
+        "origin": origin,
+        "organizerName": "テスト主催者",
+        "contactUrl": "https://example.com/post",
+        "title": event.title,
+        "body": "開催日: 2026年10月21日 10:00\n申込締切: 2026年10月1日",
+        "event": event,
+        "evidence": [make_evidence("ev-post", sourceType="organizer")],
+        "createdAt": NOW,
+        "updatedAt": NOW,
+    }
+    fields.update(overrides)
+    return OrganizerPost(**fields)
 
 
 class TestRuns:
@@ -364,14 +384,52 @@ class TestSessions:
         assert session.messages == []
 
 
+class TestOrganizerPosts:
+    def test_round_trip_keeps_nested_models(self, store):
+        saved = store.save_organizer_post(make_post())
+        loaded = store.get_organizer_post("post-1")
+        assert loaded == saved
+        assert loaded.event.dates.event_start == NOW + timedelta(days=30)
+        assert loaded.evidence[0].source_type == "organizer"
+        assert loaded.placement == PostPlacement()
+        assert loaded.status == "published"
+
+    def test_resave_keeps_created_at_and_state(self, store):
+        store.save_organizer_post(make_post())
+        store.update_post_state(
+            "post-1", status="hidden", placement=PostPlacement(kind="pinned")
+        )
+        later = NOW + timedelta(days=1)
+        resaved = store.save_organizer_post(
+            make_post(title="改題", createdAt=later, updatedAt=later)
+        )
+        assert resaved.title == "改題"
+        assert resaved.updated_at == later
+        assert resaved.created_at == NOW
+        assert resaved.status == "hidden"
+        assert resaved.placement.kind == "pinned"
+
+    def test_list_filters_by_status(self, store):
+        store.save_organizer_post(make_post("post-1"))
+        store.save_organizer_post(make_post("post-2"))
+        store.update_post_state("post-2", status="hidden")
+        assert {p.post_id for p in store.list_organizer_posts()} == {"post-1", "post-2"}
+        assert [p.post_id for p in store.list_organizer_posts(status="published")] == ["post-1"]
+
+    def test_update_unknown_post_is_none(self, store):
+        assert store.update_post_state("missing", status="hidden") is None
+
+
 class TestReset:
     def test_reset_clears_everything(self, store):
         store.create_run(make_run())
         store.save_events("run-1", [make_event("evt-1")])
         store.save_evidence("run-1", [make_evidence("ev-1")])
+        store.save_organizer_post(make_post())
 
         store.reset()
 
         assert store.get_run("run-1") is None
         assert store.list_events() == []
         assert store.get_evidence("run-1", ["ev-1"]) == []
+        assert store.list_organizer_posts() == []
