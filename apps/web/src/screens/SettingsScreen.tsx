@@ -15,7 +15,6 @@ export function SettingsScreen() {
   const [profile, setProfile] = useState<Profile | null>(initial.profile)
   const [persisted, setPersisted] = useState(initial.profile !== null)
   const [profileNotice, setProfileNotice] = useState(initial.notice)
-  const [onlineAllowed, setOnlineAllowed] = useState(true)
 
   const saveProfile = (value: Profile, remember: boolean): string | null => {
     try {
@@ -48,6 +47,15 @@ export function SettingsScreen() {
 
       <div className="scroll-area">
         <div className="settings">
+          {profileOpen ? (
+            <ProfileDialog
+              profile={profile}
+              persisted={persisted}
+              onClose={() => setProfileOpen(false)}
+              onSave={saveProfile}
+            />
+          ) : (
+            <>
           <section className="panel">
             <h3>アカウント</h3>
             <div className="setting-row">
@@ -66,7 +74,14 @@ export function SettingsScreen() {
             <h3>関心条件</h3>
             <p className="prompt-box">
               {profile
-                ? [profile.prefecture, ...profile.genres].filter(Boolean).join('・')
+                ? [
+                    `${profile.originStation}から${profile.maxTravelMinutes}分以内`,
+                    ...profile.locations,
+                    ...profile.genres,
+                    profile.interestsPrompt,
+                  ]
+                    .filter(Boolean)
+                    .join('・')
                 : 'ハッカソン、生成AI、GCP、関西エリア。オンライン参加も可。'}
             </p>
             {profileNotice && <p className="fine warn-text">{profileNotice}</p>}
@@ -79,10 +94,10 @@ export function SettingsScreen() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={onlineAllowed}
+                aria-checked={profile?.online ?? true}
                 aria-label="オンラインも含める"
                 className="switch"
-                onClick={() => setOnlineAllowed((v) => !v)}
+                onClick={() => setProfileOpen(true)}
               />
             </div>
             <button type="button" className="ghost-button wide" onClick={() => setProfileOpen(true)}>
@@ -157,17 +172,10 @@ export function SettingsScreen() {
           <p className="fine">
             イベント情報は公開Web情報をもとにAIが整理したものです。申込前に必ず公式サイトをご確認ください。
           </p>
+            </>
+          )}
         </div>
       </div>
-
-      {profileOpen && (
-        <ProfileDialog
-          profile={profile}
-          persisted={persisted}
-          onClose={() => setProfileOpen(false)}
-          onSave={saveProfile}
-        />
-      )}
     </>
   )
 }
