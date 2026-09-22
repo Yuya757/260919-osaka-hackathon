@@ -376,6 +376,8 @@ export type SearchIntent = {
   dateFrom?: string | null
   dateTo?: string | null
   keywords: string[]
+  /** 問いかけが指す機会の種別。空なら種別で絞っていない */
+  kinds: EventKind[]
 }
 
 export type PoolSearchRequest = { sessionId?: string; query: string }

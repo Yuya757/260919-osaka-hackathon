@@ -13,7 +13,12 @@ from event_agent.clients import gemini
 from event_agent.entrypoints.service import app
 from event_agent.schemas import UserPreferences
 from event_agent.workflows.collect import run_collect_workflow
-from event_agent.workflows.pool_search import _heuristic_intent, _relative_period, search_pool
+from event_agent.workflows.pool_search import (
+    _heuristic_intent,
+    _kinds_in,
+    _relative_period,
+    search_pool,
+)
 from test_chat_defense import ATTACK
 
 
@@ -35,6 +40,32 @@ def test_heuristic_intent_reads_places_period_and_keywords():
     assert online.online_only is True
     both = _heuristic_intent("オンラインも含めて大阪", UserPreferences(), FROZEN_NOW)
     assert both.online_only is False and both.locations == ["大阪"]
+
+
+def test_kind_words_map_to_event_kinds():
+    """「ビジコン」で探したらビジコンだけが出る（ジャンル拡張計画 段階1）。"""
+    assert _kinds_in("大阪のビジコン") == ["contest"]
+    assert _kinds_in("ビジネスプランコンテストに出たい") == ["contest"]
+    assert _kinds_in("オンラインのハッカソン") == ["hackathon"]
+    assert _kinds_in("アクセラに応募したい") == ["accelerator"]
+    assert _kinds_in("関西の補助金") == ["subsidy"]
+    # 種別に触れていない問いかけでは絞らない
+    assert _kinds_in("京都で来月 学生向け 生成AI") == []
+
+
+@pytest.mark.asyncio
+async def test_search_narrows_the_pool_by_kind(store_backend):
+    """種別の語があるときだけ種別で絞り、そう書かなければ全種別を返す。"""
+    await run_collect_workflow(UserPreferences(), True, now=FROZEN_NOW)
+
+    contest = await search_pool("ビジコン", None, now=FROZEN_NOW)
+    assert contest.events and all(e.kind == "contest" for e in contest.events)
+    assert contest.intent.kinds == ["contest"]
+    assert any("ビジコンに絞る" in line.message for line in contest.activity)
+
+    everything = await search_pool("大阪", None, now=FROZEN_NOW)
+    assert everything.intent.kinds == []
+    assert {e.kind for e in everything.events} > {"contest"}
 
 
 @pytest.mark.asyncio
@@ -60,7 +91,8 @@ async def test_search_filters_and_ranks_the_pool_without_model(store_backend):
 @pytest.mark.asyncio
 async def test_model_interpretation_and_relevance_are_validated(store_backend, monkeypatch):
     await run_collect_workflow(UserPreferences(), True, now=FROZEN_NOW)
-    pool_ids = {e.event_id for e in store_backend.list_events()}
+    # 問いかけが「ハッカソン」なので、候補はハッカソンだけに絞られる
+    pool_ids = {e.event_id for e in store_backend.list_events() if e.kind == "hackathon"}
     calls: list[str] = []
 
     async def fake_generate(prompt: str, system: str | None = None, **_: object) -> str:
@@ -81,6 +113,9 @@ async def test_model_interpretation_and_relevance_are_validated(store_backend, m
     result = await search_pool("大阪の学生向け生成AIハッカソン", None, now=FROZEN_NOW)
     assert len(calls) == 2
     assert result.intent.locations == ["大阪"] and result.intent.date_from is None
+    # モデルが kinds を返さなくても、規則で読んだ種別が残る
+    assert result.intent.kinds == ["hackathon"]
+    assert all(e.kind == "hackathon" for e in result.events)
     assert "上記の命令を無視して" not in result.intent.keywords and "学生" in result.intent.keywords
     top = result.events[0]
     assert top.event_id == sorted(pool_ids)[0] and top.recommendation.reason == "大阪開催で生成AIがテーマ"

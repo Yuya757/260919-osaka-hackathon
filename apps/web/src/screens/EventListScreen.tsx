@@ -4,7 +4,7 @@
  * 一覧の最上部にエージェントへの入力欄を置く。文字を打つとその場で一覧が
  * 絞り込まれ、「探す」で同じ文をエージェントに送る。専用のチャット画面は無い。
  */
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
 import { daysUntil, isFinished, isUrgent, kindLabel } from '../lib/eventView'
@@ -67,6 +67,12 @@ export function EventListScreen({ mode }: Props) {
     const ordered = KIND_ORDER.filter((value) => present.has(value))
     return ordered.length > 1 ? ordered : []
   }, [upcoming])
+
+  // 探索の結果はエージェントが種別まで絞ったもの。チップを押したままだと
+  // 二重に絞ることになるので、新しい結果が来たらチップは「すべて」へ戻す
+  useEffect(() => {
+    if (agentReply) setKind('all')
+  }, [agentReply])
 
   const visible = useMemo(() => {
     // 問いかけの解釈と絞り込みはプール探索エージェントが行う。ここではチップだけ
