@@ -242,7 +242,8 @@ async def get_event_route(
         logger.warning("route search failed for %s: %s", event_id, exc)
         raise HTTPException(status_code=502, detail="経路検索サービスでエラーが発生しました。") from exc
     except httpx.HTTPError as exc:
-        logger.warning("route search transport error for %s: %s %s", event_id, type(exc).__name__, exc)
+        # 例外文には URL（＝アクセスキー）が入る。種別だけを残す
+        logger.warning("route search transport error for %s: %s", event_id, type(exc).__name__)
         raise HTTPException(status_code=502, detail="経路検索サービスに接続できませんでした。") from exc
 
     return EventRouteResponse(eventId=event.event_id, arriveBy=event.dates.event_start, route=route)

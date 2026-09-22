@@ -229,7 +229,36 @@ async def test_address_lookup_takes_the_nearest_station() -> None:
     assert station is not None and station.name == "京橋(大阪府)"
     path, params = client.calls[0]
     assert path == "/address/station"
-    assert params["address"].startswith(ADDRESS) and params["address"].endswith(",3000")
+    # 丁目・番・号は落として渡す（漢字混じりのままだと 400 が返る）
+    assert params["address"] == "大阪市都島区東野田町4-15-82,3000"
+
+
+def test_address_normalisation_keeps_only_the_address() -> None:
+    from event_agent.clients.ekispert import normalize_address
+
+    assert normalize_address(ADDRESS) == "大阪市都島区東野田町4-15-82"
+    assert (
+        normalize_address("〒530-0001 大阪市北区梅田1丁目1番3号 グランフロント大阪 3F")
+        == "大阪市北区梅田1-1-3"
+    )
+    assert normalize_address("東京都渋谷区渋谷2-21-1") == "東京都渋谷区渋谷2-21-1"
+
+
+@pytest.mark.asyncio
+async def test_address_lookup_falls_back_to_the_raw_address() -> None:
+    """整えた形で弾かれたら、素の住所でもう一度だけ試す。"""
+    calls: list[str] = []
+
+    class Picky(FakeClient):
+        async def _get(self, path: str, params: dict[str, str]):  # type: ignore[override]
+            calls.append(params["address"])
+            if "-" in params["address"]:
+                raise EkispertError("HTTP 400")
+            return ADDRESS_STATION_RESPONSE["ResultSet"]
+
+    station = await Picky({}).find_station_near_address(ADDRESS)
+    assert station is not None and station.name == "京橋(大阪府)"
+    assert len(calls) == 2 and calls[1] == ADDRESS
 
 
 @pytest.mark.asyncio
@@ -277,3 +306,31 @@ def test_route_endpoint_resolves_the_station_from_the_address(
     # 会場名を駅名検索に渡していない（渡すのは出発駅だけ）
     names = [params.get("name") for path, params in fake.calls if path == "/station/light"]
     assert names == ["京都"]
+
+
+@pytest.mark.asyncio
+async def test_upstream_errors_never_carry_the_api_key() -> None:
+    """httpx の例外文にはキー入りの URL が載る。ログにも例外にも出さない。"""
+    import httpx as httpx_module
+
+    class Upstream(EkispertClient):
+        def __init__(self) -> None:
+            super().__init__(api_key="super-secret-key")
+
+    client = Upstream()
+
+    async def fake_get(self, url, params=None, headers=None):  # type: ignore[no-untyped-def]
+        request = httpx_module.Request("GET", f"{url}?key={params['key']}")
+        return httpx_module.Response(400, request=request, text="bad request")
+
+    import event_agent.clients.ekispert as module
+
+    original = module.httpx.AsyncClient.get
+    module.httpx.AsyncClient.get = fake_get  # type: ignore[method-assign]
+    try:
+        with pytest.raises(EkispertError) as caught:
+            await client._get("/address/station", {"address": "大阪市北区1-1"})
+    finally:
+        module.httpx.AsyncClient.get = original  # type: ignore[method-assign]
+    assert "super-secret-key" not in str(caught.value)
+    assert "400" in str(caught.value)

@@ -11,6 +11,8 @@ Responses are treated as untrusted data and reduced to a small typed summary.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
@@ -96,6 +98,33 @@ def _parse_datetime(value: Any) -> datetime | None:
         return None
 
 
+_POSTAL = re.compile(r"〒?\s*\d{3}-\d{4}")
+_BANCHI = re.compile(r"(\d+)\s*(?:丁目|番地|番|号)")
+
+
+def normalize_address(address: str) -> str:
+    """住所検索に渡す形に整える。
+
+    ドキュメントの例は「東京都杉並区高円寺北2,500」で、丁目・番・号の漢字は
+    入っていない。実際、漢字混じりのまま渡すと 400 が返る。
+    郵便番号と、番地より後ろのビル名・階数も落とす。
+    """
+    text = unicodedata.normalize("NFKC", address)
+    text = _POSTAL.sub("", text).strip()
+    text = _BANCHI.sub(r"\1-", text)
+    text = re.sub(r"-{2,}", "-", text)
+    # 「…1-1-3 グランフロント大阪 3F」→「…1-1-3」。番地の後ろはビル名で住所ではない
+    kept: list[str] = []
+    seen_number = False
+    for token in text.split():
+        has_number = any(char.isdigit() for char in token)
+        if seen_number and not has_number:
+            break
+        kept.append(token)
+        seen_number = seen_number or has_number
+    return " ".join(kept).strip(" 　-")
+
+
 def _validate_station_name(name: str) -> str:
     cleaned = name.strip()
     if not cleaned or len(cleaned) > _MAX_STATION_NAME_LENGTH:
@@ -125,9 +154,13 @@ class EkispertClient:
                 response = await client.get(url, params=query)
             except httpx.TransportError as exc:
                 # The upstream occasionally drops the first connection; retry once.
+                # 例外そのものは出さない（文面に URL とキーが入る）
                 logger.info("ekispert transport error on %s (%s); retrying", path, type(exc).__name__)
                 response = await client.get(url, params=query)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            # httpx の例外文にはクエリ文字列つきの URL が入る。そこにアクセスキーが
+            # 載っているので、例外もレスポンス本文もログへ出さない（§10.1）
+            raise EkispertError(f"駅すぱあと API がエラーを返しました（HTTP {response.status_code}）")
         payload = response.json()
         result = payload.get("ResultSet") if isinstance(payload, dict) else None
         if not isinstance(result, dict):
@@ -193,13 +226,34 @@ class EkispertClient:
             if cached and now - cached[0] < _CACHE_TTL:
                 return cached[1]
 
-        try:
-            result = await self._get(
-                "/address/station",
-                {"address": f"{cleaned},{radius_m}", "type": "train", "stationCount": "3"},
+        # 書式で弾かれることがあるので、整えた形 → 素の形の順に 1 回ずつ試す
+        attempts: list[dict[str, str]] = []
+        normalized = normalize_address(cleaned)
+        if normalized:
+            attempts.append(
+                {"address": f"{normalized},{radius_m}", "type": "train", "stationCount": "3"}
             )
-        except (EkispertError, httpx.HTTPError) as exc:
+        if normalized != cleaned:
+            attempts.append({"address": cleaned})
+
+        result: dict[str, Any] | None = None
+        try:
+            for params in attempts:
+                try:
+                    result = await self._get("/address/station", params)
+                    break
+                except EkispertError as exc:
+                    logger.info(
+                        "address lookup attempt failed for %r: %s", params["address"][:40], exc
+                    )
+            if result is None:
+                return None
+        except EkispertError as exc:
+            # 例外文にキーを混ぜない作りにしてあるが、住所と状況だけで十分
             logger.info("address lookup failed for %r: %s", cleaned[:40], exc)
+            return None
+        except httpx.HTTPError as exc:
+            logger.info("address lookup failed for %r: %s", cleaned[:40], type(exc).__name__)
             return None
 
         best: tuple[float, Station] | None = None
