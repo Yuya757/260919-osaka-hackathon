@@ -28,8 +28,10 @@ from event_agent.extraction import dates as d
 from event_agent.extraction.extractor import (
     ExtractedCandidate,
     FieldSource,
+    _CATEGORY_BY_KIND,
     category_of,
     clean_venue,
+    headline_kind,
     kind_of,
     location_of,
     station_of,
@@ -156,6 +158,11 @@ def candidate_from_lines(
     # 引用の照合は生のまま行い、表示用の文字列だけ実体参照を戻す（&#x27; など）
     title = html.unescape(title)[:200]
 
+    from_headline = headline_kind(title)
+    if kind and from_headline is None and kind_of(category) != kind:
+        # ページがジャンルを名乗っていない。テーマの種別で表示も揃える
+        category = _CATEGORY_BY_KIND.get(kind, category)
+
     sources: dict[str, FieldSource] = {"title": FieldSource("title", title, page.final_url)}
     if start is not None and date_line:
         sources["dates.eventStart"] = FieldSource("dates.eventStart", date_line, page.final_url)
@@ -229,7 +236,9 @@ def candidate_from_lines(
         )
         for index, source in enumerate(sources.values())
     ]
-    return ExtractedCandidate(event=event, evidence=evidence, field_sources=sources)
+    return ExtractedCandidate(
+        event=event, evidence=evidence, field_sources=sources, headline_kind=from_headline
+    )
 
 
 async def extract_with_model(

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     known_url_refresh_days: int = 7
     # 1 日あたりの Grounding 検索の上限（全 Run 合計）。
     # テーマ数 × クエリ数 + 手動探索の余裕（ジャンル拡張計画のコスト試算）
-    daily_grounding_cap: int = 60
+    daily_grounding_cap: int = 90
     verified_confidence_threshold: float = 0.8
     # 公式・主催者の根拠が無く集約サイトだけを出典とするイベントを表示する下限
     # （画面設計書§8-2）。compute_confidence の重み上、集約サイト単独ホストの

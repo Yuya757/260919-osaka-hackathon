@@ -159,6 +159,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   conference: 'カンファレンス',
   meetup: 'ミートアップ',
   acceleration: 'アクセラレーター',
+  cocreation: '共創プログラム',
   pitch: 'ピッチ',
   workshop: 'ワークショップ',
   seminar: 'セミナー',

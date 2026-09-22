@@ -17,9 +17,12 @@ def test_themes_map_to_task_indices():
     assert [t.id for t in COLLECTION_THEMES] == [
         "hackathon-kansai", "hackathon-kanto", "hackathon-chubu", "hackathon-online",
         "contest-kansai", "contest-kanto", "contest-online",
+        "accelerator-kansai", "accelerator-kanto", "accelerator-online",
+        "cocreation-kansai", "cocreation-kanto", "cocreation-online",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
     assert theme_for_task_index(6).id == "contest-online"
+    assert theme_for_task_index(12).id == "cocreation-online"
     with pytest.raises(ValueError):
         theme_for_task_index(len(COLLECTION_THEMES))
     assert theme_by_id("hackathon-kanto").locations == ("関東", "東京")
@@ -37,6 +40,18 @@ def test_contest_themes_target_contest_kind_and_sites():
     assert "go.jp" in joined  # 自治体
 
 
+def test_program_themes_target_the_platforms():
+    """アクセラ・共創は AUBA と Creww に集まる（事前調査 2026-09-22）。"""
+    accelerator = theme_by_id("accelerator-kansai")
+    assert accelerator.kind == "accelerator"
+    # 共創プログラムはアクセラと同じ場所に載るので、どちらも残す
+    assert set(accelerator.allowed_kinds) == {"accelerator", "cocreation"}
+    assert "creww.me" in " ".join(accelerator.site_queries)
+    cocreation = theme_by_id("cocreation-kanto")
+    assert cocreation.kind == "cocreation"
+    assert "auba.eiicon.net" in " ".join(cocreation.site_queries)
+
+
 def test_query_plan_differs_by_kind():
     from datetime import timezone as _tz
 
@@ -47,6 +62,8 @@ def test_query_plan_differs_by_kind():
     hackathon = theme_by_id("hackathon-kansai")
     assert "応募 締切" in _plan_queries(contest.preferences(now=now), contest)[0]
     assert "イベント 申込" in _plan_queries(hackathon.preferences(now=now), hackathon)[0]
+    accelerator = theme_by_id("accelerator-online")
+    assert "募集 締切" in _plan_queries(accelerator.preferences(now=now), accelerator)[0]
     # テーマ無し（手動 Run）は従来どおりハッカソン向けのサイト指名
     assert "connpass" in " ".join(_plan_queries(hackathon.preferences(now=now)))
 

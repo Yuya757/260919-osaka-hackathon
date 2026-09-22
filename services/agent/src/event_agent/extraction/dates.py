@@ -19,11 +19,15 @@ from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 
-# 「申込締切」として採用してよいラベル
+# 「申込締切」として採用してよいラベル。より具体的な語を先に置く
+# （`find_labelled` は行に最初に当たったラベルを採る）。
+# 末尾の「募集期間」以降は期間で書かれる募集（アクセラ・共創に多い）で、
+# 範囲の終わりが締切になる。裸の「締切」は最後の手段。
 APPLICATION_LABELS = (
     "申込締切", "申込み締切", "申し込み締切", "応募締切", "エントリー締切",
     "参加申込締切", "申込期限", "応募期限", "エントリー期限", "申込〆切", "参加登録締切",
     "募集締切", "募集期限", "応募・提出締切", "出展申込締切",
+    "募集期間", "応募期間", "エントリー期間", "締切",
 )
 # 締切ではあるが「申込締切」ではないラベル。混同すると §13.2 の締切正確率が落ちる。
 NON_APPLICATION_DEADLINE_LABELS = (
@@ -34,9 +38,12 @@ EVENT_DATE_LABELS = ("開催日", "開催日時", "会期", "日程", "開催期
 
 # 締切と実施日のあいだの節目（ジャンル拡張計画）。値が取れたものだけ持つ
 MILESTONE_LABELS = (
-    "エントリー開始", "募集開始", "受付開始",
+    "エントリー開始", "募集開始", "受付開始", "説明会", "キックオフ",
     "書類選考結果通知", "一次選考通過", "一次審査", "二次審査",
     "プレゼン審査", "最終審査会", "最終審査", "結果発表", "表彰式", "審査結果",
+    # アクセラ・共創（事前調査: Creww は「選考期間」「面談期間」で書く）
+    "選考期間", "審査期間", "面談期間", "採択発表", "採択企業発表",
+    "プログラム期間", "Demo Day", "デモデイ",
 )
 
 
@@ -61,9 +68,15 @@ _CONTEST_EXCLUDE = tuple(
     if label not in ("作品提出", "作品提出締切", "提出締切", "予稿締切", "原稿締切", "登壇応募")
 )
 
+# アクセラ・共創の「実施」はプログラム期間や Demo Day で、会場に集まる日は
+# 書かれないことが多い。期間が書いてあればその開始を実施日にする。
+_PROGRAM_DATE_LABELS = EVENT_DATE_LABELS + ("プログラム期間", "Demo Day", "デモデイ")
+
 LABEL_SETS: dict[str, LabelSet] = {
     "hackathon": LabelSet(APPLICATION_LABELS, NON_APPLICATION_DEADLINE_LABELS, EVENT_DATE_LABELS, MILESTONE_LABELS),
     "contest": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, EVENT_DATE_LABELS + ("最終審査会", "最終審査"), MILESTONE_LABELS),
+    "accelerator": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS),
+    "cocreation": LabelSet(APPLICATION_LABELS, _CONTEST_EXCLUDE, _PROGRAM_DATE_LABELS, MILESTONE_LABELS),
 }
 
 
@@ -187,6 +200,21 @@ def deadline_from_fragment(fragment: str, *, fallback_year: int | None) -> Parse
     return start
 
 
+# 「募集期間 A〜B」は締切を名指ししていない。名指しの締切が同じページにあるなら
+# そちらが正しい（AUBA は「応募期間」を先に書き、後から「応募締切 …23:59」と書く）。
+PERIOD_LABELS = ("募集期間", "応募期間", "エントリー期間")
+BARE_DEADLINE_LABELS = ("締切",)
+
+
+def _deadline_tiers(labels: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+    """締切ラベルを確度の順に分ける。名指し → 裸の「締切」→ 期間。"""
+    weak = set(PERIOD_LABELS) | set(BARE_DEADLINE_LABELS)
+    named = tuple(label for label in labels if label not in weak)
+    bare = tuple(label for label in labels if label in BARE_DEADLINE_LABELS)
+    period = tuple(label for label in labels if label in PERIOD_LABELS)
+    return tuple(tier for tier in (named, bare, period) if tier)
+
+
 def find_application_deadline(
     text: str, *, fallback_year: int | None, kind: str = "hackathon"
 ) -> ParsedDate | None:
@@ -195,14 +223,15 @@ def find_application_deadline(
     除外語は ``kind`` で変わる（ジャンル拡張計画）。
     """
     labels = labels_for(kind)
-    for _label, rest, line in find_labelled(text, labels.deadline):
-        # 行全体で判定する。「早期申込締切」「スポンサー申込締切」は
-        # 「申込締切」を含むので、接頭辞まで見ないと除外できない。
-        if any(bad in line for bad in labels.exclude):
-            continue
-        parsed = deadline_from_fragment(rest, fallback_year=fallback_year)
-        if parsed is not None:
-            return parsed
+    for tier in _deadline_tiers(labels.deadline):
+        for _label, rest, line in find_labelled(text, tier):
+            # 行全体で判定する。「早期申込締切」「スポンサー申込締切」は
+            # 「申込締切」を含むので、接頭辞まで見ないと除外できない。
+            if any(bad in line for bad in labels.exclude):
+                continue
+            parsed = deadline_from_fragment(rest, fallback_year=fallback_year)
+            if parsed is not None:
+                return parsed
     return None
 
 

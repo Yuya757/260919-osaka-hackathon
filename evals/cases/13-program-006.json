@@ -1,0 +1,34 @@
+{
+  "caseId": "13-program-006",
+  "categories": [
+    "program"
+  ],
+  "note": "募集が終わった共創プログラムは表示しない（締切が過去、実施日なし）。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "アクセラレータープログラム オープンイノベーション 共創",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://program6.example.jp/2026",
+      "query": "アクセラレータープログラム 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://program6.example.jp/2026",
+      "body": "<html><head><title>2025 オープンイノベーションプログラム</title></head><body><h1>2025 オープンイノベーションプログラム</h1><p>共創パートナーを募集しました。</p><div>募集期間: 2025年4月1日〜2025年6月30日</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": []
+  }
+}
