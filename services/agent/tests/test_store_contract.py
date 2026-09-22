@@ -384,6 +384,53 @@ class TestSessions:
         assert session.messages == []
 
 
+class TestPool:
+    def test_list_recent_events_respects_since(self, store):
+        store.save_events("run-1", [make_event("evt-old", url="https://example.com/old", lastSeenAt=NOW - timedelta(days=40))])
+        store.save_events("run-2", [make_event("evt-new", url="https://example.com/new", lastSeenAt=NOW - timedelta(days=3))])
+        recent = store.list_recent_events(NOW - timedelta(days=30))
+        assert [e.event_id for e in recent] == ["evt-new"]
+
+    def test_find_events_by_urls_matches_normalized_url(self, store):
+        store.save_events("run-1", [make_event("evt-1", url="https://www.example.com/event/?utm_source=x")])
+        found = store.find_events_by_urls(["https://example.com/event"])
+        assert list(found) == ["https://example.com/event"]
+        assert found["https://example.com/event"].event_id == "evt-1"
+        assert store.find_events_by_urls(["https://example.com/other"]) == {}
+
+    def test_touch_events_moves_only_last_seen_at(self, store):
+        saved = store.save_events(
+            "run-1", [make_event("evt-1", lastExtractedAt=NOW - timedelta(days=2))]
+        )[0]
+        later = NOW + timedelta(days=1)
+        store.touch_events([saved.dedup_key], last_seen_at=later)
+        touched = store.get_event("evt-1")
+        assert touched.last_seen_at == later
+        assert touched.last_extracted_at == NOW - timedelta(days=2)
+        assert touched.source_run_id == "run-1"
+        assert touched.evidence_ids == ["ev-1"]
+        store.touch_events(["missing"], last_seen_at=later)  # 無いものは黙って飛ばす
+
+    def test_get_evidence_for_events_spans_runs(self, store):
+        store.save_evidence("run-1", [make_evidence("ev-1")])
+        store.save_evidence("run-2", [make_evidence("ev-2", excerpt="別の根拠")])
+        store.save_events("run-1", [make_event("evt-1", url="https://example.com/a", evidenceIds=["ev-1"])])
+        store.save_events("run-2", [make_event("evt-2", url="https://example.com/b", run_id="run-2", evidenceIds=["ev-2", "ev-missing"])])
+        events = [store.get_event("evt-1"), store.get_event("evt-2")]
+        by_id = store.get_evidence_for_events(events)
+        assert [e.evidence_id for e in by_id["evt-1"]] == ["ev-1"]
+        assert [e.evidence_id for e in by_id["evt-2"]] == ["ev-2"]
+
+    def test_latest_collection_at_follows_non_empty_saves(self, store):
+        assert store.latest_collection_at() is None
+        store.save_events("run-1", [make_event("evt-1")])
+        first = store.latest_collection_at()
+        assert first is not None
+        store.save_events("run-2", [])
+        assert store.latest_collection_at() == first
+        assert store.list_events() and store.list_events()[0].event_id == "evt-1"
+
+
 class TestOrganizerPosts:
     def test_round_trip_keeps_nested_models(self, store):
         saved = store.save_organizer_post(make_post())

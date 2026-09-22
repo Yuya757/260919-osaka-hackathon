@@ -37,6 +37,7 @@ from event_agent.schemas import (
 )
 from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
+from event_agent.workflows.pool import ranked_pool
 from event_agent.workflows.organizer_posts import (
     PostRejected,
     create_post,
@@ -72,6 +73,7 @@ async def health() -> HealthResponse:
         status="ok",
         demo_mode=not settings.use_vertex,
         model=settings.gemini_model if settings.use_vertex else None,
+        manualRunsEnabled=settings.manual_runs_enabled,
     )
 
 
@@ -85,6 +87,12 @@ async def create_agent_run(
     body: AgentRunCreateRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentRunCreateResponse:
+    if not settings.manual_runs_enabled:
+        # ユーザー起点の Grounding 探索は費用のため既定で受け付けない（ADR-008）
+        raise HTTPException(
+            status_code=403,
+            detail="手動の探索は現在利用できません。毎朝の自動収集の結果を表示しています。",
+        )
     session = store.get_or_create_session(body.session_id)
     run = schedule_collect_run(
         session.preferences,
@@ -104,30 +112,40 @@ async def get_agent_run(run_id: str) -> AgentRun:
 
 @app.get("/api/events", response_model=EventsResponse)
 async def list_events(
-    sourceRunId: str | None = Query(default=None, description="Agent run ID"),
+    sourceRunId: str | None = Query(default=None),
+    sessionId: str | None = Query(default=None),
 ) -> EventsResponse:
+    """Displayable events (§8.3).
+
+    ``sourceRunId`` を指定すればその Run の結果、無ければ共有プール（ADR-008）を
+    ``sessionId`` の関心条件で採点した順に返す。どちらも quarantined / rejected は出さない。
+    """
+    now = datetime.now(timezone.utc)
     if sourceRunId:
-        record = store.get_run(sourceRunId)
-        if not record:
+        if not store.get_run(sourceRunId):
             raise HTTPException(status_code=404, detail="Run not found")
-    events = [
-        e
-        for e in store.list_events(sourceRunId)
-        if e.validation_status in ("verified", "partial")
-    ]
+        events = [
+            e
+            for e in store.list_events(sourceRunId)
+            if e.validation_status in ("verified", "partial")
+        ]
+        evidence_by_id = store.get_evidence_for_events(events)
+    else:
+        session = store.get_or_create_session(sessionId)
+        events, evidence_by_id = ranked_pool(session.preferences, now=now)
+
     # 一覧の行に根拠（出典と引用）を添える。全文は evidence API
     with_preview = [
         e.model_copy(
             update={
                 "evidence_preview": preview_evidence(
-                    store.get_evidence(e.source_run_id, e.evidence_ids)
-                    or demo_evidence().get(e.event_id, [])
+                    evidence_by_id.get(e.event_id) or demo_evidence().get(e.event_id, [])
                 )
             }
         )
         for e in events
     ]
-    return EventsResponse(events=with_preview)
+    return EventsResponse(events=with_preview, lastCollectedAt=store.latest_collection_at())
 
 
 def _find_event(event_id: str) -> ApiEvent | None:

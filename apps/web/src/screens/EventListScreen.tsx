@@ -61,6 +61,8 @@ export function EventListScreen({ mode }: Props) {
     agentReply,
     agentPending,
     ask,
+    manualRunsEnabled,
+    lastCollectedAt,
     toggleSaved,
     register,
     refresh,
@@ -120,7 +122,7 @@ export function EventListScreen({ mode }: Props) {
             autoComplete="off"
           />
           <button type="submit" disabled={agentPending || busy}>
-            {agentPending || busy ? '探索中…' : '探す'}
+            {agentPending || busy ? '探索中…' : manualRunsEnabled ? '探す' : '並べ替え'}
           </button>
         </form>
 
@@ -180,6 +182,19 @@ export function EventListScreen({ mode }: Props) {
           {visible.length} / {upcoming.length}件
         </span>
       </div>
+      {lastCollectedAt && (
+        <p className="fine collected-at">
+          最終収集:{' '}
+          {new Date(lastCollectedAt).toLocaleString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+          {mode === 'home' && !manualRunsEnabled && ' · 毎朝7時に自動収集'}
+        </p>
+      )}
 
       {loadState === 'loading' && (
         <div aria-busy="true">
@@ -215,7 +230,9 @@ export function EventListScreen({ mode }: Props) {
               <>
                 条件に合うイベントはありません。
                 <br />
-                上の入力欄に関心を書くと、エージェントが探し直します。
+                {manualRunsEnabled
+                  ? '上の入力欄に関心を書くと、エージェントが探し直します。'
+                  : '毎朝の自動収集で増えます。絞り込みを緩めてみてください。'}
               </>
             )}
           </p>

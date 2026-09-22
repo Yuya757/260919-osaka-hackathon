@@ -28,4 +28,4 @@ fi
 npx --yes "firebase-tools@${firebase_tools_version}" emulators:exec \
   --only firestore \
   --project "$project" \
-  "cd services/agent && PYTHONPATH=src AGENT_DEMO_MODE=true pytest -q $*"
+  "cd services/agent && PYTHONPATH=src AGENT_DEMO_MODE=true MANUAL_RUNS_ENABLED=true pytest -q $*"

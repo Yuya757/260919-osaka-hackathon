@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     fetch_concurrency: int = 6
     model_call_timeout_seconds: float = 60.0
     locate_concurrency: int = 4
+    # ADR-008: ユーザー起点の Grounding 探索を受け付けるか。既定は費用の安全側
+    manual_runs_enabled: bool = False
+    # 一覧に出す共有プールの範囲（lastSeenAt がこの日数以内）
+    pool_window_days: int = 30
+    # 既知ページを再抽出するまでの日数
+    known_url_refresh_days: int = 7
+    # 1 日あたりの Grounding 検索の上限（全 Run 合計）
+    daily_grounding_cap: int = 40
     verified_confidence_threshold: float = 0.8
     # 公式・主催者の根拠が無く集約サイトだけを出典とするイベントを表示する下限
     # （画面設計書§8-2）。compute_confidence の重み上、集約サイト単独ホストの

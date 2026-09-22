@@ -64,9 +64,24 @@ export function getAgentRun(runId: string): Promise<AgentRun> {
   return request<AgentRun>(`/api/agent-runs/${runId}`)
 }
 
-export function listEvents(sourceRunId?: string): Promise<{ events: ApiEvent[] }> {
-  const query = sourceRunId ? `?sourceRunId=${encodeURIComponent(sourceRunId)}` : ''
-  return request<{ events: ApiEvent[] }>(`/api/events${query}`)
+export type EventListResponse = { events: ApiEvent[]; lastCollectedAt?: string | null }
+
+/**
+ * 一覧。`sourceRunId` を渡せばその Run の結果、無ければ共有プール（ADR-008）を
+ * `sessionId` の関心条件で採点した順に返す。
+ */
+export function listEvents(sourceRunId?: string, sessionId?: string): Promise<EventListResponse> {
+  const params = new URLSearchParams()
+  if (sourceRunId) params.set('sourceRunId', sourceRunId)
+  if (sessionId) params.set('sessionId', sessionId)
+  const query = params.toString()
+  return request<EventListResponse>(`/api/events${query ? `?${query}` : ''}`)
+}
+
+export type HealthResponse = { status: string; demo_mode: boolean; model?: string | null; manualRunsEnabled: boolean }
+
+export function getHealth(): Promise<HealthResponse> {
+  return request<HealthResponse>('/api/health')
 }
 
 /** 根拠（§7.2）。S-08 の根拠シートが使う。 */

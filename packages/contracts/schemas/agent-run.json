@@ -62,6 +62,13 @@
       "additionalProperties": false,
       "required": ["runId", "userId", "triggerType", "idempotencyKey", "status", "startedAt"],
       "properties": {
+        "themeId": {
+          "type": ["string", "null"],
+          "description": "テーマ単位の定期収集（ADR-008）のテーマID。手動 Run では null"
+        },
+        "groundingCalls": { "type": "integer", "minimum": 0, "description": "この Run で使った Grounding 検索の回数（課金単位）" },
+        "modelCalls": { "type": "integer", "minimum": 0, "description": "この Run で使ったテキスト生成の回数" },
+        "skippedKnownCount": { "type": "integer", "minimum": 0, "description": "既知ページとして抽出を省いた数" },
         "activity": {
           "type": "array",
           "maxItems": 80,

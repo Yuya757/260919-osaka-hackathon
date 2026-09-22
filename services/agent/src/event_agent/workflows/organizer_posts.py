@@ -93,10 +93,11 @@ def _guard(request: OrganizerPostRequest) -> tuple[OrganizerPostRequest, list[st
 # ------------------------------------------------------------------- dedup
 
 
-def _collected_candidates() -> list[ApiEvent]:
-    return [
-        e for e in store.list_events() if e.validation_status in ("verified", "partial")
-    ]
+def _collected_candidates(now: datetime) -> list[ApiEvent]:
+    # 共有プール（ADR-008）全体と照合する。最新 Run だけだと他テーマの収集分を取りこぼす
+    from event_agent.workflows.pool import candidates
+
+    return candidates(now=now)
 
 
 def link_to_collected_event(event: ApiEvent, candidates: list[ApiEvent]) -> ApiEvent | None:
@@ -123,7 +124,7 @@ def preview_post(
     """何も書かずに、抽出結果と指摘だけを返す。"""
     cleaned, _flags = _guard(request)
     draft = derive_event_from_post(cleaned, now=now)
-    linked = link_to_collected_event(draft.event, _collected_candidates()) if draft.event else None
+    linked = link_to_collected_event(draft.event, _collected_candidates(now)) if draft.event else None
     if linked is not None:
         draft.issues.append(
             PostIssue(
@@ -142,7 +143,7 @@ def create_post(
     draft = derive_event_from_post(cleaned, now=now)
     if not draft.ok() or draft.event is None:
         raise PostRejected(draft.errors[0].message if draft.errors else REJECTED_MESSAGE)
-    linked = link_to_collected_event(draft.event, _collected_candidates())
+    linked = link_to_collected_event(draft.event, _collected_candidates(now))
     warnings = list(draft.warnings)
     if linked is not None:
         warnings.append(
