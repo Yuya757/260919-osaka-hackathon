@@ -7,6 +7,7 @@ import { RunProgressBanner } from './RunProgressBanner'
 
 const NAV: [string, string][] = [
   ['/', 'ホーム'],
+  ['/feed', 'フィード'],
   ['/calendar', 'カレンダー'],
   ['/saved', '保存'],
   ['/settings', '設定'],
@@ -17,7 +18,11 @@ export function AppShell() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-inner">
-          <span className="brand">超イベント管理</span>
+          <span className="brand">
+            {/* 360px では5項目が入らないので、狭い画面ではマークだけにする */}
+            <img className="brand-mark" src="/favicon.svg" alt="" width={20} height={20} />
+            <span className="brand-text">超イベント管理</span>
+          </span>
           <nav className="topnav" aria-label="メインナビゲーション">
             {NAV.map(([to, label]) => (
               <NavLink key={to} to={to} end={to === '/'}>

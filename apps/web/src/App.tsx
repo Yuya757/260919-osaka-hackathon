@@ -11,6 +11,8 @@ import { AppStateProvider } from './state/AppState'
 import { CalendarScreen } from './screens/CalendarScreen'
 import { EventDetailScreen } from './screens/EventDetailScreen'
 import { EventListScreen } from './screens/EventListScreen'
+import { FeedScreen } from './screens/FeedScreen'
+import { PostFormScreen } from './screens/PostFormScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
@@ -22,6 +24,8 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route index element={<EventListScreen mode="home" />} />
             <Route path="saved" element={<EventListScreen mode="saved" />} />
+            <Route path="feed" element={<FeedScreen />} />
+            <Route path="feed/new" element={<PostFormScreen />} />
             <Route path="calendar" element={<CalendarScreen />} />
             <Route path="settings" element={<SettingsScreen />} />
             <Route path="settings/profile" element={<ProfileScreen />} />

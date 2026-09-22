@@ -25,18 +25,27 @@ function localKey(date: Date): string {
 }
 
 export function CalendarScreen() {
-  const { events } = useAppState()
+  const { events, posts } = useAppState()
   const navigate = useNavigate()
   const today = new Date()
   const todayKey = localKey(today)
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+
+  // 主催者投稿のイベントも載せる。AI 収集分と結び付いた投稿は相手側が既に載っている
+  const shown = useMemo(
+    () => [
+      ...events,
+      ...posts.filter((post) => !post.linkedEventId).map((post) => post.event),
+    ],
+    [events, posts],
+  )
 
   const { deadlineIndex, heldIndex, agenda } = useMemo(() => {
     const deadlines = new Set<string>()
     const held = new Map<string, { first: boolean; last: boolean }>()
     const items: AgendaItem[] = []
 
-    for (const event of events) {
+    for (const event of shown) {
       const tz = event.dates.timezone
       // 締切が不明なイベントは締切マーカーを描かない。推測しない（§3.2）
       if (event.dates.applicationDeadline) {
@@ -60,7 +69,7 @@ export function CalendarScreen() {
     }
     items.sort((a, b) => a.date.getTime() - b.date.getTime() || (a.kind === 'deadline' ? -1 : 1))
     return { deadlineIndex: deadlines, heldIndex: held, agenda: items }
-  }, [events])
+  }, [shown])
 
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)

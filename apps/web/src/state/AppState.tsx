@@ -16,7 +16,9 @@ import {
 } from 'react'
 import {
   AgentRunPendingError,
+  createOrganizerPost,
   listEvents,
+  listOrganizerPosts,
   pollAgentRun,
   sendChat,
   startAgentRun,
@@ -24,7 +26,14 @@ import {
 import { displayable } from '../lib/eventView'
 import { loadRegistrations, registerToCalendar, unregisterFromCalendar } from '../lib/calendarMock'
 import type { CalendarSelection } from '../lib/calendarMock'
-import type { AgentRun, Event, GoogleCalendarEventIds } from '../types/api'
+import type {
+  AgentRun,
+  Event,
+  GoogleCalendarEventIds,
+  OrganizerPost,
+  OrganizerPostCreateResponse,
+  OrganizerPostRequest,
+} from '../types/api'
 
 const SAVED_KEY = 'event-agent-saved-v1'
 
@@ -65,10 +74,18 @@ type AppState = {
   startRun: () => Promise<void>
   /** 入力欄の内容をエージェントに送る。Run が始まれば進捗はバナーで追える */
   ask: (message: string) => Promise<void>
+  /** 主催者投稿フィード（F-06）。AI 収集の一覧とは別に持つ */
+  posts: OrganizerPost[]
+  postsState: LoadState
+  postsError: string | null
+  refreshPosts: () => Promise<void>
+  createPost: (body: OrganizerPostRequest) => Promise<OrganizerPostCreateResponse>
   toggleSaved: (eventId: string) => void
   register: (event: Event, selection: CalendarSelection) => Promise<void>
   unregister: (eventId: string) => Promise<void>
   eventById: (eventId: string) => Event | undefined
+  /** その Event が主催者投稿由来なら、その投稿 */
+  postByEventId: (eventId: string) => OrganizerPost | undefined
 }
 
 const Context = createContext<AppState | null>(null)
@@ -88,6 +105,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [agentPending, setAgentPending] = useState(false)
   const sessionRef = useRef<string | undefined>(undefined)
   const runningRef = useRef(false)
+  const [posts, setPosts] = useState<OrganizerPost[]>([])
+  const [postsState, setPostsState] = useState<LoadState>('idle')
+  const [postsError, setPostsError] = useState<string | null>(null)
 
   const refresh = useCallback(async (sourceRunId?: string) => {
     setLoadState((current) => (current === 'ready' ? current : 'loading'))
@@ -102,9 +122,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshPosts = useCallback(async () => {
+    setPostsState((current) => (current === 'ready' ? current : 'loading'))
+    try {
+      const result = await listOrganizerPosts()
+      setPosts(result.posts)
+      setPostsError(null)
+      setPostsState('ready')
+    } catch (error) {
+      setPostsError(error instanceof Error ? error.message : '投稿を取得できませんでした。')
+      setPostsState('error')
+    }
+  }, [])
+
   useEffect(() => {
     void refresh()
-  }, [refresh])
+    void refreshPosts()
+  }, [refresh, refreshPosts])
 
   useEffect(() => {
     try {
@@ -125,6 +159,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setRun(finished)
       if (finished.status !== 'failed') {
         await refresh(finished.runId)
+        // Run の save ステップでボット投稿が流れるので、フィードも取り直す
+        await refreshPosts()
       }
     } catch (error) {
       if (error instanceof AgentRunPendingError) {
@@ -145,7 +181,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     } finally {
       runningRef.current = false
     }
-  }, [refresh])
+  }, [refresh, refreshPosts])
+
+  const createPost = useCallback(
+    async (body: OrganizerPostRequest) => {
+      const created = await createOrganizerPost(body)
+      await refreshPosts()
+      return created
+    },
+    [refreshPosts],
+  )
 
   const ask = useCallback(
     async (message: string) => {
@@ -196,9 +241,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // 投稿由来の Event は events には無いので、投稿側も探す（/events/:id を開けるように）
+  const postByEventId = useCallback(
+    (eventId: string) => posts.find((post) => post.event.eventId === eventId),
+    [posts],
+  )
+
   const eventById = useCallback(
-    (eventId: string) => events.find((event) => event.eventId === eventId),
-    [events],
+    (eventId: string) =>
+      events.find((event) => event.eventId === eventId) ?? postByEventId(eventId)?.event,
+    [events, postByEventId],
   )
 
   const value = useMemo<AppState>(
@@ -217,10 +269,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       refresh: () => refresh(),
       startRun,
       ask,
+      posts,
+      postsState,
+      postsError,
+      refreshPosts,
+      createPost,
       toggleSaved,
       register,
       unregister,
       eventById,
+      postByEventId,
     }),
     [
       events,
@@ -236,10 +294,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       refresh,
       startRun,
       ask,
+      posts,
+      postsState,
+      postsError,
+      refreshPosts,
+      createPost,
       toggleSaved,
       register,
       unregister,
       eventById,
+      postByEventId,
     ],
   )
 
