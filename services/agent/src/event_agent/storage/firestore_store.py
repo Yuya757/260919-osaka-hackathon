@@ -209,12 +209,88 @@ class FirestoreStore:
             merged = merge_saved_event(event, existing.get(event.dedup_key))
             batch.set(refs[event.dedup_key], _dump(merged))
             stored.append(merged)
-        batch.set(
-            self._db.collection(APP_STATE).document(LATEST_RUN_DOC),
-            {"runId": run_id, "updatedAt": datetime.now(timezone.utc)},
-        )
+        # 空の保存で「最新の Run」を進めない（検索を省いた Run が一覧を空にしないため）
+        if stored:
+            batch.set(
+                self._db.collection(APP_STATE).document(LATEST_RUN_DOC),
+                {"runId": run_id, "updatedAt": datetime.now(timezone.utc)},
+            )
         batch.commit()
         return display_order(stored)
+
+    def list_recent_events(self, since: datetime, *, limit: int = 500) -> list[ApiEvent]:
+        # 単一フィールドの範囲条件だけなら自動索引で済み、composite index は要らない（ADR-002）
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = (
+            self._db.collection(EVENTS)
+            .where(filter=FieldFilter("lastSeenAt", ">=", since))
+            .limit(limit)
+        )
+        return [ApiEvent(**(s.to_dict() or {})) for s in query.stream()]
+
+    def find_events_by_urls(self, normalized_urls: list[str]) -> dict[str, ApiEvent]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        found: dict[str, ApiEvent] = {}
+        urls = list(dict.fromkeys(normalized_urls))
+        # "in" は 30 件まで
+        for start in range(0, len(urls), 30):
+            chunk = urls[start : start + 30]
+            query = self._db.collection(EVENTS).where(
+                filter=FieldFilter("normalizedOfficialUrl", "in", chunk)
+            )
+            for snapshot in query.stream():
+                event = ApiEvent(**(snapshot.to_dict() or {}))
+                found[event.normalized_official_url] = event
+        return found
+
+    def touch_events(self, dedup_keys: list[str], *, last_seen_at: datetime) -> None:
+        if not dedup_keys:
+            return
+        # update() は無い文書で失敗する。merge の set なら無い鍵は空文書を作ってしまうので、
+        # 存在するものだけを1回の get_all で確かめてから更新する
+        refs = [self._db.collection(EVENTS).document(key) for key in dedup_keys]
+        existing = [snap.reference for snap in self._db.get_all(refs) if snap.exists]
+        if not existing:
+            return
+        batch = self._db.batch()
+        for ref in existing:
+            batch.update(ref, {"lastSeenAt": last_seen_at})
+        batch.commit()
+
+    def get_evidence_for_events(self, events: list[ApiEvent]) -> dict[str, list[Evidence]]:
+        refs = []
+        owners: list[tuple[str, str]] = []
+        for event in events:
+            collection = (
+                self._db.collection(RUNS).document(event.source_run_id).collection(EVIDENCE)
+            )
+            for eid in event.evidence_ids:
+                refs.append(collection.document(eid))
+                owners.append((event.event_id, eid))
+        by_event: dict[str, dict[str, Evidence]] = {e.event_id: {} for e in events}
+        if refs:
+            # run を跨いだ参照でも get_all は一度で引ける
+            for snapshot in self._db.get_all(refs):
+                if not snapshot.exists:
+                    continue
+                item = Evidence(**(snapshot.to_dict() or {}))
+                run_id = snapshot.reference.parent.parent.id
+                for event in events:
+                    if event.source_run_id == run_id and item.evidence_id in event.evidence_ids:
+                        by_event[event.event_id][item.evidence_id] = item
+        # 要求順を保つ
+        return {
+            e.event_id: [by_event[e.event_id][eid] for eid in e.evidence_ids if eid in by_event[e.event_id]]
+            for e in events
+        }
+
+    def latest_collection_at(self) -> datetime | None:
+        snapshot = self._db.collection(APP_STATE).document(LATEST_RUN_DOC).get()
+        if not snapshot.exists:
+            return None
+        return (snapshot.to_dict() or {}).get("updatedAt")
 
     def get_event(self, event_id: str) -> ApiEvent | None:
         found = self._where_eq(EVENTS, "eventId", event_id).limit(1).stream()

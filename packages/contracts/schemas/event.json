@@ -132,6 +132,9 @@
         "sourceRunId": { "type": "string", "minLength": 1 },
         "status": { "$ref": "#/$defs/EventLifecycleStatus" },
         "googleCalendarEventIds": { "$ref": "#/$defs/GoogleCalendarEventIds" },
+        "themeId": { "type": ["string", "null"], "description": "収集したテーマ（ADR-008）。手動 Run 由来は null" },
+        "normalizedOfficialUrl": { "type": "string", "description": "officialUrl の正規化形。既知ページの照合キー" },
+        "lastExtractedAt": { "type": ["string", "null"], "format": "date-time", "description": "本文から実際に抽出した最終時刻。lastSeenAt と違い、既知ページの省略では進まない" },
         "evidencePreview": {
           "type": "array",
           "maxItems": 4,
@@ -150,6 +153,8 @@
       "additionalProperties": false,
       "required": ["events"],
       "properties": {
+        "lastCollectedAt": { "type": ["string", "null"], "format": "date-time", "description": "最後に収集が保存された時刻（一覧の「最終収集」表示用）" },
+
         "events": {
           "type": "array",
           "items": { "$ref": "#/$defs/Event" }

@@ -716,6 +716,11 @@ button.next-title:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.collected-at {
+  padding: 6px 0 0;
+  text-align: right;
+}
+
 /* ---------- 一覧の行 ---------- */
 .row {
   border-bottom: 1px solid var(--line);

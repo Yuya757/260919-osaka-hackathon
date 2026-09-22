@@ -174,6 +174,21 @@ class Store(Protocol):
     def list_events(self, source_run_id: str | None = None) -> list[ApiEvent]:
         """Events of one run, or of the most recent run when no id is given."""
 
+    def list_recent_events(self, since: datetime, *, limit: int = 500) -> list[ApiEvent]:
+        """The shared pool (ADR-008): events seen since ``since``, unordered."""
+
+    def find_events_by_urls(self, normalized_urls: list[str]) -> dict[str, ApiEvent]:
+        """Known-page lookup keyed by ``normalizedOfficialUrl``."""
+
+    def touch_events(self, dedup_keys: list[str], *, last_seen_at: datetime) -> None:
+        """Move ``lastSeenAt`` only. Evidence, run id and ``lastExtractedAt`` stay."""
+
+    def get_evidence_for_events(self, events: list[ApiEvent]) -> dict[str, list[Evidence]]:
+        """Evidence for many events in one round trip, keyed by ``eventId``."""
+
+    def latest_collection_at(self) -> datetime | None:
+        """When the most recent run saved its events (``appState/latestRun``)."""
+
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         """Upsert by ``postId`` and return what is now stored."""
 
@@ -203,6 +218,7 @@ class MemoryStore:
         self._events_by_run: dict[str, list[str]] = {}
         self._events_by_dedup_key: dict[str, ApiEvent] = {}
         self._latest_run_id: str | None = None
+        self._latest_saved_at: datetime | None = None
         self._evidence: dict[tuple[str, str], Evidence] = {}
         self._posts: dict[str, OrganizerPost] = {}
 
@@ -214,6 +230,7 @@ class MemoryStore:
             self._events_by_run.clear()
             self._events_by_dedup_key.clear()
             self._latest_run_id = None
+            self._latest_saved_at = None
             self._evidence.clear()
             self._posts.clear()
 
@@ -258,7 +275,10 @@ class MemoryStore:
                 self._events_by_dedup_key[merged.dedup_key] = merged
                 stored.append(merged)
             self._events_by_run[run_id] = [e.dedup_key for e in stored]
-            self._latest_run_id = run_id
+            # 空の保存で「最新の Run」を進めない（検索を省いた Run が一覧を空にしないため）
+            if stored:
+                self._latest_run_id = run_id
+                self._latest_saved_at = datetime.now(timezone.utc)
             return stored
 
     def save_evidence(self, run_id: str, evidence: list[Evidence]) -> None:
@@ -293,6 +313,45 @@ class MemoryStore:
                     if key in self._events_by_dedup_key
                 ]
             )
+
+    def list_recent_events(self, since: datetime, *, limit: int = 500) -> list[ApiEvent]:
+        with self._lock:
+            return [
+                e for e in self._events_by_dedup_key.values() if e.last_seen_at >= since
+            ][:limit]
+
+    def find_events_by_urls(self, normalized_urls: list[str]) -> dict[str, ApiEvent]:
+        wanted = set(normalized_urls)
+        with self._lock:
+            return {
+                e.normalized_official_url: e
+                for e in self._events_by_dedup_key.values()
+                if e.normalized_official_url in wanted
+            }
+
+    def touch_events(self, dedup_keys: list[str], *, last_seen_at: datetime) -> None:
+        with self._lock:
+            for key in dedup_keys:
+                existing = self._events_by_dedup_key.get(key)
+                if existing is not None:
+                    self._events_by_dedup_key[key] = existing.model_copy(
+                        update={"last_seen_at": last_seen_at}
+                    )
+
+    def get_evidence_for_events(self, events: list[ApiEvent]) -> dict[str, list[Evidence]]:
+        with self._lock:
+            return {
+                e.event_id: [
+                    self._evidence[(e.source_run_id, eid)]
+                    for eid in e.evidence_ids
+                    if (e.source_run_id, eid) in self._evidence
+                ]
+                for e in events
+            }
+
+    def latest_collection_at(self) -> datetime | None:
+        with self._lock:
+            return self._latest_saved_at
 
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         with self._lock:

@@ -3,9 +3,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from event_agent.domain.normalize import compute_dedup_key, normalize_title
+from event_agent.domain.normalize import compute_dedup_key, normalize_title, normalize_url
 
 DEMO_USER_ID = "demo-user"
+# テーマ単位の定期収集（ADR-008）は特定のユーザーの Run ではない
+SYSTEM_USER_ID = "system"
 
 from event_agent.clients.ekispert import RouteSummary
 
@@ -142,6 +144,12 @@ class AgentRun(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc), alias="startedAt"
     )
     completed_at: datetime | None = Field(default=None, alias="completedAt")
+    # テーマ単位の定期収集（ADR-008）。手動 Run では None
+    theme_id: str | None = Field(default=None, alias="themeId")
+    # 課金単位の記録（§11.2）。Grounding 検索は 1,000 クエリ単位で課金される
+    grounding_calls: int = Field(default=0, ge=0, alias="groundingCalls")
+    model_calls: int = Field(default=0, ge=0, alias="modelCalls")
+    skipped_known_count: int = Field(default=0, ge=0, alias="skippedKnownCount")
     activity: list[RunActivity] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
@@ -159,6 +167,10 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     demo_mode: bool
     model: str | None = None
+    # 手動の Grounding 探索を受け付けるか（ADR-008）。UI が「探す」の意味を切り替える
+    manual_runs_enabled: bool = Field(default=True, alias="manualRunsEnabled")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class EventLocation(BaseModel):
@@ -331,6 +343,11 @@ class ApiEvent(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc), alias="lastSeenAt"
     )
     source_run_id: str = Field(default="demo", alias="sourceRunId")
+    theme_id: str | None = Field(default=None, alias="themeId")
+    # 既知ページの照合キー。officialUrl から導出する
+    normalized_official_url: str = Field(default="", alias="normalizedOfficialUrl")
+    # 本文から実際に抽出した時刻。既知ページの省略では進まない（ADR-008）
+    last_extracted_at: datetime | None = Field(default=None, alias="lastExtractedAt")
     status: Literal["suggested", "bookmarked", "dismissed"] = "suggested"
     google_calendar_event_ids: GoogleCalendarEventIds = Field(
         default_factory=GoogleCalendarEventIds, alias="googleCalendarEventIds"
@@ -346,6 +363,10 @@ class ApiEvent(BaseModel):
     def _derive(self) -> "ApiEvent":
         if not self.normalized_title:
             object.__setattr__(self, "normalized_title", normalize_title(self.title))
+        if not self.normalized_official_url:
+            object.__setattr__(
+                self, "normalized_official_url", normalize_url(self.official_url)
+            )
         if not self.dedup_key:
             object.__setattr__(
                 self,
@@ -362,6 +383,9 @@ class ApiEvent(BaseModel):
 
 class EventsResponse(BaseModel):
     events: list[ApiEvent]
+    last_collected_at: datetime | None = Field(default=None, alias="lastCollectedAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 # ---------------------------------------------------------------- organizer posts

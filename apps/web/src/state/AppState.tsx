@@ -17,6 +17,7 @@ import {
 import {
   AgentRunPendingError,
   createOrganizerPost,
+  getHealth,
   listEvents,
   listOrganizerPosts,
   pollAgentRun,
@@ -74,6 +75,10 @@ type AppState = {
   startRun: () => Promise<void>
   /** 入力欄の内容をエージェントに送る。Run が始まれば進捗はバナーで追える */
   ask: (message: string) => Promise<void>
+  /** ユーザー起点の Grounding 探索を受け付けるか（ADR-008）。false なら「探す」は並べ替え */
+  manualRunsEnabled: boolean
+  /** 共有プールに最後に収集が保存された時刻 */
+  lastCollectedAt: string | null
   /** 主催者投稿フィード（F-06）。AI 収集の一覧とは別に持つ */
   posts: OrganizerPost[]
   postsState: LoadState
@@ -108,12 +113,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<OrganizerPost[]>([])
   const [postsState, setPostsState] = useState<LoadState>('idle')
   const [postsError, setPostsError] = useState<string | null>(null)
+  const [manualRunsEnabled, setManualRunsEnabled] = useState(true)
+  const [lastCollectedAt, setLastCollectedAt] = useState<string | null>(null)
+
+  useEffect(() => {
+    getHealth()
+      .then((health) => setManualRunsEnabled(health.manualRunsEnabled))
+      .catch(() => {
+        // 取れなければ「探す」は探索扱いのまま。サーバー側が 403 で止める
+      })
+  }, [])
 
   const refresh = useCallback(async (sourceRunId?: string) => {
     setLoadState((current) => (current === 'ready' ? current : 'loading'))
     try {
-      const result = await listEvents(sourceRunId)
+      // 共有プールはセッションの関心条件で採点される
+      const result = await listEvents(sourceRunId, sourceRunId ? undefined : sessionRef.current)
       setEvents(displayable(result.events))
+      setLastCollectedAt(result.lastCollectedAt ?? null)
       setLoadError(null)
       setLoadState('ready')
     } catch (error) {
@@ -202,7 +219,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const trimmed = message.trim()
       if (agentPending) return
       if (!trimmed) {
-        void startRun()
+        // 空なら条件そのまま。探索が許されていなければプールを並べ直すだけ
+        if (manualRunsEnabled) void startRun()
+        else await refresh()
         return
       }
       setAgentPending(true)
@@ -222,7 +241,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           }
           if (action.type === 'events_ready') await refresh()
         }
-        if (!started) void startRun()
+        if (!started) {
+          if (manualRunsEnabled) void startRun()
+          else await refresh()
+        }
       } catch (error) {
         setAgentReply({
           text:
@@ -234,7 +256,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         setAgentPending(false)
       }
     },
-    [agentPending, refresh, startRun],
+    [agentPending, manualRunsEnabled, refresh, startRun],
   )
 
   const toggleSaved = useCallback((eventId: string) => {
@@ -288,6 +310,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       refresh: () => refresh(),
       startRun,
       ask,
+      manualRunsEnabled,
+      lastCollectedAt,
       posts,
       postsState,
       postsError,
@@ -313,6 +337,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       refresh,
       startRun,
       ask,
+      manualRunsEnabled,
+      lastCollectedAt,
       posts,
       postsState,
       postsError,
