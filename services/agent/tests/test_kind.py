@@ -67,6 +67,16 @@ class TestLabelSets:
         assert got is not None and got.value.date().isoformat() == "2026-08-06"
         assert d.deadline_from_fragment("2026年9月24日", fallback_year=None).value.day == 24
 
+    def test_milestone_label_comes_from_the_line(self):
+        """ラベル表は部分一致なので、行の見出しを名前に使う。
+
+        「一次審査結果発表」を「一次審査」と出すと、審査の日と発表の日が
+        入れ替わって見える。
+        """
+        text = "一次審査結果発表: 2026年12月18日\n■ 最終審査会 2027年2月6日"
+        got = d.find_milestones(text, fallback_year=None, kind="contest")
+        assert [label for label, _ in got] == ["一次審査結果発表", "最終審査会"]
+
     def test_milestones_are_collected(self):
         text = "一次選考通過: 2026年11月5日\n最終審査会: 2027年1月10日\n結果発表: 2027年1月20日"
         got = d.find_milestones(text, fallback_year=None, kind="contest")

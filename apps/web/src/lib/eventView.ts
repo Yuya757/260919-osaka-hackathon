@@ -5,7 +5,7 @@
  * タイムゾーンで整形すると、申込締切の時刻がずれて表示される。締切の見落とし
  * を防ぐのがこのプロダクトの目的なので、そのずれは致命的。
  */
-import type { Event, EventLocationType, ValidationStatus } from '../types/api'
+import type { Event, EventLocationType, EventMilestone, ValidationStatus } from '../types/api'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_TZ = 'Asia/Tokyo'
@@ -225,4 +225,20 @@ const KIND_LABEL: Record<string, string> = {
 
 export function kindLabel(kind: string | undefined): string {
   return KIND_LABEL[kind ?? 'hackathon'] ?? 'ハッカソン'
+}
+
+/**
+ * 実施日と同じ日の節目。ビジコンの実施日は「最終審査会」のような節目そのもの
+ * なので、その名前を実施日の行に出し、節目の行からは外す（同じ日を2度並べない）。
+ */
+export function heldMilestone(event: Event): EventMilestone | null {
+  const start = event.dates.eventStart
+  if (!start) return null
+  const at = new Date(start).getTime()
+  return (event.dates.milestones ?? []).find((m) => new Date(m.at).getTime() === at) ?? null
+}
+
+/** 実施日の行の見出し。ハッカソンは「開催日」、種別が違えば「実施日」 */
+export function heldRowLabel(event: Event): string {
+  return heldMilestone(event)?.label ?? (event.kind === 'hackathon' ? '開催日' : '実施日')
 }

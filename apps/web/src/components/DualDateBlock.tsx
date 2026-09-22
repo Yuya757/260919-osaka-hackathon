@@ -11,6 +11,8 @@ import {
   formatDate,
   gapDays,
   heldLabel,
+  heldMilestone,
+  heldRowLabel,
   isUrgent,
   relativeLabel,
 } from '../lib/eventView'
@@ -26,6 +28,8 @@ export function DualDateBlock({ event, size = 'card' }: Props) {
   const unknown = !event.dates.applicationDeadline
   const urgent = isUrgent(event)
   const gap = gapDays(event)
+  const named = heldMilestone(event)
+  const milestones = (event.dates.milestones ?? []).filter((m) => m !== named)
 
   return (
     <div className={`dates dates-${size}`}>
@@ -37,7 +41,7 @@ export function DualDateBlock({ event, size = 'card' }: Props) {
       </div>
       <div className="dates-row is-held">
         <span className="dates-node" aria-hidden="true" />
-        <span className="dates-label">{event.kind === 'contest' ? '実施日' : '開催日'}</span>
+        <span className="dates-label">{heldRowLabel(event)}</span>
         <span className="dates-value">{heldLabel(event)}</span>
         <span className="dates-rel">
           {event.dates.eventStart ? relativeLabel(event.dates.eventStart, 'after', tz) : ''}
@@ -45,7 +49,7 @@ export function DualDateBlock({ event, size = 'card' }: Props) {
       </div>
       {/* 節目（一次選考通過・最終審査会・結果発表など）。詳細だけに出す */}
       {size === 'detail' &&
-        (event.dates.milestones ?? []).map((milestone) => (
+        milestones.map((milestone) => (
           <div className="dates-row is-milestone" key={`${milestone.label}-${milestone.at}`}>
             <span className="dates-node" aria-hidden="true" />
             <span className="dates-label">{milestone.label}</span>
@@ -54,7 +58,9 @@ export function DualDateBlock({ event, size = 'card' }: Props) {
         ))}
       {size === 'detail' && (
         <p className="dates-gap">
-          {gap === null ? '締切が未確認のため間隔を出せません' : `締切から開催まで ${gap} 日`}
+          {gap === null
+            ? '締切が未確認のため間隔を出せません'
+            : `締切から${named?.label ?? (event.kind === 'hackathon' ? '開催' : '実施')}まで ${gap} 日`}
         </p>
       )}
     </div>

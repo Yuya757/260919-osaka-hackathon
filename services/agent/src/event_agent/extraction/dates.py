@@ -206,22 +206,45 @@ def find_application_deadline(
     return None
 
 
+def _milestone_label(line: str, label: str) -> str:
+    """行の見出しをそのまま節目の名前にする。
+
+    ラベル表は部分一致なので、「一次審査結果発表」の行は「一次審査」で当たる。
+    そのまま出すと審査の日か発表の日か分からなくなるため、行の見出し側を使う。
+    日付を含む（＝見出しと値が同じ行に続いている）場合は当たったラベルに戻す。
+    """
+    head = re.split(r"[:：]", line, maxsplit=1)[0].strip(" 　-ー・■●▼▶>【】[]")
+    if label in head and 1 <= len(head) <= 40 and not re.search(r"\d", head):
+        return head
+    return label
+
+
 def find_milestones(
-    text: str, *, fallback_year: int | None, kind: str = "hackathon", limit: int = 5
+    text: str,
+    *,
+    fallback_year: int | None,
+    kind: str = "hackathon",
+    limit: int = 5,
 ) -> list[tuple[str, ParsedDate]]:
-    """節目（一次選考通過、最終審査会、結果発表…）を拾う。値が読めたものだけ。"""
+    """節目（一次選考通過、最終審査会、結果発表…）を拾う。値が読めたものだけ。
+
+    2 軸（締切・実施日）と同じ日になる節目も落とさない。「実施日 = 最終審査会」の
+    ように、その日が何の日かを名前が伝えるため。重ねて見せないのは表示側の仕事。
+    """
     found: list[tuple[str, ParsedDate]] = []
     seen: set[str] = set()
-    for label, rest, _line in find_labelled(text, labels_for(kind).milestones):
+    for label, rest, line in find_labelled(text, labels_for(kind).milestones):
         if label in seen:
             continue
         parsed = parse_date(rest, fallback_year=fallback_year)
-        if parsed is not None:
-            seen.add(label)
-            found.append((label, parsed))
-            if len(found) >= limit:
-                break
-    return found
+        if parsed is None:
+            continue
+        seen.add(label)
+        found.append((_milestone_label(line, label), parsed))
+        if len(found) >= limit:
+            break
+    # 時系列として出すので日付順。本文の並びは節目の順とは限らない
+    return sorted(found, key=lambda pair: pair[1].value)
 
 
 def find_event_dates(

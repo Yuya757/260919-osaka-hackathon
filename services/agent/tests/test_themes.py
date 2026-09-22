@@ -16,14 +16,39 @@ from event_agent.workflows.themes import COLLECTION_THEMES, theme_by_id, theme_f
 def test_themes_map_to_task_indices():
     assert [t.id for t in COLLECTION_THEMES] == [
         "hackathon-kansai", "hackathon-kanto", "hackathon-chubu", "hackathon-online",
+        "contest-kansai", "contest-kanto", "contest-online",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
+    assert theme_for_task_index(6).id == "contest-online"
     with pytest.raises(ValueError):
-        theme_for_task_index(4)
+        theme_for_task_index(len(COLLECTION_THEMES))
     assert theme_by_id("hackathon-kanto").locations == ("関東", "東京")
     assert select_themes(["job"], {"CLOUD_RUN_TASK_INDEX": "2"})[0].id == "hackathon-chubu"
-    assert select_themes(["job", "hackathon-online"], {})[0].id == "hackathon-online"
-    assert len(select_themes(["job"], {})) == 4
+    assert select_themes(["job", "contest-kansai"], {})[0].id == "contest-kansai"
+    assert len(select_themes(["job"], {})) == len(COLLECTION_THEMES)
+
+
+def test_contest_themes_target_contest_kind_and_sites():
+    theme = theme_by_id("contest-kansai")
+    assert theme.kind == "contest" and theme.allowed_kinds == ("contest",)
+    # ビジコンは connpass ではなく公募情報サイトと主催者のページに集まる
+    joined = " ".join(theme.site_queries)
+    assert "koubo.jp" in joined and "connpass" not in joined
+    assert "go.jp" in joined  # 自治体
+
+
+def test_query_plan_differs_by_kind():
+    from datetime import timezone as _tz
+
+    from event_agent.workflows.collect import _plan_queries
+
+    now = FROZEN_NOW.astimezone(_tz.utc)
+    contest = theme_by_id("contest-kansai")
+    hackathon = theme_by_id("hackathon-kansai")
+    assert "応募 締切" in _plan_queries(contest.preferences(now=now), contest)[0]
+    assert "イベント 申込" in _plan_queries(hackathon.preferences(now=now), hackathon)[0]
+    # テーマ無し（手動 Run）は従来どおりハッカソン向けのサイト指名
+    assert "connpass" in " ".join(_plan_queries(hackathon.preferences(now=now)))
 
 
 def test_theme_key_is_daily_and_distinct_from_user_keys():
@@ -91,3 +116,17 @@ async def test_daily_grounding_cap_ends_the_run_as_partial_success(store_backend
     assert run.grounding_calls == 0 and run.candidate_count == 0
     assert any(line.level == "warn" and "検索上限" in line.message for line in run.activity)
     assert store_backend.get_usage("2026-09-21") is None
+
+
+def test_task_count_matches_the_deployed_job():
+    """Cloud Run Job の --tasks はテーマ数と一致していなければならない。
+
+    ずれるとテーマが収集されない（少ない）か、範囲外でタスクが失敗する（多い）。
+    """
+    import pathlib
+    import re
+
+    workflow = pathlib.Path(__file__).resolve().parents[3] / ".github/workflows/deploy-develop.yml"
+    match = re.search(r"--tasks (\d+)", workflow.read_text(encoding="utf-8"))
+    assert match, "deploy-develop.yml に --tasks が見つからない"
+    assert int(match.group(1)) == len(COLLECTION_THEMES)

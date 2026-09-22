@@ -32,7 +32,7 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
   return (
     <div className="activity tone-done" role="status" aria-live="polite">
       <div className="activity-head">
-        <p className="activity-title">{pending ? '収集済みのハッカソンから探しています…' : reply}</p>
+        <p className="activity-title">{pending ? '収集済みのイベントから探しています…' : reply}</p>
       </div>
       <div className="agents">
         {ROLES.map((role) => {

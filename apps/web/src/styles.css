@@ -929,7 +929,9 @@ button.next-title:hover {
   color: var(--faint);
   flex: none;
   white-space: nowrap;
-  width: 4.4em;
+  /* 4 文字の「申込締切」に合わせた幅。節目の名前（「一次審査結果発表」）は
+     これより長いので、固定幅にすると値へ重なる。下限だけを決める */
+  min-width: 4.4em;
 }
 
 .dates-value {
@@ -967,7 +969,7 @@ button.next-title:hover {
 
 .dates-detail .dates-label {
   font-size: 12px;
-  width: 4.5em;
+  min-width: 4.5em;
 }
 
 .dates-detail .dates-value {

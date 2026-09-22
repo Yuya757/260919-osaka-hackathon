@@ -241,8 +241,10 @@ def _displayable(post: OrganizerPost, now: datetime) -> bool:
     event = post.event
     if event.validation_status not in ("verified", "partial"):
         return False
-    end = event.dates.event_end or event.dates.event_start
-    return end >= now
+    # 実施日が書かれない告知（ビジコンなど）は締切を終わりの目安にする。
+    # どちらも無ければ終わったと決められないので、出し続ける（§6.6）。
+    end = event.dates.event_end or event.dates.event_start or event.dates.application_deadline
+    return end is None or end >= now
 
 
 def list_feed(*, now: datetime) -> list[OrganizerPost]:
