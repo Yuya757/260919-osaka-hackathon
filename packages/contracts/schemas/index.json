@@ -75,7 +75,11 @@
         "OrganizerPost",
         "OrganizerPostPreviewResponse",
         "OrganizerPostCreateResponse",
-        "OrganizerPostListResponse"
+        "OrganizerPostListResponse",
+        "MetricCounts",
+        "EventMetrics",
+        "PostMetricsResponse",
+        "MetricEventRequest"
       ]
     },
     {

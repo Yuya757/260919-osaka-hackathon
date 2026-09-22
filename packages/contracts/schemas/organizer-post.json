@@ -73,6 +73,7 @@
         "status",
         "placement",
         "injectionFlags",
+        "organizerConfirmed",
         "createdAt",
         "updatedAt"
       ],
@@ -94,6 +95,8 @@
         "linkedEventId": { "type": ["string", "null"] },
         "linkedDedupKey": { "type": ["string", "null"] },
         "injectionFlags": { "type": "array", "items": { "type": "string" } },
+        "organizerConfirmed": { "type": "boolean", "description": "管理者が主催者の本人性を確認済み（ADR-009）。再投稿で戻らない" },
+        "confirmedAt": { "type": ["string", "null"], "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
@@ -120,6 +123,59 @@
         "post": { "$ref": "#/$defs/OrganizerPost" },
         "warnings": { "type": "array", "items": { "$ref": "#/$defs/PostIssue" } }
       }
+    },
+    "MetricCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clicks", "calendar"],
+      "properties": {
+        "clicks": { "type": "integer", "minimum": 0 },
+        "calendar": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "EventMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "clicks", "calendar", "daily"],
+      "description": "イベント単位の成果計測（ADR-009）。アプリ内のクリックとカレンダー登録を数える",
+      "properties": {
+        "eventId": { "type": "string" },
+        "clicks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["official", "application", "contact"],
+          "properties": {
+            "official": { "type": "integer", "minimum": 0 },
+            "application": { "type": "integer", "minimum": 0 },
+            "contact": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "calendar": { "type": "integer", "minimum": 0 },
+        "daily": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/MetricCounts" },
+          "description": "JST 日付ごとの内訳"
+        },
+        "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "PostMetricsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postId", "eventId", "linkedEventId", "metrics", "linkedMetrics"],
+      "properties": {
+        "postId": { "type": "string" },
+        "eventId": { "type": "string" },
+        "linkedEventId": { "type": ["string", "null"] },
+        "metrics": { "$ref": "#/$defs/EventMetrics" },
+        "linkedMetrics": { "oneOf": [{ "$ref": "#/$defs/EventMetrics" }, { "type": "null" }] }
+      }
+    },
+    "MetricEventRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "type": "string", "enum": ["calendar"] } }
     },
     "OrganizerPostListResponse": {
       "type": "object",

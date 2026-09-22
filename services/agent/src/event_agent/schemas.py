@@ -450,10 +450,55 @@ class OrganizerPost(BaseModel):
     linked_event_id: str | None = Field(default=None, alias="linkedEventId")
     linked_dedup_key: str | None = Field(default=None, alias="linkedDedupKey")
     injection_flags: list[str] = Field(default_factory=list, alias="injectionFlags")
+    # 管理者が主催者の本人性を確認した印（ADR-009）。再投稿で戻らない。ボット投稿は不可
+    organizer_confirmed: bool = Field(default=False, alias="organizerConfirmed")
+    confirmed_at: datetime | None = Field(default=None, alias="confirmedAt")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+# ---------------------------------------------------------------- metrics (ADR-009)
+
+GoKind = Literal["official", "application", "contact"]
+
+
+class MetricCounts(BaseModel):
+    clicks: int = Field(default=0, ge=0)
+    calendar: int = Field(default=0, ge=0)
+
+
+class ClickCounts(BaseModel):
+    official: int = Field(default=0, ge=0)
+    application: int = Field(default=0, ge=0)
+    contact: int = Field(default=0, ge=0)
+
+
+class EventMetrics(BaseModel):
+    """イベント単位の成果計測。アプリ内のクリックとカレンダー登録を数える。`eventMetrics/{eventId}`。"""
+
+    event_id: str = Field(alias="eventId")
+    clicks: ClickCounts = Field(default_factory=ClickCounts)
+    calendar: int = Field(default=0, ge=0)
+    daily: dict[str, MetricCounts] = Field(default_factory=dict)
+    updated_at: datetime | None = Field(default=None, alias="updatedAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class PostMetricsResponse(BaseModel):
+    post_id: str = Field(alias="postId")
+    event_id: str = Field(alias="eventId")
+    linked_event_id: str | None = Field(default=None, alias="linkedEventId")
+    metrics: EventMetrics
+    linked_metrics: EventMetrics | None = Field(default=None, alias="linkedMetrics")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class MetricEventRequest(BaseModel):
+    kind: Literal["calendar"]
 
 
 class OrganizerPostPreviewResponse(BaseModel):

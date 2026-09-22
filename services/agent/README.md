@@ -15,6 +15,19 @@ FastAPI + ADK-style deterministic workflow for event discovery. Uses Vertex AI G
 - `POST /api/organizer-posts/preview` — 主催者投稿の下書き → `{ event|null, linkedEvent|null, issues[] }`。何も保存しない（F-06）
 - `POST /api/organizer-posts` — 投稿を保存 → `201 { post, warnings[] }`。命令様の本文・非公開URLは `400`
 - `GET /api/organizer-posts` — フィード。公開中で開催前の投稿を固定 → 優先 → 新しい順で返す
+- `GET /api/go/{eventId}/{official|application|contact}` — 計測付きリダイレクト（302、utm を付与、ADR-009）
+- `POST /api/events/{eventId}/metrics` — `{ "kind": "calendar" }` を数える（204）
+- `GET /api/organizer-posts/{postId}/metrics` — 投稿の成果（自イベントと結び付いた AI 収集イベント）
+
+## Admin commands
+
+主催者確認・PR 枠・非表示は認証が無い間、管理者が手で行う（ADR-009）:
+
+```bash
+FIRESTORE_ENABLED=true GCP_PROJECT_ID=osaka-hackathon-260919 PYTHONPATH=src \
+  python -m event_agent.entrypoints.admin confirm <postId>
+# pin <postId> --until 2026-10-15 / unpin / hide / show / metrics
+```
 
 ## Local run (WSL)
 

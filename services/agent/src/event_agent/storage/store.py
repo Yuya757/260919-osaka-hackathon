@@ -29,6 +29,8 @@ from event_agent.schemas import (
     AgentRun,
     ApiEvent,
     Evidence,
+    EventMetrics,
+    MetricCounts,
     OrganizerPost,
     PostPlacement,
     UserPreferences,
@@ -96,19 +98,45 @@ def merge_saved_post(incoming: OrganizerPost, existing: OrganizerPost | None) ->
             "created_at": existing.created_at,
             "status": existing.status,
             "placement": existing.placement,
+            # 主催者確認は管理者の判断。再投稿やボットの再投稿で戻らない（ADR-009）
+            "organizer_confirmed": existing.organizer_confirmed,
+            "confirmed_at": existing.confirmed_at,
         }
     )
 
 
 def _with_state(
-    post: OrganizerPost, *, status: str | None, placement: PostPlacement | None
+    post: OrganizerPost,
+    *,
+    status: str | None,
+    placement: PostPlacement | None,
+    organizer_confirmed: bool | None = None,
+    now: datetime | None = None,
 ) -> OrganizerPost:
-    update: dict[str, object] = {"updated_at": datetime.now(timezone.utc)}
+    now = now or datetime.now(timezone.utc)
+    update: dict[str, object] = {"updated_at": now}
     if status is not None:
         update["status"] = status
     if placement is not None:
         update["placement"] = placement
+    if organizer_confirmed is not None:
+        update["organizer_confirmed"] = organizer_confirmed
+        update["confirmed_at"] = now if organizer_confirmed else None
     return post.model_copy(update=update)
+
+
+def _bump_metrics(current: EventMetrics | None, event_id: str, kind: str, *, jst_date: str, now: datetime) -> EventMetrics:
+    """メモリ側の加算。Firestore 側は Increment で同じ形にする。"""
+    metrics = current or EventMetrics(eventId=event_id)
+    day = metrics.daily.get(jst_date, MetricCounts())
+    if kind == "calendar":
+        metrics = metrics.model_copy(update={"calendar": metrics.calendar + 1})
+        day = day.model_copy(update={"calendar": day.calendar + 1})
+    else:
+        clicks = metrics.clicks.model_copy(update={kind: getattr(metrics.clicks, kind) + 1})
+        metrics = metrics.model_copy(update={"clicks": clicks})
+        day = day.model_copy(update={"clicks": day.clicks + 1})
+    return metrics.model_copy(update={"daily": {**metrics.daily, jst_date: day}, "updated_at": now})
 
 
 _PLACEMENT_RANK = {"pinned": 0, "priority": 1, "normal": 2}
@@ -203,10 +231,17 @@ class Store(Protocol):
         *,
         status: str | None = None,
         placement: PostPlacement | None = None,
+        organizer_confirmed: bool | None = None,
+        now: datetime | None = None,
     ) -> OrganizerPost | None:
-        """Moderation and sponsorship state. The only way to change either:
-        a re-submitted post keeps them (see :func:`merge_saved_post`). No API
-        exposes this yet (ADR-006)."""
+        """Moderation, sponsorship and confirmation state. The only way to change
+        any of them: a re-submitted post keeps them (see :func:`merge_saved_post`).
+        Reached through ``entrypoints/admin.py``, not the public API (ADR-009)."""
+
+    def increment_event_metric(self, event_id: str, kind: str, *, jst_date: str) -> None:
+        """Count one click (official/application/contact) or calendar registration."""
+
+    def get_event_metrics(self, event_id: str) -> EventMetrics | None: ...
 
 
 class MemoryStore:
@@ -221,6 +256,7 @@ class MemoryStore:
         self._latest_saved_at: datetime | None = None
         self._evidence: dict[tuple[str, str], Evidence] = {}
         self._posts: dict[str, OrganizerPost] = {}
+        self._metrics: dict[str, EventMetrics] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -233,6 +269,7 @@ class MemoryStore:
             self._latest_saved_at = None
             self._evidence.clear()
             self._posts.clear()
+            self._metrics.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -373,14 +410,32 @@ class MemoryStore:
         *,
         status: str | None = None,
         placement: PostPlacement | None = None,
+        organizer_confirmed: bool | None = None,
+        now: datetime | None = None,
     ) -> OrganizerPost | None:
         with self._lock:
             existing = self._posts.get(post_id)
             if existing is None:
                 return None
-            updated = _with_state(existing, status=status, placement=placement)
+            updated = _with_state(
+                existing,
+                status=status,
+                placement=placement,
+                organizer_confirmed=organizer_confirmed,
+                now=now,
+            )
             self._posts[post_id] = updated
             return updated
+
+    def increment_event_metric(self, event_id: str, kind: str, *, jst_date: str) -> None:
+        with self._lock:
+            self._metrics[event_id] = _bump_metrics(
+                self._metrics.get(event_id), event_id, kind, jst_date=jst_date, now=datetime.now(timezone.utc)
+            )
+
+    def get_event_metrics(self, event_id: str) -> EventMetrics | None:
+        with self._lock:
+            return self._metrics.get(event_id)
 
 
 def create_store() -> Store:

@@ -9,6 +9,7 @@ Collection layout, taken from the data requirements:
 ``sessions/{hash(sessionId)}``              chat session state
 ``appState/latestRun``                      pointer used by ``list_events(None)``
 ``organizerPosts/{postId}``                 F-06 organizer post (ADR-006)
+``eventMetrics/{eventId}``                  clicks and calendar registrations (ADR-009)
 
 Two of those collections are not in §7. ``agentRunKeys`` exists because §9.3
 requires a manual run to be idempotent on the client's ``Idempotency-Key``, and
@@ -35,6 +36,7 @@ from event_agent.schemas import (
     AgentRun,
     ApiEvent,
     Evidence,
+    EventMetrics,
     OrganizerPost,
     PostPlacement,
     UserPreferences,
@@ -55,6 +57,7 @@ SESSIONS = "sessions"
 APP_STATE = "appState"
 LATEST_RUN_DOC = "latestRun"
 ORGANIZER_POSTS = "organizerPosts"
+EVENT_METRICS = "eventMetrics"
 
 
 def _path_id(raw: str) -> str:
@@ -103,7 +106,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -377,13 +380,45 @@ class FirestoreStore:
         *,
         status: str | None = None,
         placement: PostPlacement | None = None,
+        organizer_confirmed: bool | None = None,
+        now: datetime | None = None,
     ) -> OrganizerPost | None:
         ref = self._db.collection(ORGANIZER_POSTS).document(post_id)
         snapshot = ref.get()
         if not snapshot.exists:
             return None
         updated = _with_state(
-            OrganizerPost(**(snapshot.to_dict() or {})), status=status, placement=placement
+            OrganizerPost(**(snapshot.to_dict() or {})),
+            status=status,
+            placement=placement,
+            organizer_confirmed=organizer_confirmed,
+            now=now,
         )
         ref.set(_dump(updated))
         return updated
+
+    # ---------------------------------------------------------------- metrics
+
+    def increment_event_metric(self, event_id: str, kind: str, *, jst_date: str) -> None:
+        from google.cloud import firestore
+
+        # read-then-write を避け、Increment だけで加算する。無ければ merge で作られる
+        top = {"calendar": firestore.Increment(1)} if kind == "calendar" else {
+            "clicks": {kind: firestore.Increment(1)}
+        }
+        day = {"calendar": firestore.Increment(1)} if kind == "calendar" else {"clicks": firestore.Increment(1)}
+        self._db.collection(EVENT_METRICS).document(event_id).set(
+            {
+                "eventId": event_id,
+                **top,
+                "daily": {jst_date: day},
+                "updatedAt": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+
+    def get_event_metrics(self, event_id: str) -> EventMetrics | None:
+        snapshot = self._db.collection(EVENT_METRICS).document(event_id).get()
+        if not snapshot.exists:
+            return None
+        return EventMetrics(**(snapshot.to_dict() or {}))
