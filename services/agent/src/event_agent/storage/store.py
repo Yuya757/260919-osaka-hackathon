@@ -33,6 +33,7 @@ from event_agent.schemas import (
     MetricCounts,
     OrganizerPost,
     PostPlacement,
+    UsageRecord,
     UserPreferences,
 )
 
@@ -243,6 +244,18 @@ class Store(Protocol):
 
     def get_event_metrics(self, event_id: str) -> EventMetrics | None: ...
 
+    def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
+        """Claim ``count`` searches against the day's cap (ADR-008 決定5).
+
+        Atomic: two runs cannot both succeed past the cap. Returns False and
+        reserves nothing when the cap would be exceeded.
+        """
+
+    def record_model_calls(self, day: str, count: int) -> None:
+        """Add text-generation calls to the day's usage. Not capped here."""
+
+    def get_usage(self, day: str) -> UsageRecord | None: ...
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -257,6 +270,7 @@ class MemoryStore:
         self._evidence: dict[tuple[str, str], Evidence] = {}
         self._posts: dict[str, OrganizerPost] = {}
         self._metrics: dict[str, EventMetrics] = {}
+        self._usage: dict[str, UsageRecord] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -270,6 +284,7 @@ class MemoryStore:
             self._evidence.clear()
             self._posts.clear()
             self._metrics.clear()
+            self._usage.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -389,6 +404,33 @@ class MemoryStore:
     def latest_collection_at(self) -> datetime | None:
         with self._lock:
             return self._latest_saved_at
+
+    def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
+        with self._lock:
+            current = self._usage.get(day) or UsageRecord(day=day)
+            if current.grounding_calls + count > cap:
+                return False
+            self._usage[day] = current.model_copy(
+                update={
+                    "grounding_calls": current.grounding_calls + count,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
+            return True
+
+    def record_model_calls(self, day: str, count: int) -> None:
+        with self._lock:
+            current = self._usage.get(day) or UsageRecord(day=day)
+            self._usage[day] = current.model_copy(
+                update={
+                    "model_calls": current.model_calls + count,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
+
+    def get_usage(self, day: str) -> UsageRecord | None:
+        with self._lock:
+            return self._usage.get(day)
 
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         with self._lock:

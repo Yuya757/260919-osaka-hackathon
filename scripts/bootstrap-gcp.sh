@@ -11,6 +11,10 @@ WIF_POOL="${WIF_POOL:-github-pool}"
 WIF_PROVIDER="${WIF_PROVIDER:-github-provider}"
 DEPLOYER_SA="${DEPLOYER_SA:-github-deployer}"
 RUNTIME_SA="${RUNTIME_SA:-event-agent-runtime}"
+SCHEDULER_SA="${SCHEDULER_SA:-event-agent-scheduler}"
+# 月額予算のアラート（ADR-008 決定6）。請求アカウントの通貨に合わせる
+BUDGET_AMOUNT="${BUDGET_AMOUNT:-10000}"
+BUDGET_CURRENCY="${BUDGET_CURRENCY:-JPY}"
 FIRESTORE_DATABASE="${FIRESTORE_DATABASE:-(default)}"
 
 active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
@@ -34,6 +38,7 @@ gcloud config set run/region "${REGION}" >/dev/null
 
 apis=(
   aiplatform.googleapis.com
+  billingbudgets.googleapis.com
   artifactregistry.googleapis.com
   cloudbuild.googleapis.com
   cloudresourcemanager.googleapis.com
@@ -90,6 +95,9 @@ create_service_account() {
 
 create_service_account "${DEPLOYER_SA}" "GitHub Actions deployer"
 create_service_account "${RUNTIME_SA}" "Event Agent runtime"
+# Cloud Scheduler が Cloud Run Job を起動するときの身元。Job への run.invoker は
+# deploy ワークフローが付ける
+create_service_account "${SCHEDULER_SA}" "Event Agent scheduler"
 
 deployer_roles=(
   roles/artifactregistry.writer
@@ -131,6 +139,32 @@ gcloud iam service-accounts add-iam-policy-binding \
   --role="roles/iam.serviceAccountUser" \
   --project="${PROJECT_ID}" \
   --quiet >/dev/null
+
+# Scheduler ジョブに --oauth-service-account-email を付けるには、deployer が
+# その SA を actAs できる必要がある
+gcloud iam service-accounts add-iam-policy-binding \
+  "${SCHEDULER_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --member="serviceAccount:${DEPLOYER_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser" \
+  --project="${PROJECT_ID}" \
+  --quiet >/dev/null
+
+# 月額予算のアラート（50 / 90 / 100%）。請求アカウントの Costs Manager 権限が要る。
+# 通知先は既定（請求管理者へのメール）。既にあれば作らない
+budget_name="event-agent monthly ${PROJECT_ID}"
+project_number="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+if ! gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" \
+    --filter="displayName='${budget_name}'" --format='value(name)' 2>/dev/null | grep -q .; then
+  gcloud billing budgets create \
+    --billing-account="${BILLING_ACCOUNT}" \
+    --display-name="${budget_name}" \
+    --budget-amount="${BUDGET_AMOUNT}${BUDGET_CURRENCY}" \
+    --filter-projects="projects/${project_number}" \
+    --threshold-rule=percent=0.5 \
+    --threshold-rule=percent=0.9 \
+    --threshold-rule=percent=1.0 \
+    || echo "WARN: budget alert not created (needs Billing Account Costs Manager on ${BILLING_ACCOUNT})" >&2
+fi
 
 if ! gcloud iam workload-identity-pools describe "${WIF_POOL}" \
   --location=global --project="${PROJECT_ID}" >/dev/null 2>&1; then

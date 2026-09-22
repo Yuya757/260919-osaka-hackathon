@@ -244,15 +244,42 @@ async def test_a_retried_post_does_not_start_a_second_run(store_backend) -> None
 @pytest.mark.asyncio
 async def test_the_job_claims_the_day_and_a_retry_exits_zero(store_backend) -> None:
     """A retried Cloud Run Job execution must exit 0 without collecting again."""
-    from event_agent.entrypoints.job import collect_for_user
+    from event_agent.entrypoints.job import collect_theme
+    from event_agent.workflows.collect import run_theme_collection
+    from event_agent.workflows.themes import theme_by_id
 
-    assert await collect_for_user("job-user") == 0
+    theme = theme_by_id("hackathon-kansai")
+    assert await collect_theme(theme) == 0
 
-    # The job derives its key from today's JST date, so a scheduled call for the
-    # same day now finds it taken. That is what the retry relies on.
-    run, started = await run_daily_collection(preferences(), user_id="job-user")
+    # The job derives its key from today's JST date and the theme, so a
+    # scheduled call for the same day now finds it taken. That is what the
+    # retry relies on.
+    run, started = await run_theme_collection(theme)
     assert started is False
     assert run.trigger_type == "scheduled"
+    assert run.theme_id == "hackathon-kansai"
     assert run.status in ("succeeded", "partial_success")
 
-    assert await collect_for_user("job-user") == 0
+    assert await collect_theme(theme) == 0
+
+
+# ---- 課金単位の分計と日次上限 ----
+
+def test_call_budget_counts_grounding_and_text_separately() -> None:
+    from event_agent.clients.gemini import _CallBudget
+
+    budget = _CallBudget(limit=3)
+    assert budget.take("grounding") and budget.take("text") and budget.take("grounding")
+    assert not budget.take("text")
+    assert (budget.grounding_used, budget.text_used, budget.used) == (2, 1, 3)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reservations_never_exceed_the_cap(store_backend) -> None:
+    import asyncio
+
+    results = await asyncio.gather(
+        *(asyncio.to_thread(store_backend.reserve_grounding_calls, "2026-09-21", 4, cap=16) for _ in range(8))
+    )
+    assert sum(results) == 4
+    assert store_backend.get_usage("2026-09-21").grounding_calls == 16

@@ -177,7 +177,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const finished = await pollAgentRun(created.runId, (progress) => setRun(progress))
       setRun(finished)
       if (finished.status !== 'failed') {
-        await refresh(finished.runId)
+        // Run の結果だけでなく共有プール全体（ADR-008）を関心順で取り直す
+        await refresh()
         // Run の save ステップでボット投稿が流れるので、フィードも取り直す
         await refreshPosts()
       }

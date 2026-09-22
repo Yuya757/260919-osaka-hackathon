@@ -330,8 +330,10 @@ async def search_pool(query: str, session_id: str | None, *, now: datetime | Non
         }
     )
     store.save_session(session)
-    # 日次の usage への記録は ADR-008 A2（usage/{jstDate}）が入ってから繋ぐ
     calls = gemini_client.calls_used
+    if calls:
+        # 日次の使用量（ADR-008 決定5）。検索は使わないので生成回数だけ
+        store.record_model_calls(now.astimezone(JST).date().isoformat(), calls)
 
     reply = (
         f"「{_describe(intent)}」で {len(ranked)} 件見つかりました。"

@@ -431,6 +431,21 @@ class TestPool:
         assert store.list_events() and store.list_events()[0].event_id == "evt-1"
 
 
+class TestUsage:
+    def test_reservation_is_capped_per_day(self, store):
+        assert store.get_usage("2026-09-21") is None
+        assert store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert not store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert store.get_usage("2026-09-21").grounding_calls == 8
+        # 別の日は別の枠
+        assert store.reserve_grounding_calls("2026-09-22", 4, cap=10)
+        store.record_model_calls("2026-09-21", 3)
+        store.record_model_calls("2026-09-21", 2)
+        usage = store.get_usage("2026-09-21")
+        assert usage.model_calls == 5 and usage.grounding_calls == 8
+
+
 class TestOrganizerPosts:
     def test_round_trip_keeps_nested_models(self, store):
         saved = store.save_organizer_post(make_post())

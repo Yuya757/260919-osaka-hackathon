@@ -21,15 +21,27 @@ logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 
 @dataclass
 class _CallBudget:
-    """§9.2「Gemini呼び出し: 1 Run最大15回」の残数。"""
+    """§9.2「Gemini呼び出し: 1 Run最大15回」の残数。
+
+    Grounding 検索とテキスト生成を分けて数える。課金単位が違う（検索は
+    1,000 クエリ単位、生成はトークン単位）ので、Run の記録にも分けて残す（§11.2）。
+    """
 
     limit: int
-    used: int = 0
+    grounding_used: int = 0
+    text_used: int = 0
 
-    def take(self) -> bool:
+    @property
+    def used(self) -> int:
+        return self.grounding_used + self.text_used
+
+    def take(self, kind: str = "text") -> bool:
         if self.used >= self.limit:
             return False
-        self.used += 1
+        if kind == "grounding":
+            self.grounding_used += 1
+        else:
+            self.text_used += 1
         return True
 
 
@@ -84,13 +96,23 @@ class GeminiClient:
         budget = _call_budget.get()
         return budget.used if budget else 0
 
-    def _take_call(self) -> bool:
+    @property
+    def grounding_calls_used(self) -> int:
+        budget = _call_budget.get()
+        return budget.grounding_used if budget else 0
+
+    @property
+    def text_calls_used(self) -> int:
+        budget = _call_budget.get()
+        return budget.text_used if budget else 0
+
+    def _take_call(self, kind: str = "text") -> bool:
         budget = _call_budget.get()
         if budget is None:
             # 単体呼び出しなど、Runの外から使われた場合。
             budget = _CallBudget(settings.max_model_calls)
             _call_budget.set(budget)
-        return budget.take()
+        return budget.take(kind)
 
     async def generate_text(
         self, prompt: str, system: str | None = None, *, thinking: bool = False
@@ -136,7 +158,7 @@ class GeminiClient:
         pages (まとめ記事など). Both are search-side filters, so they cost no
         extra model calls.
         """
-        if not self._client or not self._take_call():
+        if not self._client or not self._take_call("grounding"):
             return []
         try:
             from google.genai import types

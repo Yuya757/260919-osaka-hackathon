@@ -39,6 +39,7 @@ from event_agent.schemas import (
     EventMetrics,
     OrganizerPost,
     PostPlacement,
+    UsageRecord,
     UserPreferences,
 )
 from event_agent.storage.store import (
@@ -58,6 +59,7 @@ APP_STATE = "appState"
 LATEST_RUN_DOC = "latestRun"
 ORGANIZER_POSTS = "organizerPosts"
 EVENT_METRICS = "eventMetrics"
+USAGE = "usage"
 
 
 def _path_id(raw: str) -> str:
@@ -106,7 +108,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -422,3 +424,62 @@ class FirestoreStore:
         if not snapshot.exists:
             return None
         return EventMetrics(**(snapshot.to_dict() or {}))
+
+    # ------------------------------------------------------------------ usage
+
+    def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
+        from google.cloud import firestore
+
+        ref = self._db.collection(USAGE).document(day)
+
+        @firestore.transactional
+        def claim(transaction: Any) -> bool:
+            snapshot = ref.get(transaction=transaction)
+            current = UsageRecord(**(snapshot.to_dict() or {"day": day})) if snapshot.exists else UsageRecord(day=day)
+            if current.grounding_calls + count > cap:
+                return False
+            transaction.set(
+                ref,
+                _dump(
+                    current.model_copy(
+                        update={
+                            "grounding_calls": current.grounding_calls + count,
+                            "updated_at": datetime.now(timezone.utc),
+                        }
+                    )
+                ),
+            )
+            return True
+
+        # 同時に予約が集中すると、クライアントの再試行（既定 5 回）を使い切って
+        # 例外になることがある。少し待って何度か試し、それでも駄目なら「予約できず」
+        # として検索を見送る（過大に検索するより安全側）
+        import time
+
+        for attempt in range(5):
+            try:
+                return bool(claim(self._db.transaction()))
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 4:
+                    logger.warning("grounding reservation gave up for %s: %s", day, exc)
+                    return False
+                time.sleep(0.05 * (attempt + 1))
+        return False
+
+    def record_model_calls(self, day: str, count: int) -> None:
+        from google.cloud import firestore
+
+        self._db.collection(USAGE).document(day).set(
+            {
+                "day": day,
+                "modelCalls": firestore.Increment(count),
+                "updatedAt": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+
+    def get_usage(self, day: str) -> UsageRecord | None:
+        snapshot = self._db.collection(USAGE).document(day).get()
+        if not snapshot.exists:
+            return None
+        return UsageRecord(**(snapshot.to_dict() or {}))

@@ -129,9 +129,9 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy the daily collection Cloud Run Job
-        # §14 Phase 2 の定期収集。Cloud Scheduler はまだ作っていないので、この
-        # Job は手動実行（gcloud run jobs execute）でしか動かない。ADR-003 参照。
-        # --max-retries 0 は意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
+        # §14 Phase 2 の定期収集（ADR-008）。1 タスク 1 テーマで 4 タスク。
+        # --parallelism 1 は意図的: 同時に走ると同じページを二重に抽出する。
+        # --max-retries 0 も意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
         # 落ちた実行の再開はしないため、自動リトライは同じ日を再収集せずに
         # 成功終了してしまう。失敗は気づけるほうがよい。
         run: |
@@ -142,10 +142,39 @@ jobs:
             --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --command=python \
             --args="-m,event_agent.entrypoints.job" \
+            --tasks 4 \
+            --parallelism 1 \
             --max-retries 0 \
-            --task-timeout 300s \
+            --task-timeout 600s \
             --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-3.8-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true" \
             --quiet
+
+      - name: Let the scheduler service account run the job
+        run: |
+          gcloud run jobs add-iam-policy-binding event-agent-daily \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --member "serviceAccount:event-agent-scheduler@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --role roles/run.invoker \
+            --quiet >/dev/null
+
+      - name: Schedule the job every morning at 07:00 JST
+        # 毎朝 07:00 JST（§8-4）。Cloud Scheduler が Cloud Run Jobs API の :run を
+        # 叩く。作成済みなら update で設定を揃える（冪等）。
+        run: |
+          URI="https://run.googleapis.com/v2/projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION }}/jobs/event-agent-daily:run"
+          SA="event-agent-scheduler@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
+          COMMON=(--location "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}"
+                  --schedule "0 7 * * *" --time-zone "Asia/Tokyo"
+                  --uri "$URI" --http-method POST
+                  --oauth-service-account-email "$SA"
+                  --description "毎朝のテーマ単位イベント収集（ADR-008）")
+          if gcloud scheduler jobs describe event-agent-daily-0700 \
+               --location "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            gcloud scheduler jobs update http event-agent-daily-0700 "${COMMON[@]}" --quiet
+          else
+            gcloud scheduler jobs create http event-agent-daily-0700 "${COMMON[@]}" --quiet
+          fi
 
   web:
     name: Build and deploy web demo
