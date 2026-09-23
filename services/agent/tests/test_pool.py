@@ -67,3 +67,15 @@ def test_manual_runs_can_be_disabled(store_backend, monkeypatch):
         assert "agent_run_started" not in kinds
         assert "events_ready" in kinds
         assert "並べ替え" in chat["reply"]
+
+
+@pytest.mark.asyncio
+async def test_pool_leaves_out_paused_kinds(store_backend):
+    """補助金などは収集を止めても過去の分がプールに残る。一覧には出さない。"""
+    from event_agent.workflows.collect import run_theme_collection
+    from event_agent.workflows.pool import candidates
+    from event_agent.workflows.themes import theme_by_id
+
+    await run_theme_collection(theme_by_id("subsidy-dx"), now=FROZEN_NOW)
+    assert any(e.kind == "subsidy" for e in store_backend.list_events())
+    assert all(e.kind in ("hackathon", "contest") for e in candidates(now=FROZEN_NOW))
