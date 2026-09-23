@@ -89,6 +89,12 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         online_only=False, kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
         lead_query="応募 締切",
     ),
+)
+
+# 一旦止めているテーマ。補助金・アクセラ・共創は一覧のノイズになったため、定期収集は
+# ハッカソンとビジコンだけにした。定義は残し、戻すときは COLLECTION_THEMES へ移す。
+# theme_by_id では引けるので、手動の再収集やテストはそのまま使える
+PAUSED_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme(
         "accelerator-kansai", "アクセラレータープログラム", ("関西", "大阪", "京都", "神戸"),
         kind="accelerator", allowed_kinds=("accelerator", "cocreation"),
@@ -144,7 +150,7 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     ),
 )
 
-_BY_ID = {theme.id: theme for theme in COLLECTION_THEMES}
+_BY_ID = {theme.id: theme for theme in COLLECTION_THEMES + PAUSED_THEMES}
 
 
 def search_themes() -> tuple[CollectionTheme, ...]:

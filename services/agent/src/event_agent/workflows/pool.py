@@ -15,6 +15,11 @@ from event_agent.schemas import ApiEvent, Evidence, Recommendation, UserPreferen
 from event_agent.storage.store import store
 
 
+# 一覧に出す種別。補助金などは収集を止めても過去の分がプールに残るため、読み出しでも絞る
+# （themes.PAUSED_THEMES と対）
+SHOWN_KINDS = ("hackathon", "contest")
+
+
 def _finished(event: ApiEvent, now: datetime) -> bool:
     # 実施日が無い告知（ビジコン・補助金）は締切で判断する
     end = event.dates.event_end or event.dates.event_start or event.dates.application_deadline
@@ -22,12 +27,14 @@ def _finished(event: ApiEvent, now: datetime) -> bool:
 
 
 def candidates(*, now: datetime) -> list[ApiEvent]:
-    """一覧に出してよいプール: 期間内に見た、表示可能で、まだ終わっていないイベント。"""
+    """一覧に出してよいプール: 期間内に見た、表示可能で、対象の種別で、まだ終わっていないイベント。"""
     since = now - timedelta(days=settings.pool_window_days)
     return [
         e
         for e in store.list_recent_events(since)
-        if e.validation_status in ("verified", "partial") and not _finished(e, now)
+        if e.validation_status in ("verified", "partial")
+        and e.kind in SHOWN_KINDS
+        and not _finished(e, now)
     ]
 
 
