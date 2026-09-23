@@ -1,7 +1,8 @@
 """駅すぱあと API client for event route search.
 
-Only two endpoints are used, both read-only and pinned to a fixed host:
+Only three endpoints are used, all read-only and pinned to a fixed host:
 - /station/light        : station name -> station code
+- /address/station      : venue address -> nearest stations (no geocoding needed)
 - /search/course/extreme: route search with arrival-time constraint
 
 Responses are treated as untrusted data and reduced to a small typed summary.
@@ -10,6 +11,8 @@ Responses are treated as untrusted data and reduced to a small typed summary.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
@@ -95,6 +98,79 @@ def _parse_datetime(value: Any) -> datetime | None:
         return None
 
 
+_POSTAL = re.compile(r"〒?\s*\d{3}-\d{4}")
+_BANCHI = re.compile(r"(\d+)\s*(?:丁目|番地|番|号)")
+
+
+# 告知は都道府県を省いて「大阪市…」と書くことが多いが、駅すぱあとの住所検索は
+# それを解釈できない（「住所が存在しないか、解釈できない住所です」）。
+# 市名から都道府県を補うための表。政令指定都市と県庁所在地くらいで足りる。
+_PREFECTURE_BY_CITY: dict[str, str] = {
+    "札幌市": "北海道", "仙台市": "宮城県", "さいたま市": "埼玉県", "千葉市": "千葉県",
+    "横浜市": "神奈川県", "川崎市": "神奈川県", "相模原市": "神奈川県",
+    "新潟市": "新潟県", "静岡市": "静岡県", "浜松市": "静岡県", "名古屋市": "愛知県",
+    "京都市": "京都府", "大阪市": "大阪府", "堺市": "大阪府", "神戸市": "兵庫県",
+    "岡山市": "岡山県", "広島市": "広島県", "北九州市": "福岡県", "福岡市": "福岡県",
+    "熊本市": "熊本県", "金沢市": "石川県", "長野市": "長野県", "岐阜市": "岐阜県",
+    "奈良市": "奈良県", "大津市": "滋賀県", "和歌山市": "和歌山県", "那覇市": "沖縄県",
+}
+# 「都島区」のように区名に「都」が入るので、正規表現ではなく実際の名前で判定する
+_PREFECTURES = (
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県",
+    "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県", "新潟県", "富山県",
+    "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県", "三重県",
+    "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県", "鳥取県", "島根県",
+    "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県",
+    "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+)
+
+
+def with_prefecture(address: str) -> str | None:
+    """都道府県が無い住所に補う。補えないときは None。"""
+    if not address or address.startswith(_PREFECTURES):
+        return None
+    for city, prefecture in _PREFECTURE_BY_CITY.items():
+        if address.startswith(city):
+            return f"{prefecture}{address}"
+    return None
+
+
+def normalize_address(address: str) -> str:
+    """住所検索に渡す形に整える。
+
+    ドキュメントの例は「東京都杉並区高円寺北2,500」で、丁目・番・号の漢字は
+    入っていない。実際、漢字混じりのまま渡すと 400 が返る。
+    郵便番号と、番地より後ろのビル名・階数も落とす。
+    """
+    text = unicodedata.normalize("NFKC", address)
+    text = _POSTAL.sub("", text).strip()
+    text = _BANCHI.sub(r"\1-", text)
+    text = re.sub(r"-{2,}", "-", text)
+    # 「…1-1-3 グランフロント大阪 3F」→「…1-1-3」。番地の後ろはビル名で住所ではない
+    kept: list[str] = []
+    seen_number = False
+    for token in text.split():
+        has_number = any(char.isdigit() for char in token)
+        if seen_number and not has_number:
+            break
+        kept.append(token)
+        seen_number = seen_number or has_number
+    return " ".join(kept).strip(" 　-")
+
+
+def _error_detail(response: httpx.Response) -> str:
+    """エラー応答から API のメッセージだけを取り出す。URL やキーは含めない。"""
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    error = (payload or {}).get("ResultSet", {}).get("Error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return ""
+    message = str(error.get("Message") or error.get("code") or "").strip()
+    return f": {message[:200]}" if message else ""
+
+
 def _validate_station_name(name: str) -> str:
     cleaned = name.strip()
     if not cleaned or len(cleaned) > _MAX_STATION_NAME_LENGTH:
@@ -124,9 +200,17 @@ class EkispertClient:
                 response = await client.get(url, params=query)
             except httpx.TransportError as exc:
                 # The upstream occasionally drops the first connection; retry once.
+                # 例外そのものは出さない（文面に URL とキーが入る）
                 logger.info("ekispert transport error on %s (%s); retrying", path, type(exc).__name__)
                 response = await client.get(url, params=query)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            # httpx の例外文にはクエリ文字列つきの URL が入る。そこにアクセスキーが
+            # 載っているので、例外に URL を混ぜない（§10.1）。原因が分からないと
+            # 直せないので、応答本文のエラー文言だけは拾う（URL は入らない）。
+            raise EkispertError(
+                f"駅すぱあと API がエラーを返しました（HTTP {response.status_code}）"
+                f"{_error_detail(response)}"
+            )
         payload = response.json()
         result = payload.get("ResultSet") if isinstance(payload, dict) else None
         if not isinstance(result, dict):
@@ -169,6 +253,87 @@ class EkispertClient:
         with self._lock:
             self._station_cache[cleaned] = (now, chosen)
         return chosen
+
+    async def find_station_near_address(
+        self, address: str, *, radius_m: int = 3000
+    ) -> Station | None:
+        """住所テキストから最寄駅を引く（`/address/station`）。
+
+        駅すぱあとが住所を解釈してくれるので、ジオコーディングは要らない。
+        返るのは駅と直線距離（メートル）で、いちばん近いものを採る。
+
+        これは補助であって、失敗しても経路検索そのものは続けられる（利用者に
+        到着駅を入力してもらう）。プランに含まれない・住所を解釈できないなど、
+        どの失敗でも None を返して呼び出し側に判断させる。
+        """
+        cleaned = address.strip()
+        if not cleaned:
+            return None
+        cache_key = f"addr:{cleaned}:{radius_m}"
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            cached = self._station_cache.get(cache_key)
+            if cached and now - cached[0] < _CACHE_TTL:
+                return cached[1]
+
+        # 書式で弾かれることがあるので、整えた形 → 素の形の順に 1 回ずつ試す
+        attempts: list[dict[str, str]] = []
+        normalized = normalize_address(cleaned)
+        for candidate in (with_prefecture(normalized), normalized):
+            # 都道府県つきを先に試す。告知は「大阪市…」と省いて書くことが多く、
+            # そのままでは「解釈できない住所」で弾かれる
+            if candidate:
+                attempts.append(
+                    {"address": f"{candidate},{radius_m}", "type": "train", "stationCount": "3"}
+                )
+        if normalized != cleaned:
+            attempts.append({"address": cleaned})
+
+        result: dict[str, Any] | None = None
+        try:
+            for params in attempts:
+                try:
+                    result = await self._get("/address/station", params)
+                    break
+                except EkispertError as exc:
+                    logger.info(
+                        "address lookup attempt failed for %r: %s", params["address"][:40], exc
+                    )
+            if result is None:
+                return None
+        except EkispertError as exc:
+            # 例外文にキーを混ぜない作りにしてあるが、住所と状況だけで十分
+            logger.info("address lookup failed for %r: %s", cleaned[:40], exc)
+            return None
+        except httpx.HTTPError as exc:
+            logger.info("address lookup failed for %r: %s", cleaned[:40], type(exc).__name__)
+            return None
+
+        best: tuple[float, Station] | None = None
+        for point in _as_list(result.get("Point")):
+            if not isinstance(point, dict):
+                continue
+            station = point.get("Station") or {}
+            code = str(station.get("code") or "")
+            name = str(station.get("Name") or "")
+            if not code or not name:
+                continue
+            raw_distance = point.get("Distance")
+            try:
+                distance = float(str(raw_distance))
+            except (TypeError, ValueError):
+                distance = float("inf")
+            prefecture = (point.get("Prefecture") or {}).get("Name")
+            candidate = Station(
+                code=code, name=name, prefecture=str(prefecture) if prefecture else None
+            )
+            if best is None or distance < best[0]:
+                best = (distance, candidate)
+        if best is None:
+            return None
+        with self._lock:
+            self._station_cache[cache_key] = (now, best[1])
+        return best[1]
 
     async def search_route_arriving_by(
         self,

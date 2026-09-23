@@ -25,11 +25,13 @@ class FakeSearch:
     def __init__(self, hits: tuple[SearchHit, ...]) -> None:
         self._hits = hits
         self.demo_mode = False  # フィクスチャ経路ではなく本番と同じ分岐を通す
+        self.grounding_calls_used = 0
+        self.text_calls_used = 0
 
     def reset_call_budget(self) -> None:
         return
 
-    async def search_with_grounding(self, query: str) -> list[dict[str, str]]:
+    async def search_with_grounding(self, query: str, **_filters: object) -> list[dict[str, str]]:
         return [
             {"url": hit.url, "title": hit.title, "excerpt": hit.excerpt}
             for hit in self._hits

@@ -20,7 +20,7 @@
 <!-- 実行したコマンドと結果を書く。 -->
 
 - [ ] `pytest -q`（`services/agent`）
-- [ ] `npm run check` / `npm run build`（`apps/web`）
+- [ ] `pnpm run check` / `pnpm run build`（`apps/web`）
 - [ ] `./scripts/run-evals.sh`（Prompt・Schema・Validation Rule・モデルを変更した場合は必須、§13.3）
 
 ## 確認事項

@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from event_agent.schemas import ApiEvent, EventDates, EventLocation, Recommendation
+from event_agent.schemas import (
+    ApiEvent,
+    EventDates,
+    EventLocation,
+    EventMilestone,
+    Recommendation,
+)
 
 JST = timezone(timedelta(hours=9))
 
@@ -101,6 +107,30 @@ def demo_catalog() -> list[ApiEvent]:
             officialUrl="https://example.com/kansai-demoday-2026",
             recommendation=Recommendation(
                 score=78, reason="関西開催で、起業・登壇の機会に関する関心に一致します。"
+            ),
+            source="公式サイトで確認済み",
+        ),
+        # 実施日が書かれていないビジコンの告知。一覧の実施日は「未確認」になり、
+        # 締切と実施日のあいだの節目は milestones に入る（ジャンル拡張計画 段階1）。
+        ApiEvent(
+            eventId="kansai-bizcon",
+            title="関西ビジネスプランコンテスト 2027",
+            organizer="関西経済同友会",
+            category="contest",
+            kind="contest",
+            summary="関西発の新規事業プランを募集するビジネスコンテスト。一次審査を通過した5組が最終審査会に登壇します。",
+            location=EventLocation(type="offline", venue="大阪商工会議所", region="大阪", nearestStation="堺筋本町"),
+            dates=EventDates(
+                applicationDeadline=datetime(2026, 11, 28, 17, 0, tzinfo=JST),
+                eventStart=None,
+                milestones=[
+                    EventMilestone(label="一次審査結果発表", at=datetime(2026, 12, 18, tzinfo=JST)),
+                    EventMilestone(label="最終審査会", at=datetime(2027, 2, 6, tzinfo=JST)),
+                ],
+            ),
+            officialUrl="https://example.com/kansai-bizcon-2027",
+            recommendation=Recommendation(
+                score=74, reason="関西開催のビジネスコンテストで、起業の関心に一致します。"
             ),
             source="公式サイトで確認済み",
         ),

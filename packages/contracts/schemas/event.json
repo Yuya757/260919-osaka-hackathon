@@ -25,19 +25,44 @@
       "type": "string",
       "enum": ["datetime", "date", "unknown"]
     },
+    "EventKind": {
+      "type": "string",
+      "description": "機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画）",
+      "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
+    },
+    "EventMilestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "at", "precision"],
+      "description": "締切と実施日のあいだの節目（一次選考通過発表、最終審査会、結果発表など）",
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "at": { "type": "string", "format": "date-time" },
+        "precision": { "type": "string", "enum": ["datetime", "date"] }
+      }
+    },
     "EventDates": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eventStart", "eventStartPrecision", "timezone"],
+      "required": ["eventStartPrecision", "timezone"],
       "properties": {
         "applicationDeadline": { "type": ["string", "null"], "format": "date-time" },
         "applicationDeadlinePrecision": { "$ref": "#/$defs/DatePrecision" },
-        "eventStart": { "type": "string", "format": "date-time" },
+        "eventStart": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "実施（開始）日時。締切だけが分かっている告知では null（ビジコン・補助金）"
+        },
         "eventStartPrecision": {
           "type": "string",
-          "enum": ["datetime", "date"]
+          "enum": ["datetime", "date", "unknown"]
         },
         "eventEnd": { "type": ["string", "null"], "format": "date-time" },
+        "milestones": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/EventMilestone" }
+        },
         "timezone": {
           "type": "string",
           "description": "IANA timezone identifier (e.g. Asia/Tokyo)"
@@ -62,6 +87,18 @@
       "enum": ["suggested", "bookmarked", "dismissed"],
       "description": "ユーザーによる選別の状態。上位要件 §6.2 が挙げる added_to_calendar は含めない。カレンダー登録状態は詳細要件 §7.3 に従い googleCalendarEventIds で表現し、選別状態と登録状態を独立に保持する。"
     },
+    "EvidencePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUrl", "sourceType", "supports", "excerpt"],
+      "description": "一覧に添える根拠の要約。全文は GET /api/events/{eventId}/evidence（§7.2）",
+      "properties": {
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "sourceType": { "$ref": "evidence.json#/$defs/EvidenceSourceType" },
+        "supports": { "type": "array", "items": { "$ref": "evidence.json#/$defs/SupportedField" } },
+        "excerpt": { "type": "string", "maxLength": 160 }
+      }
+    },
     "GoogleCalendarEventIds": {
       "type": "object",
       "additionalProperties": false,
@@ -81,6 +118,7 @@
         "normalizedTitle",
         "summary",
         "category",
+        "kind",
         "location",
         "dates",
         "officialUrl",
@@ -100,6 +138,7 @@
         "normalizedTitle": { "type": "string", "minLength": 1 },
         "summary": { "type": "string" },
         "category": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/EventKind" },
         "organizer": { "type": ["string", "null"] },
         "location": { "$ref": "#/$defs/EventLocation" },
         "dates": { "$ref": "#/$defs/EventDates" },
@@ -120,6 +159,21 @@
         "sourceRunId": { "type": "string", "minLength": 1 },
         "status": { "$ref": "#/$defs/EventLifecycleStatus" },
         "googleCalendarEventIds": { "$ref": "#/$defs/GoogleCalendarEventIds" },
+        "themeId": { "type": ["string", "null"], "description": "収集したテーマ（ADR-008）。手動 Run 由来は null" },
+        "normalizedOfficialUrl": { "type": "string", "description": "officialUrl の正規化形。既知ページの照合キー" },
+        "lastExtractedAt": { "type": ["string", "null"], "format": "date-time", "description": "本文から実際に抽出した最終時刻。lastSeenAt と違い、既知ページの省略では進まない" },
+        "attributes": {
+          "type": "object",
+          "maxProperties": 10,
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "description": "ジャンル固有の値（賞金・支援内容・対象ステージなど）。ページの行をそのまま持ち、構造化はしない（ジャンル拡張計画 段階2）"
+        },
+        "evidencePreview": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/EvidencePreview" },
+          "description": "一覧用。締切・開催日・タイトルの根拠を最大4件。サーバーが list 応答で添える"
+        },
         "source": {
           "type": "string",
           "deprecated": true,
@@ -132,6 +186,8 @@
       "additionalProperties": false,
       "required": ["events"],
       "properties": {
+        "lastCollectedAt": { "type": ["string", "null"], "format": "date-time", "description": "最後に収集が保存された時刻（一覧の「最終収集」表示用）" },
+
         "events": {
           "type": "array",
           "items": { "$ref": "#/$defs/Event" }

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/pool-search.json",
+  "title": "PoolSearch",
+  "description": "プール探索エージェント（ADR-010）。Web には出ず、バッチ収集済みのイベントを自然文の問いかけで探す。",
+  "$defs": {
+    "PoolSearchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query"],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "query": { "type": "string", "minLength": 0, "maxLength": 500, "description": "空なら現在の関心条件で並べる" }
+      }
+    },
+    "SearchIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interestsPrompt", "locations", "onlineOnly", "keywords", "kinds", "order"],
+      "description": "問いかけの構造化。モデルが返した値は選択肢・日付形式で検証してから使う",
+      "properties": {
+        "interestsPrompt": { "type": "string" },
+        "locations": { "type": "array", "items": { "type": "string" } },
+        "onlineOnly": { "type": "boolean" },
+        "dateFrom": { "type": ["string", "null"], "format": "date" },
+        "dateTo": { "type": ["string", "null"], "format": "date" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "order": {
+          "type": "string",
+          "enum": ["score", "deadline", "held"],
+          "description": "並び順。既定は適合順。「締切が近い順」「実施が近い順」と聞かれたときだけ変わる"
+        },
+        "kinds": {
+          "type": "array",
+          "description": "問いかけが指す機会の種別（ジャンル拡張計画）。空なら種別で絞らない",
+          "items": { "$ref": "event.json#/$defs/EventKind" }
+        }
+      }
+    },
+    "SearchAgent": {
+      "type": "string",
+      "enum": ["interpreter", "filter", "scorer", "presenter"]
+    },
+    "SearchActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "message", "at"],
+      "properties": {
+        "agent": { "$ref": "#/$defs/SearchAgent" },
+        "message": { "type": "string", "maxLength": 300 },
+        "level": { "type": "string", "enum": ["info", "warn"] },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PoolSearchResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "reply", "intent", "events", "activity", "modelCalls"],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "reply": { "type": "string", "description": "一覧の上に出す一言。Grounding 由来ではない（§3.7 の表示義務は生じない）" },
+        "intent": { "$ref": "#/$defs/SearchIntent" },
+        "events": { "type": "array", "items": { "$ref": "event.json#/$defs/Event" } },
+        "activity": { "type": "array", "items": { "$ref": "#/$defs/SearchActivity" } },
+        "lastCollectedAt": { "type": ["string", "null"], "format": "date-time" },
+        "modelCalls": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

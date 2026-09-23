@@ -7,9 +7,14 @@ reset would wipe the run between the fixture and the tests that consume it.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
+# 既定（本番の安全側）は手動探索オフだが、テストは Run を起点にした流れを検証する。
+# Settings は最初の import 時に読むので、event_agent を import する前に立てる。
+os.environ.setdefault("MANUAL_RUNS_ENABLED", "true")
 
 JST = timezone(timedelta(hours=9))
 
@@ -42,6 +47,9 @@ def reset_store():
 STORE_HOLDERS = (
     "event_agent.storage.store",
     "event_agent.workflows.collect",
+    "event_agent.workflows.organizer_posts",
+    "event_agent.workflows.pool",
+    "event_agent.workflows.pool_search",
     "event_agent.entrypoints.service",
     "event_agent.agents.chat",
     "event_agent.evaluation.harness",

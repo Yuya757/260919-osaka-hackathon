@@ -76,7 +76,7 @@ jobs:
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --no-invoker-iam-check \
-            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.0-flash-001|AGENT_DEMO_MODE=true|FIRESTORE_ENABLED=true|CORS_ORIGINS=https://${{ vars.FIREBASE_SITE_ID }}.web.app,http://localhost:5173|EKISPERT_API_KEY=${{ secrets.EKISPERT_API_KEY }}" \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-3.8-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|MANUAL_RUNS_ENABLED=false|FIRESTORE_ENABLED=true|CORS_ORIGINS=https://${{ vars.FIREBASE_SITE_ID }}.web.app,http://localhost:5173|EKISPERT_API_KEY=${{ secrets.EKISPERT_API_KEY }}" \
             --quiet
           URL="$(gcloud run services describe event-agent --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" --format='value(status.url)')"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
@@ -129,9 +129,10 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy the daily collection Cloud Run Job
-        # §14 Phase 2 の定期収集。Cloud Scheduler はまだ作っていないので、この
-        # Job は手動実行（gcloud run jobs execute）でしか動かない。ADR-003 参照。
-        # --max-retries 0 は意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
+        # §14 Phase 2 の定期収集（ADR-008）。1 タスク 1 テーマ
+        # （ハッカソン4 + ビジコン3。アクセラ・共創・補助金は一旦止めている）。
+        # --parallelism 1 は意図的: 同時に走ると同じページを二重に抽出する。
+        # --max-retries 0 も意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
         # 落ちた実行の再開はしないため、自動リトライは同じ日を再収集せずに
         # 成功終了してしまう。失敗は気づけるほうがよい。
         run: |
@@ -142,10 +143,39 @@ jobs:
             --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --command=python \
             --args="-m,event_agent.entrypoints.job" \
+            --tasks 7 \
+            --parallelism 1 \
             --max-retries 0 \
-            --task-timeout 300s \
-            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-2.0-flash-001|AGENT_DEMO_MODE=true|FIRESTORE_ENABLED=true" \
+            --task-timeout 600s \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|GEMINI_MODEL=gemini-3.8-flash|AGENT_DEMO_MODE=false|DEMO_CATALOG_FALLBACK=false|FIRESTORE_ENABLED=true" \
             --quiet
+
+      - name: Let the scheduler service account run the job
+        run: |
+          gcloud run jobs add-iam-policy-binding event-agent-daily \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --member "serviceAccount:event-agent-scheduler@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --role roles/run.invoker \
+            --quiet >/dev/null
+
+      - name: Schedule the job every morning at 07:00 JST
+        # 毎朝 07:00 JST（§8-4）。Cloud Scheduler が Cloud Run Jobs API の :run を
+        # 叩く。作成済みなら update で設定を揃える（冪等）。
+        run: |
+          URI="https://run.googleapis.com/v2/projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION }}/jobs/event-agent-daily:run"
+          SA="event-agent-scheduler@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
+          COMMON=(--location "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}"
+                  --schedule "0 7 * * *" --time-zone "Asia/Tokyo"
+                  --uri "$URI" --http-method POST
+                  --oauth-service-account-email "$SA"
+                  --description "毎朝のテーマ単位イベント収集（ADR-008）")
+          if gcloud scheduler jobs describe event-agent-daily-0700 \
+               --location "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            gcloud scheduler jobs update http event-agent-daily-0700 "${COMMON[@]}" --quiet
+          else
+            gcloud scheduler jobs create http event-agent-daily-0700 "${COMMON[@]}" --quiet
+          fi
 
   web:
     name: Build and deploy web demo
@@ -160,24 +190,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
         working-directory: apps/web
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Type-check
         working-directory: apps/web
-        run: npm run check
+        run: pnpm run check
 
       - name: Build
         working-directory: apps/web
-        run: npm run build
+        run: pnpm run build
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3

@@ -5,6 +5,14 @@ import type {
   ChatResponse,
   EventRouteResponse,
   EvidenceListResponse,
+  OrganizerPostCreateResponse,
+  OrganizerPostListResponse,
+  OrganizerPostPreviewResponse,
+  OrganizerPostRequest,
+  PoolSearchRequest,
+  PoolSearchResponse,
+  GoKind,
+  PostMetricsResponse,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -45,12 +53,14 @@ export function sendChat(body: ChatRequest): Promise<ChatResponse> {
 export function startAgentRun(
   forceRefresh = false,
   idempotencyKey?: string,
+  sessionId?: string,
 ): Promise<AgentRun> {
   return request<AgentRun>('/api/agent-runs', {
     method: 'POST',
     // 同一操作の二重実行を防ぐ（§9.3）。未指定ならサーバが発行する。
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
-    body: JSON.stringify({ forceRefresh }),
+    // チャットで更新した関心条件を Run に引き継ぐ
+    body: JSON.stringify({ forceRefresh, sessionId }),
   })
 }
 
@@ -58,9 +68,32 @@ export function getAgentRun(runId: string): Promise<AgentRun> {
   return request<AgentRun>(`/api/agent-runs/${runId}`)
 }
 
-export function listEvents(sourceRunId?: string): Promise<{ events: ApiEvent[] }> {
-  const query = sourceRunId ? `?sourceRunId=${encodeURIComponent(sourceRunId)}` : ''
-  return request<{ events: ApiEvent[] }>(`/api/events${query}`)
+export type EventListResponse = { events: ApiEvent[]; lastCollectedAt?: string | null }
+
+/**
+ * 一覧。`sourceRunId` を渡せばその Run の結果、無ければ共有プール（ADR-008）を
+ * `sessionId` の関心条件で採点した順に返す。
+ */
+export function listEvents(sourceRunId?: string, sessionId?: string): Promise<EventListResponse> {
+  const params = new URLSearchParams()
+  if (sourceRunId) params.set('sourceRunId', sourceRunId)
+  if (sessionId) params.set('sessionId', sessionId)
+  const query = params.toString()
+  return request<EventListResponse>(`/api/events${query ? `?${query}` : ''}`)
+}
+
+/** プール探索エージェント（ADR-010）。Web には出ず、収集済みイベントを問いかけで探す。 */
+export function poolSearch(body: PoolSearchRequest): Promise<PoolSearchResponse> {
+  return request<PoolSearchResponse>('/api/pool-search', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export type HealthResponse = { status: string; demo_mode: boolean; model?: string | null; manualRunsEnabled: boolean }
+
+export function getHealth(): Promise<HealthResponse> {
+  return request<HealthResponse>('/api/health')
 }
 
 /** 根拠（§7.2）。S-08 の根拠シートが使う。 */
@@ -70,9 +103,59 @@ export function listEvidence(eventId: string): Promise<EvidenceListResponse> {
   )
 }
 
-export function getEventRoute(eventId: string, from: string): Promise<EventRouteResponse> {
-  const query = `?from=${encodeURIComponent(from)}`
+export function getEventRoute(
+  eventId: string,
+  from: string,
+  /** 到着駅。イベントの最寄駅が未確認のときに使う */
+  to?: string,
+): Promise<EventRouteResponse> {
+  const query = `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}`
   return request<EventRouteResponse>(`/api/events/${encodeURIComponent(eventId)}/route${query}`)
+}
+
+/** 主催者投稿フィード（F-06）。 */
+export function listOrganizerPosts(): Promise<OrganizerPostListResponse> {
+  return request<OrganizerPostListResponse>('/api/organizer-posts')
+}
+
+/** 投稿前の確認。何も保存しない。 */
+export function previewOrganizerPost(
+  body: OrganizerPostRequest,
+): Promise<OrganizerPostPreviewResponse> {
+  return request<OrganizerPostPreviewResponse>('/api/organizer-posts/preview', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function createOrganizerPost(
+  body: OrganizerPostRequest,
+): Promise<OrganizerPostCreateResponse> {
+  return request<OrganizerPostCreateResponse>('/api/organizer-posts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * 外部リンクは計測付きリダイレクト（ADR-009）を経由する。サーバーが保存済みの URL へ
+ * 302 で送り、utm を付ける。href にそのまま使う。
+ */
+export function goUrl(eventId: string, kind: GoKind): string {
+  return `/api/go/${encodeURIComponent(eventId)}/${kind}`
+}
+
+/** カレンダー登録の計測。登録自体は端末側で済んでいるので、失敗しても呼び出し側は無視する。 */
+export function postEventMetric(eventId: string, kind: 'calendar'): Promise<void> {
+  return fetch(`/api/events/${encodeURIComponent(eventId)}/metrics`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind }),
+  }).then(() => undefined)
+}
+
+export function getPostMetrics(postId: string): Promise<PostMetricsResponse> {
+  return request<PostMetricsResponse>(`/api/organizer-posts/${encodeURIComponent(postId)}/metrics`)
 }
 
 /** Runが時間内に終わらなかったことを表す。失敗とは区別して扱う。 */

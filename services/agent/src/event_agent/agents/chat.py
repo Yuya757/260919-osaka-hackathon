@@ -12,10 +12,12 @@ import logging
 import re
 
 from event_agent.clients.gemini import extract_preferences_from_message, gemini_client
+from event_agent.config import settings
 from event_agent.schemas import (
     AgentRunStartedAction,
     ChatRequest,
     ChatResponse,
+    EventsReadyAction,
     PreferencesUpdatedAction,
     UserPreferences,
     preferences_to_api_dict,
@@ -30,7 +32,7 @@ logger = logging.getLogger(__name__)
 # 攻撃者にとっては回避のヒントになり、通常の利用者には意味がない。
 REFUSAL_REPLY = (
     "申し訳ありませんが、その内容にはお答えできません。"
-    "探したいイベントの地域・ジャンル・時期を教えてください。"
+    "探したいハッカソンの地域・テーマ・時期を教えてください。"
 )
 
 
@@ -49,10 +51,9 @@ def _demo_reply(preferences: UserPreferences, started_run: bool) -> str:
             f"「{preferences.interests_prompt}」で{preferences.target_year}年の"
             "イベント探索を開始しました。申込締切と開催日を分けて一覧に反映します。"
         )
-    return (
-        f"関心条件を「{preferences.interests_prompt}」に更新しました。"
-        "「イベントを探して」と送ると探索を開始します。"
-    )
+    if settings.manual_runs_enabled:
+        return f"関心条件を「{preferences.interests_prompt}」に更新しました。この条件で探索します。"
+    return f"関心条件を「{preferences.interests_prompt}」に更新しました。一覧を並べ替えます。"
 
 
 async def handle_chat(request: ChatRequest) -> ChatResponse:
@@ -95,9 +96,14 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
         )
 
     if _wants_search(request.message):
-        run = schedule_collect_run(preferences)
-        actions.append(AgentRunStartedAction(type="agent_run_started", runId=run.run_id))
-        started_run = True
+        if settings.manual_runs_enabled:
+            run = schedule_collect_run(preferences)
+            actions.append(AgentRunStartedAction(type="agent_run_started", runId=run.run_id))
+            started_run = True
+        else:
+            # ユーザー起点の Grounding 探索は費用のため受け付けない（ADR-008）。
+            # 関心条件は更新したので、一覧を共有プールから並べ替えてもらう
+            actions.append(EventsReadyAction(type="events_ready", count=0))
 
     system = prompt_guard.defended_system_prompt(
         "あなたはイベント探索エージェントです。日本語で短く返答し、"

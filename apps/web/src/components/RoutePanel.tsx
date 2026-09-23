@@ -4,7 +4,10 @@ import type { RouteSummary } from '../types/api'
 
 type RoutePanelProps = {
   eventId: string
+  /** イベントの最寄駅。未確認なら空文字で、到着駅は利用者に入力してもらう */
   nearestStation: string
+  /** 会場名。到着駅を入力してもらうときの手がかりに出す */
+  venue?: string
 }
 
 const ORIGIN_STORAGE_KEY = 'event-agent.origin-station'
@@ -43,22 +46,27 @@ function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours}時間` : `${hours}時間${rest}分`
 }
 
-export function RoutePanel({ eventId, nearestStation }: RoutePanelProps) {
+export function RoutePanel({ eventId, nearestStation, venue }: RoutePanelProps) {
   const [open, setOpen] = useState(false)
   const [origin, setOrigin] = useState(readSavedOrigin)
+  // 会場の最寄駅が分からない告知は多い。会場名を駅名として送っても見つからないので、
+  // そのときは到着駅を利用者に入力してもらう
+  const [destination, setDestination] = useState('')
   const [pending, setPending] = useState(false)
   const [route, setRoute] = useState<RouteSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const knownStation = nearestStation.trim()
 
   const search = async (event: FormEvent) => {
     event.preventDefault()
     const trimmed = origin.trim()
-    if (!trimmed || pending) return
+    const target = knownStation || destination.trim()
+    if (!trimmed || !target || pending) return
 
     setPending(true)
     setError(null)
     try {
-      const response = await getEventRoute(eventId, trimmed)
+      const response = await getEventRoute(eventId, trimmed, knownStation ? undefined : target)
       setRoute(response.route)
       saveOrigin(trimmed)
     } catch (cause) {
@@ -78,7 +86,11 @@ export function RoutePanel({ eventId, nearestStation }: RoutePanelProps) {
         onClick={() => setOpen((current) => !current)}
       >
         <span aria-hidden="true">⇢</span>
-        {open ? '経路を閉じる' : `会場までの経路（最寄: ${nearestStation}駅）`}
+        {open
+          ? '経路を閉じる'
+          : knownStation
+            ? `会場までの経路（最寄: ${knownStation}駅）`
+            : '会場までの経路（到着駅を入力）'}
       </button>
 
       {open && (
@@ -98,11 +110,37 @@ export function RoutePanel({ eventId, nearestStation }: RoutePanelProps) {
             <span className="route-arrow" aria-hidden="true">
               →
             </span>
-            <span className="route-destination">{nearestStation}</span>
-            <button type="submit" disabled={pending || !origin.trim()}>
+            {knownStation ? (
+              <span className="route-destination">{knownStation}</span>
+            ) : (
+              <>
+                <label className="sr-only" htmlFor={`route-destination-${eventId}`}>
+                  到着駅
+                </label>
+                <input
+                  id={`route-destination-${eventId}`}
+                  value={destination}
+                  placeholder="到着駅（例: 京橋）"
+                  maxLength={40}
+                  disabled={pending}
+                  onChange={(event) => setDestination(event.target.value)}
+                />
+              </>
+            )}
+            <button
+              type="submit"
+              disabled={pending || !origin.trim() || !(knownStation || destination.trim())}
+            >
               {pending ? '検索中…' : '開始時刻に間に合う経路'}
             </button>
           </form>
+
+          {!knownStation && (
+            <p className="fine route-hint">
+              最寄駅は告知に書かれていませんでした。
+              {venue ? `会場は「${venue}」です。` : ''}到着駅をご記入ください。
+            </p>
+          )}
 
           {error && (
             <p className="route-error" role="alert">

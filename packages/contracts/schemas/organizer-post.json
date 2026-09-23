@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/organizer-post.json",
+  "title": "OrganizerPost",
+  "description": "主催者投稿フィード（F-06）。投稿は派生した Event と根拠を埋め込む。Event そのものではなく events/ には書かれない（ADR-006）。",
+  "$defs": {
+    "PostOrigin": {
+      "type": "string",
+      "enum": ["organizer", "bot"]
+    },
+    "PostStatus": {
+      "type": "string",
+      "enum": ["published", "hidden"]
+    },
+    "PlacementKind": {
+      "type": "string",
+      "enum": ["normal", "pinned", "priority"]
+    },
+    "PostPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/PlacementKind" },
+        "until": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "PostIssueCode": {
+      "type": "string",
+      "enum": [
+        "EVENT_DATE_MISSING",
+        "YEAR_AMBIGUOUS",
+        "EVENT_FINISHED",
+        "DATE_CONFLICT",
+        "DEADLINE_MISSING",
+        "DUPLICATE_OF_EVENT"
+      ]
+    },
+    "PostIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/PostIssueCode" },
+        "severity": { "type": "string", "enum": ["error", "warning"] },
+        "message": { "type": "string" }
+      }
+    },
+    "OrganizerPostRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organizerName", "contactUrl", "title", "body"],
+      "properties": {
+        "organizerName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "contactUrl": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
+    "OrganizerPost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postId",
+        "userId",
+        "origin",
+        "organizerName",
+        "contactUrl",
+        "title",
+        "body",
+        "event",
+        "evidence",
+        "status",
+        "placement",
+        "injectionFlags",
+        "organizerConfirmed",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "postId": { "type": "string" },
+        "userId": { "type": "string" },
+        "origin": { "$ref": "#/$defs/PostOrigin" },
+        "organizerName": { "type": "string" },
+        "contactUrl": { "type": "string", "format": "uri" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "event": { "$ref": "event.json#/$defs/Event" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "evidence.json#/$defs/Evidence" }
+        },
+        "status": { "$ref": "#/$defs/PostStatus" },
+        "placement": { "$ref": "#/$defs/PostPlacement" },
+        "linkedEventId": { "type": ["string", "null"] },
+        "linkedDedupKey": { "type": ["string", "null"] },
+        "injectionFlags": { "type": "array", "items": { "type": "string" } },
+        "organizerConfirmed": { "type": "boolean", "description": "管理者が主催者の本人性を確認済み（ADR-009）。再投稿で戻らない" },
+        "confirmedAt": { "type": ["string", "null"], "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "OrganizerPostPreviewResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "linkedEvent", "issues"],
+      "properties": {
+        "event": {
+          "oneOf": [{ "$ref": "event.json#/$defs/Event" }, { "type": "null" }]
+        },
+        "linkedEvent": {
+          "oneOf": [{ "$ref": "event.json#/$defs/Event" }, { "type": "null" }]
+        },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/PostIssue" } }
+      }
+    },
+    "OrganizerPostCreateResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["post", "warnings"],
+      "properties": {
+        "post": { "$ref": "#/$defs/OrganizerPost" },
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/PostIssue" } }
+      }
+    },
+    "MetricCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clicks", "calendar"],
+      "properties": {
+        "clicks": { "type": "integer", "minimum": 0 },
+        "calendar": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "EventMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "clicks", "calendar", "daily"],
+      "description": "イベント単位の成果計測（ADR-009）。アプリ内のクリックとカレンダー登録を数える",
+      "properties": {
+        "eventId": { "type": "string" },
+        "clicks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["official", "application", "contact"],
+          "properties": {
+            "official": { "type": "integer", "minimum": 0 },
+            "application": { "type": "integer", "minimum": 0 },
+            "contact": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "calendar": { "type": "integer", "minimum": 0 },
+        "daily": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/MetricCounts" },
+          "description": "JST 日付ごとの内訳"
+        },
+        "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "PostMetricsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postId", "eventId", "linkedEventId", "metrics", "linkedMetrics"],
+      "properties": {
+        "postId": { "type": "string" },
+        "eventId": { "type": "string" },
+        "linkedEventId": { "type": ["string", "null"] },
+        "metrics": { "$ref": "#/$defs/EventMetrics" },
+        "linkedMetrics": { "oneOf": [{ "$ref": "#/$defs/EventMetrics" }, { "type": "null" }] }
+      }
+    },
+    "MetricEventRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "type": "string", "enum": ["calendar"] } }
+    },
+    "OrganizerPostListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posts"],
+      "properties": {
+        "posts": { "type": "array", "items": { "$ref": "#/$defs/OrganizerPost" } }
+      }
+    }
+  }
+}

@@ -12,7 +12,10 @@ class Settings(BaseSettings):
 
     gcp_project_id: str | None = None
     gcp_region: str = "asia-northeast1"
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.8-flash"
+    # Gemini の呼び出し先。Cloud Run のリージョン（gcp_region）とは別で、
+    # 最新モデルは global エンドポイントにしか無い
+    gemini_location: str = "global"
     agent_demo_mode: bool = True
     cors_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"
@@ -26,6 +29,20 @@ class Settings(BaseSettings):
     max_search_queries: int = 8
     max_candidates: int = 30
     max_model_calls: int = 15
+    # 検索の期間指定（この日数より新しいページ）と、ページ取得の同時数
+    search_recency_days: int = 180
+    fetch_concurrency: int = 6
+    model_call_timeout_seconds: float = 60.0
+    locate_concurrency: int = 4
+    # ADR-008: ユーザー起点の Grounding 探索を受け付けるか。既定は費用の安全側
+    manual_runs_enabled: bool = False
+    # 一覧に出す共有プールの範囲（lastSeenAt がこの日数以内）
+    pool_window_days: int = 30
+    # 既知ページを再抽出するまでの日数
+    known_url_refresh_days: int = 7
+    # 1 日あたりの Grounding 検索の上限（全 Run 合計）。
+    # テーマ数 × クエリ数 + 手動探索の余裕（ジャンル拡張計画のコスト試算）
+    daily_grounding_cap: int = 90
     verified_confidence_threshold: float = 0.8
     # 公式・主催者の根拠が無く集約サイトだけを出典とするイベントを表示する下限
     # （画面設計書§8-2）。compute_confidence の重み上、集約サイト単独ホストの
@@ -41,7 +58,7 @@ class Settings(BaseSettings):
     # 1.1.0: チャットのシステム命令にサンドイッチ防御とカナリアを追加（§10.1）
     prompt_version: str = "chat-1.1.0"
     extraction_schema_version: str = "extract-1.0.0"
-    validation_rule_version: str = "1.0.0"
+    validation_rule_version: str = "1.1.0"
     # 抽出が0件のときデモカタログで補う。実運用とデモの両立用。評価では False。
     demo_catalog_fallback: bool = True
     # 進捗バナーを見せるためだけの待ち時間。評価では 0 にする。

@@ -16,17 +16,36 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 from event_agent.entrypoints.service import app
 
 SCHEMA_DIR = Path(__file__).resolve().parents[3] / "packages" / "contracts" / "schemas"
 
 
+def _registry() -> Registry:
+    """Every schema document by its ``$id`` so cross-file ``$ref`` resolves.
+
+    ``organizer-post.json`` refers to ``event.json#/$defs/Event``; without a
+    registry jsonschema would try to fetch ``https://event-agent.local/…``.
+    """
+    registry: Registry = Registry()
+    for path in SCHEMA_DIR.glob("*.json"):
+        document = json.loads(path.read_text(encoding="utf-8"))
+        registry = registry.with_resource(
+            document["$id"], Resource.from_contents(document)
+        )
+    return registry
+
+
 def _validator(schema_file: str, definition: str) -> Draft202012Validator:
     document = json.loads((SCHEMA_DIR / schema_file).read_text(encoding="utf-8"))
     schema = dict(document["$defs"][definition])
     schema["$defs"] = document["$defs"]
-    return Draft202012Validator(schema)
+    # 同一文書内の "#/$defs/…" と他文書への "event.json#/…" の両方を解決するため、
+    # 定義を切り出したスキーマにも元の $id を持たせる。
+    schema["$id"] = document["$id"]
+    return Draft202012Validator(schema, registry=_registry())
 
 
 def _assert_valid(validator: Draft202012Validator, payload: object, label: str) -> None:
@@ -165,3 +184,69 @@ def test_unknown_deadline_stays_null(client: TestClient, finished_run: str) -> N
         if dates.get("applicationDeadline") is None:
             assert dates["applicationDeadlinePrecision"] == "unknown"
             assert event["validationStatus"] == "partial"
+
+
+# ------------------------------------------------------------ organizer posts
+
+POST_BODY = {
+    "organizerName": "関西イノベーションセンター",
+    "contactUrl": "https://kansai-innovation.example.jp/hackathon2026",
+    "title": "関西 Generative AI Hackathon 2026",
+    "body": "開催日: 2026年10月16日 10:00\n申込締切: 2026年9月30日 23:59\n会場: グランフロント大阪",
+}
+
+
+def test_organizer_post_preview_conforms(client: TestClient) -> None:
+    response = client.post("/api/organizer-posts/preview", json=POST_BODY)
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("organizer-post.json", "OrganizerPostPreviewResponse"),
+        response.json(),
+        "OrganizerPostPreviewResponse",
+    )
+
+
+def test_organizer_post_create_conforms(client: TestClient) -> None:
+    response = client.post("/api/organizer-posts", json=POST_BODY)
+    assert response.status_code == 201
+    _assert_valid(
+        _validator("organizer-post.json", "OrganizerPostCreateResponse"),
+        response.json(),
+        "OrganizerPostCreateResponse",
+    )
+
+
+def test_organizer_post_feed_conforms(client: TestClient, finished_run: str) -> None:
+    """finished_run のボット投稿と、上で作った主催者投稿が両方載る。"""
+    response = client.get("/api/organizer-posts")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["posts"], "feed is empty even after a finished run"
+    _assert_valid(
+        _validator("organizer-post.json", "OrganizerPostListResponse"),
+        body,
+        "OrganizerPostListResponse",
+    )
+    for post in body["posts"]:
+        assert post["status"] == "published"
+        assert post["event"]["validationStatus"] in ("verified", "partial")
+
+
+def test_pool_search_conforms(client: TestClient, finished_run: str) -> None:
+    response = client.post("/api/pool-search", json={"query": "関西 生成AI ハッカソン"})
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("pool-search.json", "PoolSearchResponse"),
+        response.json(),
+        "PoolSearchResponse",
+    )
+def test_post_metrics_conform(client: TestClient) -> None:
+    created = client.post("/api/organizer-posts", json=POST_BODY).json()["post"]
+    response = client.get(f"/api/organizer-posts/{created['postId']}/metrics")
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("organizer-post.json", "PostMetricsResponse"),
+        response.json(),
+        "PostMetricsResponse",
+    )
+    assert created["organizerConfirmed"] is False

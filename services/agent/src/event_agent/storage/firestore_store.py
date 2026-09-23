@@ -8,6 +8,8 @@ Collection layout, taken from the data requirements:
 ``agentRunKeys/{hash(idempotencyKey)}``     §9.3 run idempotency index
 ``sessions/{hash(sessionId)}``              chat session state
 ``appState/latestRun``                      pointer used by ``list_events(None)``
+``organizerPosts/{postId}``                 F-06 organizer post (ADR-006)
+``eventMetrics/{eventId}``                  clicks and calendar registrations (ADR-009)
 
 Two of those collections are not in §7. ``agentRunKeys`` exists because §9.3
 requires a manual run to be idempotent on the client's ``Idempotency-Key``, and
@@ -30,8 +32,23 @@ from typing import Any
 from uuid import uuid4
 
 from event_agent.config import get_settings
-from event_agent.schemas import AgentRun, ApiEvent, Evidence, UserPreferences
-from event_agent.storage.store import SessionState, display_order, merge_saved_event
+from event_agent.schemas import (
+    AgentRun,
+    ApiEvent,
+    Evidence,
+    EventMetrics,
+    OrganizerPost,
+    PostPlacement,
+    UsageRecord,
+    UserPreferences,
+)
+from event_agent.storage.store import (
+    SessionState,
+    _with_state,
+    display_order,
+    merge_saved_event,
+    merge_saved_post,
+)
 
 RUNS = "agentRuns"
 RUN_KEYS = "agentRunKeys"
@@ -40,6 +57,9 @@ EVENTS = "events"
 SESSIONS = "sessions"
 APP_STATE = "appState"
 LATEST_RUN_DOC = "latestRun"
+ORGANIZER_POSTS = "organizerPosts"
+EVENT_METRICS = "eventMetrics"
+USAGE = "usage"
 
 
 def _path_id(raw: str) -> str:
@@ -88,7 +108,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -194,12 +214,88 @@ class FirestoreStore:
             merged = merge_saved_event(event, existing.get(event.dedup_key))
             batch.set(refs[event.dedup_key], _dump(merged))
             stored.append(merged)
-        batch.set(
-            self._db.collection(APP_STATE).document(LATEST_RUN_DOC),
-            {"runId": run_id, "updatedAt": datetime.now(timezone.utc)},
-        )
+        # 空の保存で「最新の Run」を進めない（検索を省いた Run が一覧を空にしないため）
+        if stored:
+            batch.set(
+                self._db.collection(APP_STATE).document(LATEST_RUN_DOC),
+                {"runId": run_id, "updatedAt": datetime.now(timezone.utc)},
+            )
         batch.commit()
         return display_order(stored)
+
+    def list_recent_events(self, since: datetime, *, limit: int = 500) -> list[ApiEvent]:
+        # 単一フィールドの範囲条件だけなら自動索引で済み、composite index は要らない（ADR-002）
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = (
+            self._db.collection(EVENTS)
+            .where(filter=FieldFilter("lastSeenAt", ">=", since))
+            .limit(limit)
+        )
+        return [ApiEvent(**(s.to_dict() or {})) for s in query.stream()]
+
+    def find_events_by_urls(self, normalized_urls: list[str]) -> dict[str, ApiEvent]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        found: dict[str, ApiEvent] = {}
+        urls = list(dict.fromkeys(normalized_urls))
+        # "in" は 30 件まで
+        for start in range(0, len(urls), 30):
+            chunk = urls[start : start + 30]
+            query = self._db.collection(EVENTS).where(
+                filter=FieldFilter("normalizedOfficialUrl", "in", chunk)
+            )
+            for snapshot in query.stream():
+                event = ApiEvent(**(snapshot.to_dict() or {}))
+                found[event.normalized_official_url] = event
+        return found
+
+    def touch_events(self, dedup_keys: list[str], *, last_seen_at: datetime) -> None:
+        if not dedup_keys:
+            return
+        # update() は無い文書で失敗する。merge の set なら無い鍵は空文書を作ってしまうので、
+        # 存在するものだけを1回の get_all で確かめてから更新する
+        refs = [self._db.collection(EVENTS).document(key) for key in dedup_keys]
+        existing = [snap.reference for snap in self._db.get_all(refs) if snap.exists]
+        if not existing:
+            return
+        batch = self._db.batch()
+        for ref in existing:
+            batch.update(ref, {"lastSeenAt": last_seen_at})
+        batch.commit()
+
+    def get_evidence_for_events(self, events: list[ApiEvent]) -> dict[str, list[Evidence]]:
+        refs = []
+        owners: list[tuple[str, str]] = []
+        for event in events:
+            collection = (
+                self._db.collection(RUNS).document(event.source_run_id).collection(EVIDENCE)
+            )
+            for eid in event.evidence_ids:
+                refs.append(collection.document(eid))
+                owners.append((event.event_id, eid))
+        by_event: dict[str, dict[str, Evidence]] = {e.event_id: {} for e in events}
+        if refs:
+            # run を跨いだ参照でも get_all は一度で引ける
+            for snapshot in self._db.get_all(refs):
+                if not snapshot.exists:
+                    continue
+                item = Evidence(**(snapshot.to_dict() or {}))
+                run_id = snapshot.reference.parent.parent.id
+                for event in events:
+                    if event.source_run_id == run_id and item.evidence_id in event.evidence_ids:
+                        by_event[event.event_id][item.evidence_id] = item
+        # 要求順を保つ
+        return {
+            e.event_id: [by_event[e.event_id][eid] for eid in e.evidence_ids if eid in by_event[e.event_id]]
+            for e in events
+        }
+
+    def latest_collection_at(self) -> datetime | None:
+        snapshot = self._db.collection(APP_STATE).document(LATEST_RUN_DOC).get()
+        if not snapshot.exists:
+            return None
+        return (snapshot.to_dict() or {}).get("updatedAt")
 
     def get_event(self, event_id: str) -> ApiEvent | None:
         found = self._where_eq(EVENTS, "eventId", event_id).limit(1).stream()
@@ -253,3 +349,137 @@ class FirestoreStore:
                 by_id[item.evidence_id] = item
         # get_all does not preserve request order, so restore the caller's.
         return [by_id[eid] for eid in evidence_ids if eid in by_id]
+
+    # ------------------------------------------------------- organizer posts
+
+    def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
+        ref = self._db.collection(ORGANIZER_POSTS).document(post.post_id)
+        snapshot = ref.get()
+        existing = OrganizerPost(**(snapshot.to_dict() or {})) if snapshot.exists else None
+        merged = merge_saved_post(post, existing)
+        ref.set(_dump(merged))
+        return merged
+
+    def get_organizer_post(self, post_id: str) -> OrganizerPost | None:
+        snapshot = self._db.collection(ORGANIZER_POSTS).document(post_id).get()
+        if not snapshot.exists:
+            return None
+        return OrganizerPost(**(snapshot.to_dict() or {}))
+
+    def list_organizer_posts(self, status: str | None = None) -> list[OrganizerPost]:
+        # 並び順はクエリに持たせない。単一フィールドの等価条件だけなら
+        # composite index が要らず、ADR-002 の運用（rules しか deploy しない）で済む。
+        query = (
+            self._where_eq(ORGANIZER_POSTS, "status", status)
+            if status
+            else self._db.collection(ORGANIZER_POSTS)
+        )
+        return [OrganizerPost(**(s.to_dict() or {})) for s in query.stream()]
+
+    def update_post_state(
+        self,
+        post_id: str,
+        *,
+        status: str | None = None,
+        placement: PostPlacement | None = None,
+        organizer_confirmed: bool | None = None,
+        now: datetime | None = None,
+    ) -> OrganizerPost | None:
+        ref = self._db.collection(ORGANIZER_POSTS).document(post_id)
+        snapshot = ref.get()
+        if not snapshot.exists:
+            return None
+        updated = _with_state(
+            OrganizerPost(**(snapshot.to_dict() or {})),
+            status=status,
+            placement=placement,
+            organizer_confirmed=organizer_confirmed,
+            now=now,
+        )
+        ref.set(_dump(updated))
+        return updated
+
+    # ---------------------------------------------------------------- metrics
+
+    def increment_event_metric(self, event_id: str, kind: str, *, jst_date: str) -> None:
+        from google.cloud import firestore
+
+        # read-then-write を避け、Increment だけで加算する。無ければ merge で作られる
+        top = {"calendar": firestore.Increment(1)} if kind == "calendar" else {
+            "clicks": {kind: firestore.Increment(1)}
+        }
+        day = {"calendar": firestore.Increment(1)} if kind == "calendar" else {"clicks": firestore.Increment(1)}
+        self._db.collection(EVENT_METRICS).document(event_id).set(
+            {
+                "eventId": event_id,
+                **top,
+                "daily": {jst_date: day},
+                "updatedAt": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+
+    def get_event_metrics(self, event_id: str) -> EventMetrics | None:
+        snapshot = self._db.collection(EVENT_METRICS).document(event_id).get()
+        if not snapshot.exists:
+            return None
+        return EventMetrics(**(snapshot.to_dict() or {}))
+
+    # ------------------------------------------------------------------ usage
+
+    def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
+        from google.cloud import firestore
+
+        ref = self._db.collection(USAGE).document(day)
+
+        @firestore.transactional
+        def claim(transaction: Any) -> bool:
+            snapshot = ref.get(transaction=transaction)
+            current = UsageRecord(**(snapshot.to_dict() or {"day": day})) if snapshot.exists else UsageRecord(day=day)
+            if current.grounding_calls + count > cap:
+                return False
+            transaction.set(
+                ref,
+                _dump(
+                    current.model_copy(
+                        update={
+                            "grounding_calls": current.grounding_calls + count,
+                            "updated_at": datetime.now(timezone.utc),
+                        }
+                    )
+                ),
+            )
+            return True
+
+        # 同時に予約が集中すると、クライアントの再試行（既定 5 回）を使い切って
+        # 例外になることがある。少し待って何度か試し、それでも駄目なら「予約できず」
+        # として検索を見送る（過大に検索するより安全側）
+        import time
+
+        for attempt in range(5):
+            try:
+                return bool(claim(self._db.transaction()))
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 4:
+                    logger.warning("grounding reservation gave up for %s: %s", day, exc)
+                    return False
+                time.sleep(0.05 * (attempt + 1))
+        return False
+
+    def record_model_calls(self, day: str, count: int) -> None:
+        from google.cloud import firestore
+
+        self._db.collection(USAGE).document(day).set(
+            {
+                "day": day,
+                "modelCalls": firestore.Increment(count),
+                "updatedAt": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+
+    def get_usage(self, day: str) -> UsageRecord | None:
+        snapshot = self._db.collection(USAGE).document(day).get()
+        if not snapshot.exists:
+            return None
+        return UsageRecord(**(snapshot.to_dict() or {}))

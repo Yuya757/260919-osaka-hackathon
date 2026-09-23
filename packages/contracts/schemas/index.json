@@ -21,6 +21,8 @@
         "AgentRunStatus",
         "AgentRunTriggerType",
         "CreateAgentRunRequest",
+        "RunAgent",
+        "RunActivity",
         "CreateAgentRunResponse",
         "AgentRun"
       ]
@@ -30,9 +32,12 @@
       "path": "event.json",
       "definitions": [
         "Event",
+        "EventKind",
+        "EventMilestone",
         "EventLocation",
         "EventDates",
         "EventRecommendation",
+        "EvidencePreview",
         "GoogleCalendarEventIds",
         "EventListResponse"
       ]
@@ -56,6 +61,38 @@
         "SupportedField",
         "GroundingMetadata",
         "EvidenceListResponse"
+      ]
+    },
+    {
+      "id": "organizer-post",
+      "path": "organizer-post.json",
+      "definitions": [
+        "PostOrigin",
+        "PostStatus",
+        "PlacementKind",
+        "PostPlacement",
+        "PostIssueCode",
+        "PostIssue",
+        "OrganizerPostRequest",
+        "OrganizerPost",
+        "OrganizerPostPreviewResponse",
+        "OrganizerPostCreateResponse",
+        "OrganizerPostListResponse",
+        "MetricCounts",
+        "EventMetrics",
+        "PostMetricsResponse",
+        "MetricEventRequest"
+      ]
+    },
+    {
+      "id": "pool-search",
+      "path": "pool-search.json",
+      "definitions": [
+        "PoolSearchRequest",
+        "SearchIntent",
+        "SearchAgent",
+        "SearchActivity",
+        "PoolSearchResponse"
       ]
     }
   ]

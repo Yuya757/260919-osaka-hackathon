@@ -5,7 +5,7 @@
  * タイムゾーンで整形すると、申込締切の時刻がずれて表示される。締切の見落とし
  * を防ぐのがこのプロダクトの目的なので、そのずれは致命的。
  */
-import type { Event, EventLocationType, ValidationStatus } from '../types/api'
+import type { Event, EventLocationType, EventMilestone, ValidationStatus } from '../types/api'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_TZ = 'Asia/Tokyo'
@@ -78,16 +78,26 @@ export function deadlineLabel(event: Event): string {
   return `${formatDate(iso, tz)} ${formatTime(iso, tz)}`
 }
 
-/** 開催日のラベル。複数日開催は「M月D日 — M月D日」。 */
+/**
+ * 実施日のラベル。複数日開催は「M月D日 — M月D日」。
+ * 実施日が無い告知（ビジコン・補助金）は「未確認」。「なし」とは書かない（§6.6）。
+ */
 export function heldLabel(event: Event): string {
   const { eventStart, eventEnd, timezone } = event.dates
+  // 補助金に実施日（会場に集まる日）は無い。「未確認」だと探し損ねたように見える
+  if (!eventStart) return event.kind === 'subsidy' ? 'なし' : '未確認'
   if (eventEnd && dayKey(eventEnd, timezone) !== dayKey(eventStart, timezone)) {
     return `${formatDate(eventStart, timezone)} — ${formatDate(eventEnd, timezone)}`
   }
   const base = formatDate(eventStart, timezone)
-  return event.dates.eventStartPrecision === 'date'
-    ? base
-    : `${base} ${formatTime(eventStart, timezone)}`
+  return event.dates.eventStartPrecision === 'datetime'
+    ? `${base} ${formatTime(eventStart, timezone)}`
+    : base
+}
+
+/** 実施（開始）日と終了日から、終了済み判定などに使う日付を決める。 */
+export function anchorDate(event: Event): string | null {
+  return event.dates.eventEnd ?? event.dates.eventStart ?? event.dates.applicationDeadline ?? null
 }
 
 /** 残り日数。暦日どうしの差で数え、時刻の端数で1日ずれないようにする。 */
@@ -115,7 +125,8 @@ export function isUrgent(event: Event, thresholdDays = 5): boolean {
 }
 
 export function isFinished(event: Event): boolean {
-  const end = event.dates.eventEnd ?? event.dates.eventStart
+  // 実施日が無い告知は締切で判断する
+  const end = anchorDate(event)
   const n = daysUntil(end, event.dates.timezone)
   return n !== null && n < 0
 }
@@ -123,8 +134,15 @@ export function isFinished(event: Event): boolean {
 /** 申込締切と開催日のあいだの日数。締切が不明なら null。 */
 export function gapDays(event: Event): number | null {
   const { applicationDeadline, eventStart, timezone } = event.dates
-  if (!applicationDeadline) return null
+  if (!applicationDeadline || !eventStart) return null
   return dayIndex(eventStart, timezone) - dayIndex(applicationDeadline, timezone)
+}
+
+/** 2 軸の間隔を出せない理由。補助金は実施日が無いのが正しい状態 */
+export function gapNote(event: Event): string {
+  if (event.kind === 'subsidy') return '補助金に実施日はありません。締切までに申請します。'
+  if (!event.dates.applicationDeadline) return '締切が未確認のため間隔を出せません'
+  return '実施日が未確認のため間隔を出せません'
 }
 
 export function formatLocationType(type: EventLocationType): string {
@@ -145,9 +163,12 @@ export function placeLabel(event: Event): string {
  */
 const CATEGORY_LABEL: Record<string, string> = {
   hackathon: 'ハッカソン',
+  contest: 'ビジネスコンテスト',
   conference: 'カンファレンス',
   meetup: 'ミートアップ',
   acceleration: 'アクセラレーター',
+  cocreation: '共創プログラム',
+  subsidy: '補助金',
   pitch: 'ピッチ',
   workshop: 'ワークショップ',
   seminar: 'セミナー',
@@ -177,6 +198,8 @@ export function missingFields(event: Event): string[] {
   const missing: string[] = []
   if (!event.dates.applicationDeadline) missing.push('申込締切')
   if (!event.organizer) missing.push('主催者')
+  // 補助金に会場も開催形式も無い。「未確認」と並べると探し損ねたように見える
+  if (event.kind === 'subsidy') return missing
   if (event.location.type === 'unknown') missing.push('開催形式')
   if (!event.location.venue && !event.location.region) missing.push('開催場所')
   return missing
@@ -200,4 +223,35 @@ export function isCalendarRegistered(ids?: {
   mainEventId?: string | null
 }): boolean {
   return Boolean(ids?.deadlineEventId || ids?.mainEventId)
+}
+
+/** 機会の種別のラベル。一覧のチップと詳細に出す */
+const KIND_LABEL: Record<string, string> = {
+  hackathon: 'ハッカソン',
+  contest: 'ビジコン',
+  accelerator: 'アクセラ',
+  cocreation: '共創',
+  exhibition: '展示会',
+  subsidy: '補助金',
+}
+
+export function kindLabel(kind: string | undefined): string {
+  return KIND_LABEL[kind ?? 'hackathon'] ?? 'ハッカソン'
+}
+
+/**
+ * 実施日と同じ日の節目。ビジコンの実施日は「最終審査会」のような節目そのもの
+ * なので、その名前を実施日の行に出し、節目の行からは外す（同じ日を2度並べない）。
+ */
+export function heldMilestone(event: Event): EventMilestone | null {
+  const start = event.dates.eventStart
+  if (!start) return null
+  const at = new Date(start).getTime()
+  return (event.dates.milestones ?? []).find((m) => new Date(m.at).getTime() === at) ?? null
+}
+
+/** 実施日の行の見出し。ハッカソンは「開催日」、種別が違えば「実施日」 */
+export function heldRowLabel(event: Event): string {
+  if (event.kind === 'subsidy') return '実施日'
+  return heldMilestone(event)?.label ?? (event.kind === 'hackathon' ? '開催日' : '実施日')
 }

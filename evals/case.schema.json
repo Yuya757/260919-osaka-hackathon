@@ -35,7 +35,9 @@
           "finished",
           "conflicting_sources",
           "prompt_injection",
-          "aggregator_only"
+          "aggregator_only",
+          "contest",
+          "program"
         ]
       }
     },
@@ -172,8 +174,23 @@
                 "type": "string",
                 "enum": [
                   "datetime",
-                  "date"
+                  "date",
+                  "unknown"
                 ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "期待するジャンル固有の値（部分一致で照合する）"
+              },
+              "milestoneLabels": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "期待する節目のラベル（順序どおり）"
               },
               "eventEnd": {
                 "type": [

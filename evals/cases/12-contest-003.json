@@ -1,0 +1,44 @@
+{
+  "caseId": "12-contest-003",
+  "categories": [
+    "contest"
+  ],
+  "note": "実施日が書かれていないビジコン。締切だけで載せる（eventStart は null）。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ビジネスコンテスト ビジコン 起業",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "query": "ビジネスコンテスト 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://contest1.example.jp/2026",
+      "body": "<html><head><title>関西ビジネスアイデアコンテスト 2026</title></head><body><h1>関西ビジネスアイデアコンテスト 2026</h1><p>ビジネスプランを募集します。</p><div>応募締切: 2026年10月31日 17:00</div><div>結果発表は12月下旬を予定</div><div>主催: 関西起業支援機構</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://contest1.example.jp/2026",
+        "kind": "contest",
+        "eventStart": null,
+        "eventStartPrecision": "unknown",
+        "applicationDeadline": "2026-10-31T17:00:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "validationStatus": "partial"
+      }
+    ]
+  }
+}

@@ -1,69 +1,157 @@
-export const prefectures = '北海道 青森県 岩手県 宮城県 秋田県 山形県 福島県 茨城県 栃木県 群馬県 埼玉県 千葉県 東京都 神奈川県 新潟県 富山県 石川県 福井県 山梨県 長野県 岐阜県 静岡県 愛知県 三重県 滋賀県 京都府 大阪府 兵庫県 奈良県 和歌山県 鳥取県 島根県 岡山県 広島県 山口県 徳島県 香川県 愛媛県 高知県 福岡県 佐賀県 長崎県 熊本県 大分県 宮崎県 鹿児島県 沖縄県'.split(' ')
+/**
+ * プロフィール（興味・条件）。カード式ステップで選ぶチップの集合として持つ。
+ *
+ * v3 までは都道府県セレクトや距離・徒歩分のフォームだったが、簡素化UIで
+ * 「行ける範囲」「ジャンル」「目的」「得意な技術」「参加しやすい日時」の
+ * 5ステップのチップ選択に置き換えた。この端末の localStorage にだけ保存し、
+ * サーバーには送らない。
+ */
+
+export type ProfileGroup = 'area' | 'hackathonTypes' | 'purposes' | 'skills' | 'availability'
+
+export type ProfileStep = {
+  key: ProfileGroup
+  title: string
+  help: string
+  /** false のときは1つだけ選べる */
+  multi: boolean
+  options: string[]
+}
+
 // 要件定義書 §2.1 のターゲット（エンジニア、ハッカソン参加者、起業準備者、
-// 登壇機会を探すスピーカー）に合わせる。評価データセットとデモカタログの
-// category（hackathon / meetup / conference / pitch / acceleration）に対応する。
-// 生活系ジャンル（音楽・食事）は v3 で廃止した（画面設計書§8-5）。
-export const genres = [
-  'ハッカソン',
-  '勉強会・ミートアップ',
-  'カンファレンス',
-  'LT・登壇',
-  'ピッチ・アクセラレータ',
+// 登壇機会を探すスピーカー）に合わせる。ジャンルは評価データセットとデモ
+// カタログの category（hackathon / meetup / conference / pitch / acceleration）に対応する。
+export const profileSteps: ProfileStep[] = [
+  {
+    key: 'area',
+    title: 'どのあたりなら行けますか',
+    help: 'いちばん近いものをひとつ選んでください。あとから変えられます。',
+    multi: false,
+    options: ['大阪府', '京都府', '兵庫県', '奈良県', '関西どこでも', 'オンラインだけ'],
+  },
+  {
+    key: 'hackathonTypes',
+    title: 'どんなハッカソンに出たいですか',
+    help: 'いくつでも選べます。',
+    multi: true,
+    options: ['学生・初心者歓迎', 'ビジネス・起業', '技術特化', 'オンライン参加OK'],
+  },
+  {
+    key: 'purposes',
+    title: '参加する目的は',
+    help: '推薦の並び順に使います。',
+    multi: true,
+    options: [
+      '技術を学ぶ',
+      '仲間・チームを探す',
+      '登壇して知ってもらう',
+      '仕事・案件につなげる',
+      '資金調達の情報を集める',
+      'とにかく手を動かす',
+    ],
+  },
+  {
+    key: 'skills',
+    title: '得意なこと・興味のある技術',
+    help: 'タグで選ぶと、近いテーマのイベントが上に来ます。',
+    multi: true,
+    options: [
+      '生成AI',
+      'GCP',
+      'AWS',
+      'Python',
+      'TypeScript',
+      'Rust',
+      'Go',
+      'モバイル',
+      'データ基盤',
+      'デザイン',
+      'プロダクト企画',
+      '初心者歓迎',
+    ],
+  },
+  {
+    key: 'availability',
+    title: '参加しやすいのはいつ',
+    help: '締切より先に、行ける日かどうかで並べ替えます。',
+    multi: true,
+    options: ['平日の夜', '土曜', '日曜', '平日の日中', '連休', 'いつでも'],
+  },
 ]
-export const profileStorageKey = 'event-agent-profile-v2'
 
-// v2 の選択値から v3 の選択肢への読み替え。対応先が無いものは捨てる。
-const genresV2ToV3: Record<string, string> = {
-  ハッカソン: 'ハッカソン',
-  勉強会: '勉強会・ミートアップ',
-}
-
-export type Profile = {
-  version: 3
-  prefecture: string
-  city: string
-  distance: number
-  walkMinutes: number
-  online: boolean
-  genres: string[]
-  keywords: string
-  excluded: string
-  snsInterests: string
-}
+export type Profile = { version: 5 } & Record<ProfileGroup, string[]>
 
 export const emptyProfile: Profile = {
-  version: 3, prefecture: '', city: '', distance: 27, walkMinutes: 10,
-  online: false, genres: [], keywords: '', excluded: '', snsInterests: '',
+  version: 5,
+  area: [],
+  hackathonTypes: [],
+  purposes: [],
+  skills: [],
+  availability: [],
 }
 
-function validChoices(value: unknown, allowed: string[]): value is string[] {
-  return Array.isArray(value) && value.length <= allowed.length &&
-    new Set(value).size === value.length && value.every(item => typeof item === 'string' && allowed.includes(item))
+// キー名は v2 から据え置き。中身の version で世代を判定する。
+export const profileStorageKey = 'event-agent-profile-v2'
+
+const stepByKey = new Map(profileSteps.map((step) => [step.key, step]))
+
+function validChoices(value: unknown, step: ProfileStep): value is string[] {
+  if (!Array.isArray(value)) return false
+  if (!step.multi && value.length > 1) return false
+  return (
+    new Set(value).size === value.length &&
+    value.every((item) => typeof item === 'string' && step.options.includes(item))
+  )
 }
 
 export function isProfile(value: unknown): value is Profile {
   if (!value || typeof value !== 'object') return false
   const p = value as Record<string, unknown>
-  return p.version === 3 && typeof p.prefecture === 'string' && prefectures.includes(p.prefecture) &&
-    typeof p.city === 'string' && p.city.length <= 60 &&
-    typeof p.distance === 'number' && Number.isInteger(p.distance) && p.distance >= 1 && p.distance <= 1000 &&
-    typeof p.walkMinutes === 'number' && Number.isInteger(p.walkMinutes) && p.walkMinutes >= 1 && p.walkMinutes <= 120 &&
-    typeof p.online === 'boolean' && validChoices(p.genres, genres) && p.genres.length > 0 &&
-    typeof p.keywords === 'string' && p.keywords.length <= 300 &&
-    typeof p.excluded === 'string' && p.excluded.length <= 200 &&
-    typeof p.snsInterests === 'string' && p.snsInterests.length <= 300
+  if (p.version !== 5) return false
+  return profileSteps.every((step) => validChoices(p[step.key], step))
 }
 
-/** v2 で保存された内容を v3 の形へ読み替える。ジャンルが1つも残らなければ諦める。 */
-function migrateFromV2(value: Record<string, unknown>): Profile | null {
-  if (value.version !== 2) return null
-  const previous = Array.isArray(value.genres) ? value.genres : []
-  const mapped = [...new Set(
-    previous.flatMap(item => (typeof item === 'string' && genresV2ToV3[item] ? [genresV2ToV3[item]] : [])),
-  )]
-  if (mapped.length === 0) return null
-  const { meals: _discarded, ...rest } = value
-  const candidate = { ...rest, version: 3, genres: mapped }
+/** 選択肢に無い値を落として、必ず保存できる形に整える。 */
+export function sanitizeProfile(value: Profile): Profile {
+  const next: Profile = { ...emptyProfile }
+  for (const step of profileSteps) {
+    const picked = value[step.key].filter((item) => step.options.includes(item))
+    next[step.key] = step.multi ? [...new Set(picked)] : picked.slice(0, 1)
+  }
+  return next
+}
+
+/** v3（都道府県・距離・フォーム式）からの読み替え。対応先が無い項目は捨てる。 */
+function migrateFromV3(value: Record<string, unknown>): Profile | null {
+  if (value.version !== 3) return null
+  const areaStep = stepByKey.get('area')!
+  const prefecture = typeof value.prefecture === 'string' ? value.prefecture : ''
+  const online = value.online === true
+  const area = areaStep.options.includes(prefecture)
+    ? [prefecture]
+    : online && !prefecture
+      ? ['オンラインだけ']
+      : ['関西どこでも']
+  const candidate: Profile = { ...emptyProfile, area }
+  return isProfile(candidate) ? candidate : null
+}
+
+/**
+ * v4（ジャンル選択あり）からの読み替え。ハッカソンに絞ったので「ジャンル」は捨て、
+ * 行ける範囲・目的・技術・日時はそのまま引き継ぐ。
+ */
+function migrateFromV4(value: Record<string, unknown>): Profile | null {
+  if (value.version !== 4) return null
+  const candidate: Profile = { ...emptyProfile }
+  for (const step of profileSteps) {
+    if (step.key === 'hackathonTypes') continue
+    const raw = value[step.key]
+    if (Array.isArray(raw)) {
+      candidate[step.key] = raw.filter(
+        (item): item is string => typeof item === 'string' && step.options.includes(item),
+      )
+    }
+  }
   return isProfile(candidate) ? candidate : null
 }
 
@@ -74,13 +162,41 @@ export function loadProfile(): { profile: Profile | null; notice: string } {
     const value: unknown = JSON.parse(raw)
     if (isProfile(value)) return { profile: value, notice: '' }
     if (value && typeof value === 'object') {
-      const migrated = migrateFromV2(value as Record<string, unknown>)
+      const record = value as Record<string, unknown>
+      const migrated = migrateFromV4(record) ?? migrateFromV3(record)
       if (migrated) {
-        return { profile: migrated, notice: '興味のあるジャンルの選択肢を見直しました。設定を確認してください。' }
+        return {
+          profile: migrated,
+          notice: '興味の選び方が新しくなりました。内容を確認してください。',
+        }
       }
     }
-    return { profile: null, notice: '保存内容を読み込めませんでした。プロフィールを設定し直してください。' }
+    return {
+      profile: null,
+      notice: '保存内容を読み込めませんでした。興味を設定し直してください。',
+    }
   } catch {
-    return { profile: null, notice: 'ブラウザの保存内容を読み込めませんでした。このページ内でプロフィールを設定できます。' }
+    return {
+      profile: null,
+      notice: 'ブラウザの保存内容を読み込めませんでした。興味はこのページ内で設定できます。',
+    }
   }
+}
+
+/** 保存に成功したら true。プライベートウィンドウ等では失敗することがある。 */
+export function saveProfile(profile: Profile): boolean {
+  try {
+    localStorage.setItem(profileStorageKey, JSON.stringify(sanitizeProfile(profile)))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 設定画面の1行要約。「大阪府 / ハッカソン・勉強会 / 技術を学ぶ / …」 */
+export function summarizeProfile(profile: Profile): string {
+  return profileSteps
+    .map((step) => profile[step.key].join('・'))
+    .filter(Boolean)
+    .join(' / ')
 }

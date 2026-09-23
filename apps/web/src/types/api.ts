@@ -48,6 +48,16 @@ export type CreateAgentRunResponse = {
   status: 'queued'
 }
 
+/** パイプラインの役割。UI の「エージェントの動き」で列にする */
+export type RunAgent = 'planner' | 'searcher' | 'extractor' | 'organizer'
+
+export type RunActivity = {
+  agent: RunAgent
+  message: string
+  level?: 'info' | 'warn'
+  at: string
+}
+
 /** GET /api/agent-runs/{runId} — subset of Firestore agentRuns/{runId} (§7.1, §8.2) */
 export type AgentRun = {
   runId: string
@@ -70,6 +80,8 @@ export type AgentRun = {
   startedAt?: string
   completedAt?: string | null
   expiresAt?: string
+  /** 各役割が何をしたか。古い行から捨てられ、最大80行 */
+  activity?: RunActivity[]
 }
 
 export type EventLocationType = 'online' | 'offline' | 'hybrid' | 'unknown'
@@ -84,14 +96,32 @@ export type EventLocation = {
 
 export type DatePrecision = 'datetime' | 'date' | 'unknown'
 
+/** 機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画） */
+export type EventKind =
+  | 'hackathon'
+  | 'contest'
+  | 'accelerator'
+  | 'cocreation'
+  | 'exhibition'
+  | 'subsidy'
+
+/** 締切と実施日のあいだの節目（一次選考通過、最終審査会、結果発表など） */
+export type EventMilestone = {
+  label: string
+  at: string
+  precision: 'datetime' | 'date'
+}
+
 export type EventDates = {
   /** null は「未確認」。UIで「締切なし」と表現してはならない（§6.6）。 */
   applicationDeadline?: string | null
   /** 'date' のとき時刻を表示してはならない */
   applicationDeadlinePrecision?: DatePrecision
-  eventStart: string
-  eventStartPrecision?: 'datetime' | 'date'
+  /** 実施（開始）日時。締切だけが分かっている告知では null（ビジコン・補助金） */
+  eventStart?: string | null
+  eventStartPrecision?: DatePrecision
   eventEnd?: string | null
+  milestones?: EventMilestone[]
   /** IANA timezone。表示は必ずこのタイムゾーンで解釈する。 */
   timezone: string
 }
@@ -155,6 +185,14 @@ export type EvidenceListResponse = {
   evidence: Evidence[]
 }
 
+/** 一覧に添える根拠の要約。全文は GET /api/events/{eventId}/evidence */
+export type EvidencePreview = {
+  sourceUrl: string
+  sourceType: EvidenceSourceType
+  supports: SupportedField[]
+  excerpt: string
+}
+
 /** Event candidate / persisted event (§7.3) */
 export type Event = {
   eventId: string
@@ -163,6 +201,7 @@ export type Event = {
   normalizedTitle: string
   summary: string
   category: string
+  kind?: EventKind
   organizer?: string | null
   location: EventLocation
   dates: EventDates
@@ -179,6 +218,10 @@ export type Event = {
   sourceRunId: string
   status: EventLifecycleStatus
   googleCalendarEventIds?: GoogleCalendarEventIds
+  /** ジャンル固有の値（賞金・支援内容・対象ステージなど）。最大10項目 */
+  attributes?: Record<string, string>
+  /** 一覧用の根拠（サーバーが list 応答で添える）。最大4件 */
+  evidencePreview?: EvidencePreview[]
   /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */
   source?: string
 }
@@ -221,4 +264,133 @@ export type EventRouteResponse = {
   eventId: string
   arriveBy: string
   route: RouteSummary
+}
+
+// ---- 主催者投稿フィード（F-06）— packages/contracts/schemas/organizer-post.json
+
+export type PostOrigin = 'organizer' | 'bot'
+export type PostStatus = 'published' | 'hidden'
+export type PlacementKind = 'normal' | 'pinned' | 'priority'
+
+export type PostPlacement = {
+  kind: PlacementKind
+  until?: string | null
+}
+
+export type PostIssueCode =
+  | 'EVENT_DATE_MISSING'
+  | 'YEAR_AMBIGUOUS'
+  | 'EVENT_FINISHED'
+  | 'DATE_CONFLICT'
+  | 'DEADLINE_MISSING'
+  | 'DUPLICATE_OF_EVENT'
+
+export type PostIssue = {
+  code: PostIssueCode
+  severity: 'error' | 'warning'
+  message: string
+}
+
+export type OrganizerPostRequest = {
+  organizerName: string
+  contactUrl: string
+  title: string
+  body: string
+}
+
+/**
+ * 投稿は派生した Event と根拠を埋め込む。Event そのものではなく、`events/` にも
+ * 載らない（ADR-006）。`linkedEventId` は AI 収集イベントと同じと判定された相手。
+ */
+export type OrganizerPost = {
+  postId: string
+  userId: string
+  origin: PostOrigin
+  organizerName: string
+  contactUrl: string
+  title: string
+  body: string
+  event: Event
+  evidence: Evidence[]
+  status: PostStatus
+  placement: PostPlacement
+  linkedEventId?: string | null
+  linkedDedupKey?: string | null
+  injectionFlags: string[]
+  /** 管理者が主催者の本人性を確認済み（ADR-009）。再投稿で戻らない */
+  organizerConfirmed: boolean
+  confirmedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** 計測付きリダイレクトの種別（ADR-009） */
+export type GoKind = 'official' | 'application' | 'contact'
+
+export type MetricCounts = { clicks: number; calendar: number }
+
+export type EventMetrics = {
+  eventId: string
+  clicks: { official: number; application: number; contact: number }
+  calendar: number
+  daily: Record<string, MetricCounts>
+  updatedAt?: string | null
+}
+
+export type PostMetricsResponse = {
+  postId: string
+  eventId: string
+  linkedEventId?: string | null
+  metrics: EventMetrics
+  linkedMetrics?: EventMetrics | null
+}
+
+export type OrganizerPostPreviewResponse = {
+  event: Event | null
+  linkedEvent: Event | null
+  issues: PostIssue[]
+}
+
+export type OrganizerPostCreateResponse = {
+  post: OrganizerPost
+  warnings: PostIssue[]
+}
+
+export type OrganizerPostListResponse = {
+  posts: OrganizerPost[]
+}
+
+// ---- プール探索エージェント（ADR-010）— packages/contracts/schemas/pool-search.json
+
+export type SearchAgent = 'interpreter' | 'filter' | 'scorer' | 'presenter'
+
+export type SearchActivity = {
+  agent: SearchAgent
+  message: string
+  level?: 'info' | 'warn'
+  at: string
+}
+
+export type SearchIntent = {
+  interestsPrompt: string
+  locations: string[]
+  onlineOnly: boolean
+  dateFrom?: string | null
+  dateTo?: string | null
+  keywords: string[]
+  /** 問いかけが指す機会の種別。空なら種別で絞っていない */
+  kinds: EventKind[]
+}
+
+export type PoolSearchRequest = { sessionId?: string; query: string }
+
+export type PoolSearchResponse = {
+  sessionId: string
+  /** 一覧の上に出す一言。Grounding 由来ではない（§3.7 の表示義務は生じない） */
+  reply: string
+  intent: SearchIntent
+  events: Event[]
+  activity: SearchActivity[]
+  lastCollectedAt?: string | null
+  modelCalls: number
 }

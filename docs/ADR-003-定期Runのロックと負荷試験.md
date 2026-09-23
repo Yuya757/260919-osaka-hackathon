@@ -83,16 +83,17 @@ Cloud Run Job の作成、Cloud Scheduler の登録、デプロイワークフ�
 - §9.2 の「1 Run最大15回」が、同時実行下で実際に1 Runあたりの上限として働くようになった。
 - 定期実行を Phase 2 で動かすとき、二重収集の防止は既に済んでいる状態から始められる。
 
-## デプロイ状況（2026-09-21 更新）
+## デプロイ状況（2026-09-22 更新）
 
 | 対象 | 状態 |
 | --- | --- |
-| Cloud Run Job `event-agent-daily` | `deploy-develop.yml` からデプロイする |
-| Cloud Scheduler | **未作成**（下記） |
+| Cloud Run Job `event-agent-daily` | `deploy-develop.yml` からデプロイする。13 タスク直列（1 タスク 1 テーマ、ADR-008） |
+| Cloud Scheduler `event-agent-daily-0700` | `deploy-develop.yml` が作成・更新する（毎朝 07:00 JST、`event-agent-scheduler` SA） |
 
-Job は同じコンテナイメージを `python -m event_agent.entrypoints.job` で起動する。
-`--task-timeout 300s` を付けたので、§9.2 の「Run全体300秒で強制終了」はJob経路に限り
-インフラ側で満たされる。アプリ内のタイムアウトは引き続き未実装である。
+Job は同じコンテナイメージを `python -m event_agent.entrypoints.job` で起動し、
+`CLOUD_RUN_TASK_INDEX` でテーマを選ぶ。`--task-timeout 600s`（1 テーマ 90 秒前後）。
+Run の鍵は `theme:<id> + JST日付 + RUN_SCHEDULE_VERSION` で、ユーザー単位ではない。
+アプリ内のタイムアウトは引き続き未実装である。
 
 `--max-retries 0` は意図的な選択である。§9.3 のロックは二重収集を防ぐが、キーを
 claim した実行が途中で落ちた場合の再開はしない。自動リトライを入れると、再試行は

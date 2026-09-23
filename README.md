@@ -1,6 +1,6 @@
 # 超イベント管理（仮称）
 
-ユーザーの関心に合うイベントをGeminiで探索・検証し、「申込締切」と「開催日」を分けて提示するイベント管理アプリケーションです。
+ユーザーの関心に合う**ハッカソン**をGeminiで探索・検証し、「申込締切」と「開催日」を分けて提示するイベント管理アプリケーションです。収集はテーマ単位（関西 / 関東 / 中部 / オンライン）で毎朝行い、主催者の告知投稿フィードも持ちます。
 
 ## デモ
 
@@ -60,10 +60,17 @@
 - [プロジェクト要件定義書](docs/イベント自律管理AIエージェント%20要件定義書.md)
 - [Agent詳細要件定義書](docs/Agent詳細要件定義書.md)
 - [スマートフォン画面設計書](docs/画面設計書_スマホ.md) — 画面一覧は §2.2、各画面仕様は §4
+- [ジャンル拡張計画](docs/ジャンル拡張計画.md) — ビジコン・展示会・アクセラ・共創・補助金へ広げる段階と、ベクトル化を今は入れない理由
 - [ADR-001 駅すぱあと経路検索](docs/ADR-001-駅すぱあと経路検索.md)
 - [ADR-002 Firestore永続化](docs/ADR-002-Firestore永続化.md) — コレクション構成と §9.3 の冪等性
 - [ADR-003 定期Runのロックと負荷試験](docs/ADR-003-定期Runのロックと負荷試験.md) — §13.3 Load と §9.2 のRun単位クォータ
 - [ADR-004 プロンプトインジェクション対策](docs/ADR-004-プロンプトインジェクション対策.md) — 検出・デリミタ・カナリアの3層と、ページと発話で扱いを分ける理由
+- [ADR-005 PWA化とキャッシュ方針](docs/ADR-005-PWA化とキャッシュ方針.md) — `/api/` をキャッシュしない理由とアプリシェルだけを持つ Service Worker
+- [ADR-006 主催者投稿フィード](docs/ADR-006-主催者投稿フィード.md) — 投稿を Event に実体化せず埋め込む理由、投稿本文の扱い、ボット投稿と固定枠のモデル
+- [ADR-007 実ページからの抽出](docs/ADR-007-実ページからの抽出.md) — モデルは本文の該当行を引用するだけで、値は決定論的パーサが決める。本番はデモを切る
+- [ADR-009 主催者向け計測と掲載枠](docs/ADR-009-主催者向け計測と掲載枠.md) — クリックとカレンダー登録の計測、主催者確認、PR 枠の管理コマンド。料金は仮説
+- [ADR-008 テーマ単位収集とコスト制御](docs/ADR-008-テーマ単位収集とコスト制御.md) — 収集はテーマ単位で共有し、一覧は読み出し時に採点。手動探索は設定で切替、既知ページは再抽出しない
+- [ADR-010 プール探索エージェント](docs/ADR-010-プール探索エージェント.md) — 「探す」は Web に出ず、バッチ収集済みのプールを 解釈 → 絞り込み → 採点 → 提示 の4役割で探す
 - [ブランチ運用ルール](docs/ブランチ運用ルール.md) — `develop` が本番。作業ブランチは `develop` から切る
 
 スマホ画面の実寸モック: [docs/mockups/mobile.html](docs/mockups/mobile.html)（ブラウザで直接開けます。ビルド不要）
@@ -74,8 +81,9 @@
 
 ```bash
 cd apps/web
-npm ci
-npm run dev
+corepack enable   # package.json の packageManager に従って pnpm を用意する
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 ### Agent API
@@ -83,9 +91,9 @@ npm run dev
 テストと評価データセット:
 
 ```bash
-cd services/agent && pytest         # 184件（Firestoreの44件は自動スキップ）
+cd services/agent && pytest         # 209件（Firestoreの56件は自動スキップ）
 ./scripts/run-evals.sh              # 61ケース、§13.2 の受入基準で判定
-./scripts/run-integration-tests.sh  # Firestore Emulator上で228件（Java必須、§13.3）
+./scripts/run-integration-tests.sh  # Firestore Emulator上で273件（Java必須、§13.3）
 ```
 
 ```bash

@@ -8,11 +8,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { AppStateProvider } from './state/AppState'
-import { AgentChatScreen } from './screens/AgentChatScreen'
 import { CalendarScreen } from './screens/CalendarScreen'
 import { EventDetailScreen } from './screens/EventDetailScreen'
-import { HomeScreen } from './screens/HomeScreen'
-import { SavedScreen } from './screens/SavedScreen'
+import { EventListScreen } from './screens/EventListScreen'
+import { FeedScreen } from './screens/FeedScreen'
+import { PostFormScreen } from './screens/PostFormScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 
 export default function App() {
@@ -21,12 +22,16 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell />}>
-            <Route index element={<HomeScreen />} />
+            <Route index element={<EventListScreen mode="home" />} />
+            <Route path="saved" element={<EventListScreen mode="saved" />} />
+            <Route path="feed" element={<FeedScreen />} />
+            <Route path="feed/new" element={<PostFormScreen />} />
             <Route path="calendar" element={<CalendarScreen />} />
-            <Route path="saved" element={<SavedScreen />} />
             <Route path="settings" element={<SettingsScreen />} />
-            <Route path="agent" element={<AgentChatScreen />} />
+            <Route path="settings/profile" element={<ProfileScreen />} />
             <Route path="events/:eventId" element={<EventDetailScreen />} />
+            {/* 旧チャット画面。入力欄は一覧の最上部に統合した */}
+            <Route path="agent" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -24,6 +24,8 @@ from event_agent.schemas import (
     EventLocation,
     Evidence,
     GoogleCalendarEventIds,
+    OrganizerPost,
+    PostPlacement,
     Recommendation,
     UserPreferences,
 )
@@ -113,6 +115,24 @@ def make_evidence(evidence_id: str = "ev-1", **overrides) -> Evidence:
     }
     fields.update(overrides)
     return Evidence(**fields)
+
+
+def make_post(post_id: str = "post-1", *, origin: str = "organizer", **overrides) -> OrganizerPost:
+    event = make_event(post_id, run_id="organizer-posts", url="https://example.com/post")
+    fields = {
+        "postId": post_id,
+        "origin": origin,
+        "organizerName": "テスト主催者",
+        "contactUrl": "https://example.com/post",
+        "title": event.title,
+        "body": "開催日: 2026年10月21日 10:00\n申込締切: 2026年10月1日",
+        "event": event,
+        "evidence": [make_evidence("ev-post", sourceType="organizer")],
+        "createdAt": NOW,
+        "updatedAt": NOW,
+    }
+    fields.update(overrides)
+    return OrganizerPost(**fields)
 
 
 class TestRuns:
@@ -364,14 +384,138 @@ class TestSessions:
         assert session.messages == []
 
 
+class TestPool:
+    def test_list_recent_events_respects_since(self, store):
+        store.save_events("run-1", [make_event("evt-old", url="https://example.com/old", lastSeenAt=NOW - timedelta(days=40))])
+        store.save_events("run-2", [make_event("evt-new", url="https://example.com/new", lastSeenAt=NOW - timedelta(days=3))])
+        recent = store.list_recent_events(NOW - timedelta(days=30))
+        assert [e.event_id for e in recent] == ["evt-new"]
+
+    def test_find_events_by_urls_matches_normalized_url(self, store):
+        store.save_events("run-1", [make_event("evt-1", url="https://www.example.com/event/?utm_source=x")])
+        found = store.find_events_by_urls(["https://example.com/event"])
+        assert list(found) == ["https://example.com/event"]
+        assert found["https://example.com/event"].event_id == "evt-1"
+        assert store.find_events_by_urls(["https://example.com/other"]) == {}
+
+    def test_touch_events_moves_only_last_seen_at(self, store):
+        saved = store.save_events(
+            "run-1", [make_event("evt-1", lastExtractedAt=NOW - timedelta(days=2))]
+        )[0]
+        later = NOW + timedelta(days=1)
+        store.touch_events([saved.dedup_key], last_seen_at=later)
+        touched = store.get_event("evt-1")
+        assert touched.last_seen_at == later
+        assert touched.last_extracted_at == NOW - timedelta(days=2)
+        assert touched.source_run_id == "run-1"
+        assert touched.evidence_ids == ["ev-1"]
+        store.touch_events(["missing"], last_seen_at=later)  # 無いものは黙って飛ばす
+
+    def test_get_evidence_for_events_spans_runs(self, store):
+        store.save_evidence("run-1", [make_evidence("ev-1")])
+        store.save_evidence("run-2", [make_evidence("ev-2", excerpt="別の根拠")])
+        store.save_events("run-1", [make_event("evt-1", url="https://example.com/a", evidenceIds=["ev-1"])])
+        store.save_events("run-2", [make_event("evt-2", url="https://example.com/b", run_id="run-2", evidenceIds=["ev-2", "ev-missing"])])
+        events = [store.get_event("evt-1"), store.get_event("evt-2")]
+        by_id = store.get_evidence_for_events(events)
+        assert [e.evidence_id for e in by_id["evt-1"]] == ["ev-1"]
+        assert [e.evidence_id for e in by_id["evt-2"]] == ["ev-2"]
+
+    def test_latest_collection_at_follows_non_empty_saves(self, store):
+        assert store.latest_collection_at() is None
+        store.save_events("run-1", [make_event("evt-1")])
+        first = store.latest_collection_at()
+        assert first is not None
+        store.save_events("run-2", [])
+        assert store.latest_collection_at() == first
+        assert store.list_events() and store.list_events()[0].event_id == "evt-1"
+
+
+class TestUsage:
+    def test_reservation_is_capped_per_day(self, store):
+        assert store.get_usage("2026-09-21") is None
+        assert store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert not store.reserve_grounding_calls("2026-09-21", 4, cap=10)
+        assert store.get_usage("2026-09-21").grounding_calls == 8
+        # 別の日は別の枠
+        assert store.reserve_grounding_calls("2026-09-22", 4, cap=10)
+        store.record_model_calls("2026-09-21", 3)
+        store.record_model_calls("2026-09-21", 2)
+        usage = store.get_usage("2026-09-21")
+        assert usage.model_calls == 5 and usage.grounding_calls == 8
+
+
+class TestOrganizerPosts:
+    def test_round_trip_keeps_nested_models(self, store):
+        saved = store.save_organizer_post(make_post())
+        loaded = store.get_organizer_post("post-1")
+        assert loaded == saved
+        assert loaded.event.dates.event_start == NOW + timedelta(days=30)
+        assert loaded.evidence[0].source_type == "organizer"
+        assert loaded.placement == PostPlacement()
+        assert loaded.status == "published"
+
+    def test_resave_keeps_created_at_and_state(self, store):
+        store.save_organizer_post(make_post())
+        store.update_post_state(
+            "post-1", status="hidden", placement=PostPlacement(kind="pinned")
+        )
+        later = NOW + timedelta(days=1)
+        resaved = store.save_organizer_post(
+            make_post(title="改題", createdAt=later, updatedAt=later)
+        )
+        assert resaved.title == "改題"
+        assert resaved.updated_at == later
+        assert resaved.created_at == NOW
+        assert resaved.status == "hidden"
+        assert resaved.placement.kind == "pinned"
+
+    def test_list_filters_by_status(self, store):
+        store.save_organizer_post(make_post("post-1"))
+        store.save_organizer_post(make_post("post-2"))
+        store.update_post_state("post-2", status="hidden")
+        assert {p.post_id for p in store.list_organizer_posts()} == {"post-1", "post-2"}
+        assert [p.post_id for p in store.list_organizer_posts(status="published")] == ["post-1"]
+
+    def test_update_unknown_post_is_none(self, store):
+        assert store.update_post_state("missing", status="hidden") is None
+
+
 class TestReset:
     def test_reset_clears_everything(self, store):
         store.create_run(make_run())
         store.save_events("run-1", [make_event("evt-1")])
         store.save_evidence("run-1", [make_evidence("ev-1")])
+        store.save_organizer_post(make_post())
 
         store.reset()
 
         assert store.get_run("run-1") is None
         assert store.list_events() == []
         assert store.get_evidence("run-1", ["ev-1"]) == []
+        assert store.list_organizer_posts() == []
+
+
+class TestMetrics:
+    def test_increment_creates_and_accumulates(self, store):
+        assert store.get_event_metrics("evt-1") is None
+        store.increment_event_metric("evt-1", "official", jst_date="2026-09-21")
+        store.increment_event_metric("evt-1", "official", jst_date="2026-09-21")
+        store.increment_event_metric("evt-1", "calendar", jst_date="2026-09-22")
+        metrics = store.get_event_metrics("evt-1")
+        assert metrics.event_id == "evt-1"
+        assert metrics.clicks.official == 2 and metrics.clicks.application == 0
+        assert metrics.calendar == 1
+        assert metrics.daily["2026-09-21"].clicks == 2 and metrics.daily["2026-09-21"].calendar == 0
+        assert metrics.daily["2026-09-22"].calendar == 1
+        assert metrics.updated_at is not None
+
+    def test_confirmation_is_kept_on_resave(self, store):
+        store.save_organizer_post(make_post())
+        confirmed = store.update_post_state("post-1", organizer_confirmed=True, now=NOW)
+        assert confirmed.organizer_confirmed and confirmed.confirmed_at == NOW
+        resaved = store.save_organizer_post(make_post(title="改題"))
+        assert resaved.organizer_confirmed and resaved.confirmed_at == NOW
+        cleared = store.update_post_state("post-1", organizer_confirmed=False, now=NOW)
+        assert not cleared.organizer_confirmed and cleared.confirmed_at is None

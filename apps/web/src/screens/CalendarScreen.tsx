@@ -1,267 +1,181 @@
 /**
  * S-03 カレンダー（2軸月表示）
  *
- * 360px幅では1セル約47pxしかないため、2軸をテキストで並べられない。
  * 申込締切は「右上の点」、開催日は「下端の帯」として、位置と形で区別する。
  * 帯は複数日開催が横に連続するので、点との性質の違いが色を見なくても伝わる。
+ * 月の予定は下に日付順で並べ、押すと詳細へ移る。
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
-import { dayDate, dayKey, formatTime } from '../lib/eventView'
-import { RunProgressBanner } from '../components/RunProgressBanner'
+import { dayDate, dayKey } from '../lib/eventView'
 import type { Event } from '../types/api'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
-type Axis = 'both' | 'deadline' | 'held'
+
+type AgendaItem = {
+  key: string
+  date: Date
+  kind: 'deadline' | 'held'
+  event: Event
+}
 
 function localKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 }
 
 export function CalendarScreen() {
-  const { events } = useAppState()
+  const { events, posts } = useAppState()
   const navigate = useNavigate()
   const today = new Date()
+  const todayKey = localKey(today)
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
-  const [selected, setSelected] = useState(() => localKey(today))
-  const [axis, setAxis] = useState<Axis>('both')
 
-  const { deadlineIndex, heldIndex, unknownDeadline } = useMemo(() => {
-    const deadlines = new Map<string, Event[]>()
-    const held = new Map<string, { event: Event; first: boolean; last: boolean }[]>()
-    const unknown: Event[] = []
+  // 主催者投稿のイベントも載せる。AI 収集分と結び付いた投稿は相手側が既に載っている
+  const shown = useMemo(
+    () => [
+      ...events,
+      ...posts.filter((post) => !post.linkedEventId).map((post) => post.event),
+    ],
+    [events, posts],
+  )
 
-    for (const event of events) {
+  const { deadlineIndex, heldIndex, agenda } = useMemo(() => {
+    const deadlines = new Set<string>()
+    const held = new Map<string, { first: boolean; last: boolean }>()
+    const items: AgendaItem[] = []
+
+    for (const event of shown) {
       const tz = event.dates.timezone
       // 締切が不明なイベントは締切マーカーを描かない。推測しない（§3.2）
       if (event.dates.applicationDeadline) {
-        const key = dayKey(event.dates.applicationDeadline, tz)
-        deadlines.set(key, [...(deadlines.get(key) ?? []), event])
-      } else {
-        unknown.push(event)
+        const date = dayDate(event.dates.applicationDeadline, tz)
+        deadlines.add(dayKey(event.dates.applicationDeadline, tz))
+        items.push({ key: `${event.eventId}-deadline`, date, kind: 'deadline', event })
       }
+      // 実施日が無い告知（ビジコン・補助金）は締切だけを載せる
+      if (!event.dates.eventStart) continue
       const start = dayDate(event.dates.eventStart, tz)
       const end = event.dates.eventEnd ? dayDate(event.dates.eventEnd, tz) : start
-      const startKey = localKey(start)
-      const endKey = localKey(end)
+      items.push({ key: `${event.eventId}-held`, date: start, kind: 'held', event })
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = localKey(d)
-        held.set(key, [
-          ...(held.get(key) ?? []),
-          { event, first: key === startKey, last: key === endKey },
-        ])
+        const current = held.get(key)
+        const mark = { first: key === localKey(start), last: key === localKey(end) }
+        // 同じ日に複数の開催が重なるときは、帯の端を丸めない側を優先する
+        held.set(
+          key,
+          current ? { first: current.first && mark.first, last: current.last && mark.last } : mark,
+        )
       }
     }
-    return { deadlineIndex: deadlines, heldIndex: held, unknownDeadline: unknown }
-  }, [events])
+    items.sort((a, b) => a.date.getTime() - b.date.getTime() || (a.kind === 'deadline' ? -1 : 1))
+    return { deadlineIndex: deadlines, heldIndex: held, agenda: items }
+  }, [shown])
 
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
     const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay())
-    return Array.from({ length: 42 }, (_, i) => {
+    const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+    const rows = Math.ceil((first.getDay() + daysInMonth) / 7)
+    return Array.from({ length: rows * 7 }, (_, i) => {
       const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
       return { date, key: localKey(date), outside: date.getMonth() !== cursor.getMonth() }
     })
   }, [cursor])
 
-  const selectedDate = useMemo(() => {
-    const [y, m, d] = selected.split('-').map(Number)
-    return new Date(y, m - 1, d)
-  }, [selected])
+  const monthAgenda = useMemo(
+    () =>
+      agenda.filter(
+        (item) =>
+          item.date.getFullYear() === cursor.getFullYear() &&
+          item.date.getMonth() === cursor.getMonth(),
+      ),
+    [agenda, cursor],
+  )
 
-  const dayDeadlines = deadlineIndex.get(selected) ?? []
-  const dayHeld = heldIndex.get(selected) ?? []
-  const monthLabel = `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`
-  /**
-   * 月を送ったら選択日もその月へ移す。移さないと、10月のグリッドを見ながら
-   * 下のリストだけ9月の日付、という状態になって読み手が混乱する。
-   * 送った先が今月なら今日を、そうでなければ1日を選ぶ。
-   */
-  const shiftMonth = (delta: number) => {
-    setCursor((c) => {
-      const next = new Date(c.getFullYear(), c.getMonth() + delta, 1)
-      const now = new Date()
-      const isThisMonth =
-        next.getFullYear() === now.getFullYear() && next.getMonth() === now.getMonth()
-      setSelected(localKey(isThisMonth ? now : next))
-      return next
-    })
-  }
+  const shiftMonth = (delta: number) =>
+    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1))
 
   return (
-    <>
-      <header className="app-header">
-        <div className="header-main">
-          <h1 className="header-compact">カレンダー</h1>
-        </div>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => {
-            const now = new Date()
-            setCursor(new Date(now.getFullYear(), now.getMonth(), 1))
-            setSelected(localKey(now))
-          }}
-        >
-          今日
+    <div className="calendar">
+      <div className="month-nav">
+        <h1>
+          {cursor.getFullYear()}年{cursor.getMonth() + 1}月
+        </h1>
+        <button type="button" className="icon-button" onClick={() => shiftMonth(-1)} aria-label="前の月">
+          ‹
         </button>
-      </header>
-
-      <RunProgressBanner />
-
-      <div className="scroll-area">
-        <div className="month-nav">
-          <button type="button" className="icon-button" onClick={() => shiftMonth(-1)} aria-label="前の月">
-            ‹
-          </button>
-          <strong>{monthLabel}</strong>
-          <button type="button" className="icon-button" onClick={() => shiftMonth(1)} aria-label="次の月">
-            ›
-          </button>
-        </div>
-
-        <div className="segmented" role="group" aria-label="表示する軸">
-          {(
-            [
-              ['both', '両方'],
-              ['deadline', '締切のみ'],
-              ['held', '開催のみ'],
-            ] as [Axis, string][]
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={axis === value}
-              onClick={() => setAxis(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="weekday-row" aria-hidden="true">
-          {WEEKDAYS.map((w) => (
-            <span key={w}>{w}</span>
-          ))}
-        </div>
-
-        <div className="month-grid">
-          {cells.map(({ date, key, outside }) => {
-            const deadlines = axis === 'held' ? [] : deadlineIndex.get(key) ?? []
-            const held = axis === 'deadline' ? [] : heldIndex.get(key) ?? []
-            const label =
-              `${date.getMonth() + 1}月${date.getDate()}日` +
-              (deadlines.length ? ` 申込締切${deadlines.length}件` : '') +
-              (held.length ? ` 開催${held.length}件` : '')
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`day-cell${outside ? ' is-outside' : ''}`}
-                aria-pressed={selected === key}
-                aria-label={label}
-                onClick={() => setSelected(key)}
-              >
-                <span className="day-number">{date.getDate()}</span>
-                {key === localKey(today) && <span className="today-dot" aria-hidden="true" />}
-                {deadlines.length > 0 && <span className="mark-deadline" aria-hidden="true" />}
-                {held.length > 0 && (
-                  <span
-                    className={`mark-held${held[0].first ? ' is-start' : ''}${
-                      held[0].last ? ' is-end' : ''
-                    }`}
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="legend">
-          <span>
-            <i className="key-deadline" aria-hidden="true" />
-            申込締切（点）
-          </span>
-          <span>
-            <i className="key-held" aria-hidden="true" />
-            開催日（帯）
-          </span>
-        </div>
-
-        <section className="agenda">
-          <h2>
-            {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日（
-            {WEEKDAYS[selectedDate.getDay()]}）
-          </h2>
-
-          {dayDeadlines.length === 0 && dayHeld.length === 0 && (
-            <p className="event-meta">この日に予定はありません。</p>
-          )}
-
-          {dayDeadlines.length > 0 && (
-            <div className="agenda-group">
-              <p className="agenda-label">申込締切（{dayDeadlines.length}）</p>
-              {dayDeadlines.map((event) => (
-                <button
-                  key={event.eventId}
-                  type="button"
-                  className="agenda-row is-deadline"
-                  onClick={() => navigate(`/events/${encodeURIComponent(event.eventId)}`)}
-                >
-                  <span aria-hidden="true">🚨</span>
-                  <span className="agenda-title">{event.title}</span>
-                  <span className="agenda-time">
-                    {event.dates.applicationDeadlinePrecision === 'date'
-                      ? '時刻未確認'
-                      : formatTime(event.dates.applicationDeadline!, event.dates.timezone)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {dayHeld.length > 0 && (
-            <div className="agenda-group">
-              <p className="agenda-label">開催（{dayHeld.length}）</p>
-              {dayHeld.map(({ event }) => (
-                <button
-                  key={event.eventId}
-                  type="button"
-                  className="agenda-row is-held"
-                  onClick={() => navigate(`/events/${encodeURIComponent(event.eventId)}`)}
-                >
-                  <span aria-hidden="true">📅</span>
-                  <span className="agenda-title">{event.title}</span>
-                  <span className="agenda-time">
-                    {formatTime(event.dates.eventStart, event.dates.timezone)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {unknownDeadline.length > 0 && (
-            <div className="agenda-group">
-              {/* 締切が不明なイベントを黙って落とさない */}
-              <p className="agenda-label">締切未確認（{unknownDeadline.length}）</p>
-              {unknownDeadline.map((event) => (
-                <button
-                  key={event.eventId}
-                  type="button"
-                  className="agenda-row is-unknown"
-                  onClick={() => navigate(`/events/${encodeURIComponent(event.eventId)}`)}
-                >
-                  <span aria-hidden="true">○</span>
-                  <span className="agenda-title">{event.title}</span>
-                  <span className="agenda-time">—</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <button type="button" className="icon-button" onClick={() => shiftMonth(1)} aria-label="次の月">
+          ›
+        </button>
       </div>
-    </>
+
+      <div className="weekdays" aria-hidden="true">
+        {WEEKDAYS.map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+      </div>
+
+      <div className="month-grid">
+        {cells.map(({ date, key, outside }) => {
+          const hasDeadline = !outside && deadlineIndex.has(key)
+          const held = outside ? undefined : heldIndex.get(key)
+          const label =
+            `${date.getMonth() + 1}月${date.getDate()}日` +
+            (hasDeadline ? ' 申込締切あり' : '') +
+            (held ? ' 開催あり' : '')
+          return (
+            <div
+              key={key}
+              className={`day${outside ? ' is-outside' : ''}${key === todayKey ? ' is-today' : ''}`}
+              aria-label={outside ? undefined : label}
+            >
+              {outside ? '' : date.getDate()}
+              {hasDeadline && <span className="mark-deadline" aria-hidden="true" />}
+              {held && (
+                <span
+                  className={`mark-held${held.first ? ' is-start' : ''}${held.last ? ' is-end' : ''}`}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="legend">
+        <span>
+          <i className="dot dot-deadline" aria-hidden="true" />
+          申込締切
+        </span>
+        <span>
+          <i className="bar-held" aria-hidden="true" />
+          開催日
+        </span>
+      </div>
+
+      <div className="agenda">
+        {monthAgenda.length === 0 && <p className="empty">この月に予定はありません。</p>}
+        {monthAgenda.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className="agenda-row"
+            onClick={() => navigate(`/events/${encodeURIComponent(item.event.eventId)}`)}
+          >
+            <span className="agenda-date">
+              {item.date.getMonth() + 1}/{item.date.getDate()}
+            </span>
+            <span
+              className={`dot ${item.kind === 'deadline' ? 'dot-deadline' : 'dot-held'}`}
+              aria-hidden="true"
+            />
+            <span className="agenda-title">{item.event.title}</span>
+            <span className="agenda-kind">{item.kind === 'deadline' ? '締切' : '開催'}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

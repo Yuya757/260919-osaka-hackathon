@@ -32,6 +32,9 @@ class ExpectedEvent:
     application_deadline: str | None = None
     application_deadline_precision: str = "unknown"
     location_type: str | None = None
+    kind: str | None = None
+    milestone_labels: tuple[str, ...] = ()
+    attributes: dict[str, str] | None = None
     evidence_required: tuple[str, ...] = ()
 
 
@@ -64,6 +67,9 @@ def _expected(entry: dict[str, Any]) -> ExpectedEvent:
         application_deadline=entry.get("applicationDeadline"),
         application_deadline_precision=entry.get("applicationDeadlinePrecision", "unknown"),
         location_type=entry.get("locationType"),
+        kind=entry.get("kind"),
+        milestone_labels=tuple(entry.get("milestoneLabels", ())),
+        attributes=entry.get("attributes"),
         evidence_required=tuple(entry.get("evidenceRequired", ())),
     )
 

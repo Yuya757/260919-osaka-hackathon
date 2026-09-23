@@ -1,0 +1,48 @@
+{
+  "caseId": "13-program-004",
+  "categories": [
+    "program"
+  ],
+  "note": "一覧由来の素っ気ない書き方（裸の「締切」）でも締切を読む。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "アクセラレータープログラム オープンイノベーション 共創",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西",
+      "東京"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://program4.example.jp/2026",
+      "query": "アクセラレータープログラム 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://program4.example.jp/2026",
+      "body": "<html><head><title>埼玉版スーパー・シティ アクセラレータープログラム</title></head><body><h1>埼玉版スーパー・シティ アクセラレータープログラム</h1><p>市町村の地域課題を解決する企業を募集します。</p><div>締切2026.11.27</div><div>エントリー募集中</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://program4.example.jp/2026",
+        "kind": "accelerator",
+        "eventStart": null,
+        "eventStartPrecision": "unknown",
+        "applicationDeadline": "2026-11-27T00:00:00+09:00",
+        "applicationDeadlinePrecision": "date",
+        "validationStatus": "partial",
+        "evidenceRequired": [
+          "title",
+          "dates.applicationDeadline"
+        ]
+      }
+    ]
+  }
+}
