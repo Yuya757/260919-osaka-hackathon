@@ -15,8 +15,8 @@ import type { Event, EventKind } from '../types/api'
 
 type Filter = 'all' | 'soon' | 'online' | 'check'
 
-const FILTERS: [Filter, string][] = [
-  ['all', 'すべて'],
+// 「すべて」はジャンルの行と共通の 1 つだけ。状態のチップは押し直すと外れる
+const FILTERS: [Exclude<Filter, 'all'>, string][] = [
   ['soon', '締切間近'],
   ['online', 'オンライン'],
   ['check', '要確認'],
@@ -125,31 +125,35 @@ export function EventListScreen({ mode }: Props) {
           </button>
         </form>
 
-        {kinds.length > 0 && (
-          <div className="filters" role="group" aria-label="ジャンルの絞り込み">
-            <button type="button" aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
-              すべて
-            </button>
-            {kinds.map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={kind === value}
-                onClick={() => setKind(value)}
-              >
-                {kindLabel(value)}
-              </button>
-            ))}
-          </div>
-        )}
-
+        {/* ジャンルと状態を 1 行にまとめる。「すべて」は両方の絞り込みを外す */}
         <div className="filters" role="group" aria-label="イベントの絞り込み">
+          <button
+            type="button"
+            aria-pressed={kind === 'all' && filter === 'all'}
+            onClick={() => {
+              setKind('all')
+              setFilter('all')
+            }}
+          >
+            すべて
+          </button>
+          {kinds.map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={kind === value}
+              onClick={() => setKind(kind === value ? 'all' : value)}
+            >
+              {kindLabel(value)}
+            </button>
+          ))}
+          <span className="filters-divider" aria-hidden="true" />
           {FILTERS.map(([value, label]) => (
             <button
               key={value}
               type="button"
               aria-pressed={filter === value}
-              onClick={() => setFilter(value)}
+              onClick={() => setFilter(filter === value ? 'all' : value)}
             >
               {label}
             </button>
