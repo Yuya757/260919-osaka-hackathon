@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { getEventRoute } from '../api/client'
+import { loadHomeStation, saveHomeStation } from '../lib/homeStation'
 import type { RouteSummary } from '../types/api'
 
 type RoutePanelProps = {
@@ -8,24 +9,6 @@ type RoutePanelProps = {
   nearestStation: string
   /** 会場名。到着駅を入力してもらうときの手がかりに出す */
   venue?: string
-}
-
-const ORIGIN_STORAGE_KEY = 'event-agent.origin-station'
-
-function readSavedOrigin(): string {
-  try {
-    return window.localStorage.getItem(ORIGIN_STORAGE_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-function saveOrigin(value: string) {
-  try {
-    window.localStorage.setItem(ORIGIN_STORAGE_KEY, value)
-  } catch {
-    // storage unavailable (private mode etc.) — ignore
-  }
 }
 
 function formatTime(iso?: string | null): string {
@@ -48,7 +31,7 @@ function formatDuration(minutes: number): string {
 
 export function RoutePanel({ eventId, nearestStation, venue }: RoutePanelProps) {
   const [open, setOpen] = useState(false)
-  const [origin, setOrigin] = useState(readSavedOrigin)
+  const [origin, setOrigin] = useState(loadHomeStation)
   // 会場の最寄駅が分からない告知は多い。会場名を駅名として送っても見つからないので、
   // そのときは到着駅を利用者に入力してもらう
   const [destination, setDestination] = useState('')
@@ -68,7 +51,8 @@ export function RoutePanel({ eventId, nearestStation, venue }: RoutePanelProps) 
     try {
       const response = await getEventRoute(eventId, trimmed, knownStation ? undefined : target)
       setRoute(response.route)
-      saveOrigin(trimmed)
+      // 設定で最寄駅を登録していなければ、使った出発駅を次回の既定にする
+      if (!loadHomeStation()) saveHomeStation(trimmed)
     } catch (cause) {
       setRoute(null)
       setError(cause instanceof Error ? cause.message : '経路を取得できませんでした。')

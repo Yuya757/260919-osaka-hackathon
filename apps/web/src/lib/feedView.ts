@@ -14,18 +14,37 @@ const HACKATHON_WORDS: Record<string, string[]> = {
   技術特化: ['api', 'ai', '生成ai', 'llm', 'データ', 'クラウド', 'gcp', 'aws', '開発者'],
 }
 
-/** 「行ける範囲」→ 地域文字列に含まれていてほしい語 */
+/** 「行ける範囲」（地方区分）→ 地域文字列に含まれていてほしい語。都道府県名と主な都市 */
 const AREA_WORDS: Record<string, string[]> = {
-  大阪府: ['大阪', '梅田', '難波', 'なんば', '本町', '中之島', 'osaka'],
-  京都府: ['京都', 'kyoto'],
-  兵庫県: ['兵庫', '神戸', 'kobe'],
-  奈良県: ['奈良', 'nara'],
-  関西どこでも: ['関西', '大阪', '京都', '兵庫', '神戸', '奈良', '滋賀', '和歌山', 'kansai', 'osaka', 'kyoto', 'kobe'],
+  '北海道・東北': [
+    '北海道', '札幌', '青森', '岩手', '盛岡', '宮城', '仙台', '秋田', '山形', '福島', '郡山',
+    '東北', 'hokkaido', 'sapporo', 'sendai', 'tohoku',
+  ],
+  関東: [
+    '東京', '渋谷', '新宿', '品川', '六本木', '秋葉原', '神奈川', '横浜', '川崎', '埼玉', '千葉',
+    '茨城', 'つくば', '栃木', '宇都宮', '群馬', '高崎', '関東', 'tokyo', 'yokohama', 'kanto',
+  ],
+  中部: [
+    '愛知', '名古屋', '静岡', '浜松', '岐阜', '三重', '新潟', '長野', '富山', '石川', '金沢',
+    '福井', '山梨', '甲府', '中部', '北陸', '東海', 'nagoya', 'shizuoka', 'kanazawa',
+  ],
+  関西: [
+    '関西', '大阪', '梅田', '難波', 'なんば', '本町', '中之島', '京都', '兵庫', '神戸', '奈良',
+    '滋賀', '和歌山', 'kansai', 'osaka', 'kyoto', 'kobe', 'nara',
+  ],
+  '中国・四国': [
+    '広島', '岡山', '山口', '鳥取', '島根', '松江', '香川', '高松', '徳島', '愛媛', '松山',
+    '高知', '中国地方', '四国', 'hiroshima', 'okayama', 'shikoku',
+  ],
+  '九州・沖縄': [
+    '福岡', '博多', '天神', '北九州', '佐賀', '長崎', '熊本', '大分', '宮崎', '鹿児島', '沖縄',
+    '那覇', '九州', 'fukuoka', 'kumamoto', 'okinawa', 'kyushu',
+  ],
 }
 
 /**
  * 投稿がプロフィールのどの項目に合うかを返す。空なら「関心に合う」を出さない。
- * 一致した項目名をそのまま表示に使う（例: 「ハッカソン」「生成AI」「大阪府」）。
+ * 一致した項目名をそのまま表示に使う（例: 「ハッカソン」「生成AI」「関西」）。
  */
 export function profileMatches(post: OrganizerPost, profile: Profile | null): string[] {
   if (!profile) return []
@@ -43,12 +62,17 @@ export function profileMatches(post: OrganizerPost, profile: Profile | null): st
   for (const skill of profile.skills) {
     if (text.includes(skill.toLowerCase())) hits.push(skill)
   }
-  const area = profile.area[0]
-  if (area === 'オンラインだけ') {
-    if (event.location.type === 'online' || event.location.type === 'hybrid') hits.push(area)
-  } else if (area) {
-    const region = `${event.location.region ?? ''} ${event.location.venue ?? ''}`.toLowerCase()
-    if ((AREA_WORDS[area] ?? []).some((word) => region.includes(word))) hits.push(area)
+  // 「東京都」は「京都」を含む。関西に当てないよう先に外す
+  const region = `${event.location.region ?? ''} ${event.location.venue ?? ''}`
+    .replace(/東京都/g, '東京')
+    .toLowerCase()
+  for (const area of profile.area) {
+    if (area === 'オンラインだけ') {
+      if (event.location.type === 'online' || event.location.type === 'hybrid') hits.push(area)
+    } else if ((AREA_WORDS[area] ?? []).some((word) => region.includes(word))) {
+      // 「全国どこでも」は語を持たないので、関心の一致としては出さない
+      hits.push(area)
+    }
   }
   return [...new Set(hits)]
 }
