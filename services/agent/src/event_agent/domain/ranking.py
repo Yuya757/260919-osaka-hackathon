@@ -7,6 +7,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 
 from event_agent.domain.confidence import required_evidence_fields
+from event_agent.domain.regions import in_locations
 from event_agent.schemas import ApiEvent, Evidence, UserPreferences
 
 
@@ -41,7 +42,7 @@ def score_recommendation(
 
     # 地域・オンライン条件適合: 20
     region = (event.location.region or "") + (event.location.venue or "")
-    region_match = any(loc and loc in region for loc in preferences.locations)
+    region_match = in_locations(region, preferences.locations)
     if region_match:
         score += 20
     elif preferences.online_allowed and event.location.type in {"online", "hybrid"}:

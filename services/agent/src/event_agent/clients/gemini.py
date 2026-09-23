@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from event_agent.config import settings
+from event_agent.domain.regions import KNOWN_LOCATIONS
 from event_agent.schemas import UserPreferences
 from event_agent.security import prompt_guard
 
@@ -216,7 +217,7 @@ async def extract_preferences_from_message(
     year_match = re.search(r"(20\d{2})", msg)
     target_year = int(year_match.group(1)) if year_match else current.target_year
     locations = list(current.locations)
-    for place in ("関西", "大阪", "京都", "神戸", "東京", "オンライン"):
+    for place in KNOWN_LOCATIONS:
         if place in msg and place not in locations:
             locations.append(place)
     online_allowed = current.online_allowed
