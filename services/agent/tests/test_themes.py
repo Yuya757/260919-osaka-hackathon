@@ -10,16 +10,22 @@ from conftest import FROZEN_NOW
 from event_agent.config import get_settings
 from event_agent.entrypoints.job import select_themes
 from event_agent.workflows.collect import run_theme_collection, scheduled_idempotency_key
-from event_agent.workflows.themes import COLLECTION_THEMES, theme_by_id, theme_for_task_index
+from event_agent.workflows.themes import (
+    COLLECTION_THEMES,
+    CollectionTheme,
+    theme_by_id,
+    theme_for_task_index,
+)
 
 
 def test_themes_map_to_task_indices():
     assert [t.id for t in COLLECTION_THEMES] == [
         "hackathon-kansai", "hackathon-kanto", "hackathon-chubu", "hackathon-online",
+        "hackathon-hokkaido-tohoku", "hackathon-chugoku-shikoku", "hackathon-kyushu-okinawa",
         "contest-kansai", "contest-kanto", "contest-online",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
-    assert theme_for_task_index(6).id == "contest-online"
+    assert theme_for_task_index(9).id == "contest-online"
     # 止めているテーマはタスクに割り当てないが、id では引ける
     assert "subsidy-kansai" not in {t.id for t in COLLECTION_THEMES}
     assert theme_by_id("subsidy-kansai").kind == "subsidy"
@@ -133,6 +139,16 @@ async def test_daily_grounding_cap_ends_the_run_as_partial_success(store_backend
     assert run.grounding_calls == 0 and run.candidate_count == 0
     assert any(line.level == "warn" and "検索上限" in line.message for line in run.activity)
     assert store_backend.get_usage("2026-09-21") is None
+
+
+def test_daily_searches_fit_the_grounding_cap():
+    """全テーマを 1 日 1 回回しても、1 日の検索上限に収まる。"""
+    from event_agent.workflows.themes import search_themes
+
+    settings = get_settings()
+    per_theme = min(len(CollectionTheme.__dataclass_fields__["site_queries"].default) + 1,
+                    settings.max_search_queries)
+    assert len(search_themes()) * per_theme <= settings.daily_grounding_cap
 
 
 def test_task_count_matches_the_deployed_job():

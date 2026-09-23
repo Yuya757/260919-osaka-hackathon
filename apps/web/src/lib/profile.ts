@@ -4,7 +4,7 @@
  * v3 までは都道府県セレクトや距離・徒歩分のフォームだったが、簡素化UIで
  * 「行ける範囲」「ジャンル」「目的」「得意な技術」「参加しやすい日時」の
  * 5ステップのチップ選択に置き換えた。この端末の localStorage にだけ保存し、
- * サーバーには送らない。
+ * サーバーには送らない。v6 で「行ける範囲」を関西の府県から全国の地方区分に広げた。
  */
 
 export type ProfileGroup = 'area' | 'hackathonTypes' | 'purposes' | 'skills' | 'availability'
@@ -25,9 +25,18 @@ export const profileSteps: ProfileStep[] = [
   {
     key: 'area',
     title: 'どのあたりなら行けますか',
-    help: 'いちばん近いものをひとつ選んでください。あとから変えられます。',
-    multi: false,
-    options: ['大阪府', '京都府', '兵庫県', '奈良県', '関西どこでも', 'オンラインだけ'],
+    help: 'いくつでも選べます。あとから変えられます。',
+    multi: true,
+    options: [
+      '北海道・東北',
+      '関東',
+      '中部',
+      '関西',
+      '中国・四国',
+      '九州・沖縄',
+      '全国どこでも',
+      'オンラインだけ',
+    ],
   },
   {
     key: 'hackathonTypes',
@@ -79,10 +88,10 @@ export const profileSteps: ProfileStep[] = [
   },
 ]
 
-export type Profile = { version: 5 } & Record<ProfileGroup, string[]>
+export type Profile = { version: 6 } & Record<ProfileGroup, string[]>
 
 export const emptyProfile: Profile = {
-  version: 5,
+  version: 6,
   area: [],
   hackathonTypes: [],
   purposes: [],
@@ -92,8 +101,6 @@ export const emptyProfile: Profile = {
 
 // キー名は v2 から据え置き。中身の version で世代を判定する。
 export const profileStorageKey = 'event-agent-profile-v2'
-
-const stepByKey = new Map(profileSteps.map((step) => [step.key, step]))
 
 function validChoices(value: unknown, step: ProfileStep): value is string[] {
   if (!Array.isArray(value)) return false
@@ -107,7 +114,7 @@ function validChoices(value: unknown, step: ProfileStep): value is string[] {
 export function isProfile(value: unknown): value is Profile {
   if (!value || typeof value !== 'object') return false
   const p = value as Record<string, unknown>
-  if (p.version !== 5) return false
+  if (p.version !== 6) return false
   return profileSteps.every((step) => validChoices(p[step.key], step))
 }
 
@@ -121,17 +128,54 @@ export function sanitizeProfile(value: Profile): Profile {
   return next
 }
 
+/** v5 まで（関西の府県）の「行ける範囲」→ v6 の地方区分 */
+const LEGACY_AREA: Record<string, string> = {
+  大阪府: '関西',
+  京都府: '関西',
+  兵庫県: '関西',
+  奈良県: '関西',
+  関西どこでも: '関西',
+  オンラインだけ: 'オンラインだけ',
+}
+
+function migrateArea(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const mapped = raw
+    .map((item) => (typeof item === 'string' ? LEGACY_AREA[item] : undefined))
+    .filter((item): item is string => Boolean(item))
+  return [...new Set(mapped)]
+}
+
+/**
+ * v5（関西の府県から 1 つ）からの読み替え。「行ける範囲」を地方区分に直し、
+ * ほかの項目はそのまま引き継ぐ。
+ */
+function migrateFromV5(value: Record<string, unknown>): Profile | null {
+  if (value.version !== 5) return null
+  const candidate: Profile = { ...emptyProfile }
+  for (const step of profileSteps) {
+    const raw = value[step.key]
+    if (step.key === 'area') {
+      candidate.area = migrateArea(raw)
+    } else if (Array.isArray(raw)) {
+      candidate[step.key] = raw.filter(
+        (item): item is string => typeof item === 'string' && step.options.includes(item),
+      )
+    }
+  }
+  return isProfile(candidate) ? candidate : null
+}
+
 /** v3（都道府県・距離・フォーム式）からの読み替え。対応先が無い項目は捨てる。 */
 function migrateFromV3(value: Record<string, unknown>): Profile | null {
   if (value.version !== 3) return null
-  const areaStep = stepByKey.get('area')!
   const prefecture = typeof value.prefecture === 'string' ? value.prefecture : ''
   const online = value.online === true
-  const area = areaStep.options.includes(prefecture)
-    ? [prefecture]
+  const area = LEGACY_AREA[prefecture]
+    ? [LEGACY_AREA[prefecture]]
     : online && !prefecture
       ? ['オンラインだけ']
-      : ['関西どこでも']
+      : ['関西']
   const candidate: Profile = { ...emptyProfile, area }
   return isProfile(candidate) ? candidate : null
 }
@@ -146,7 +190,9 @@ function migrateFromV4(value: Record<string, unknown>): Profile | null {
   for (const step of profileSteps) {
     if (step.key === 'hackathonTypes') continue
     const raw = value[step.key]
-    if (Array.isArray(raw)) {
+    if (step.key === 'area') {
+      candidate.area = migrateArea(raw)
+    } else if (Array.isArray(raw)) {
       candidate[step.key] = raw.filter(
         (item): item is string => typeof item === 'string' && step.options.includes(item),
       )
@@ -163,7 +209,7 @@ export function loadProfile(): { profile: Profile | null; notice: string } {
     if (isProfile(value)) return { profile: value, notice: '' }
     if (value && typeof value === 'object') {
       const record = value as Record<string, unknown>
-      const migrated = migrateFromV4(record) ?? migrateFromV3(record)
+      const migrated = migrateFromV5(record) ?? migrateFromV4(record) ?? migrateFromV3(record)
       if (migrated) {
         return {
           profile: migrated,
@@ -193,7 +239,7 @@ export function saveProfile(profile: Profile): boolean {
   }
 }
 
-/** 設定画面の1行要約。「大阪府 / ハッカソン・勉強会 / 技術を学ぶ / …」 */
+/** 設定画面の1行要約。「関西・関東 / 学生・初心者歓迎 / 技術を学ぶ / …」 */
 export function summarizeProfile(profile: Profile): string {
   return profileSteps
     .map((step) => profile[step.key].join('・'))

@@ -74,6 +74,10 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme("hackathon-kanto", "ハッカソン", ("関東", "東京")),
     CollectionTheme("hackathon-chubu", "ハッカソン", ("中部", "名古屋")),
     CollectionTheme("hackathon-online", "ハッカソン", ("オンライン",), online_only=True),
+    # 興味登録で全国の地方区分を選べるようにしたので、関西・関東・中部以外も集める
+    CollectionTheme("hackathon-hokkaido-tohoku", "ハッカソン", ("北海道", "東北", "札幌", "仙台")),
+    CollectionTheme("hackathon-chugoku-shikoku", "ハッカソン", ("中国地方", "四国", "広島", "岡山")),
+    CollectionTheme("hackathon-kyushu-okinawa", "ハッカソン", ("九州", "沖縄", "福岡")),
     CollectionTheme(
         "contest-kansai", "ビジネスコンテスト", ("関西", "大阪", "京都", "神戸"),
         kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,

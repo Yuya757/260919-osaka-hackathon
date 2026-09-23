@@ -30,6 +30,7 @@ from event_agent.schemas import (
     SearchIntent,
     UserPreferences,
 )
+from event_agent.domain.regions import KNOWN_LOCATIONS, in_locations
 from event_agent.security import prompt_guard
 from event_agent.storage.store import store
 from event_agent.workflows.pool import candidates
@@ -37,7 +38,6 @@ from event_agent.workflows.pool import candidates
 logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
-KNOWN_LOCATIONS = ("関西", "大阪", "京都", "神戸", "兵庫", "奈良", "関東", "東京", "中部", "名古屋", "福岡", "北海道", "オンライン")
 
 # 問いかけの語 → 機会の種別（ジャンル拡張計画）。長い語から順に見る
 KIND_WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -66,7 +66,7 @@ INTERPRET_INSTRUCTION = prompt_guard.defended_system_prompt(
     '{"interestsPrompt": string, "locations": string[], "onlineOnly": boolean,'
     ' "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "keywords": string[],'
     ' "kinds": string[], "order": "score"|"deadline"|"held"}\n'
-    "locations は 関西/大阪/京都/神戸/兵庫/奈良/関東/東京/中部/名古屋/福岡/北海道/オンライン から。"
+    f"locations は {'/'.join(KNOWN_LOCATIONS)} から。"
     "kinds は hackathon/contest/accelerator/cocreation/exhibition/subsidy から、"
     "問いかけが種別を指しているときだけ。「ビジコン」「コンテスト」は contest、"
     "「ハッカソン」は hackathon。種別に触れていなければ空配列にしてください。"
@@ -271,7 +271,7 @@ def apply_filters(pool: list[ApiEvent], intent: SearchIntent, *, trace: Trace) -
     elif intent.locations and "オンライン" not in intent.locations:
         def in_region(e: ApiEvent) -> bool:
             region = f"{e.location.region or ''}{e.location.venue or ''}"
-            return any(loc in region for loc in intent.locations) or e.location.type in ("online", "hybrid")
+            return in_locations(region, intent.locations) or e.location.type in ("online", "hybrid")
         kept = [e for e in kept if in_region(e)]
         trace.note("filter", f"{'・'.join(intent.locations)} かオンラインに絞る → {len(kept)} 件")
     if intent.date_from or intent.date_to:

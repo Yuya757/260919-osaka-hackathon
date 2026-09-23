@@ -618,10 +618,16 @@ button {
   cursor: default;
 }
 
+/* 1 行に収め、はみ出す分は横にスクロールする。折り返すとチップが 2 段に見える */
 .filters {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
 }
 
 .filters button {
@@ -632,6 +638,18 @@ button {
   font-size: 12px;
   background: var(--paper);
   color: var(--dim);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ジャンルと状態の境目 */
+.filters-divider {
+  align-self: center;
+  width: 1px;
+  flex-shrink: 0;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
 }
 
 .filters button:hover {
