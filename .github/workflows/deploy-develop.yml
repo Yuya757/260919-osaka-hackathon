@@ -130,7 +130,8 @@ jobs:
 
       - name: Deploy the daily collection Cloud Run Job
         # §14 Phase 2 の定期収集（ADR-008）。1 タスク 1 テーマ
-        # （ハッカソン7 + ビジコン3 + 技術イベント2。アクセラ・共創・補助金は一旦止めている）。
+        # （ハッカソン7 + ビジコン3 + 技術イベント9（Doorkeeper 2 + connpass 検索 7）。
+        # アクセラ・共創・補助金は一旦止めている）。
         # --parallelism 1 は意図的: 同時に走ると同じページを二重に抽出する。
         # --max-retries 0 も意図的。§9.3 のロックは二重収集を防ぐが、claim 後に
         # 落ちた実行の再開はしないため、自動リトライは同じ日を再収集せずに
@@ -143,7 +144,7 @@ jobs:
             --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --command=python \
             --args="-m,event_agent.entrypoints.job" \
-            --tasks 12 \
+            --tasks 19 \
             --parallelism 1 \
             --max-retries 0 \
             --task-timeout 600s \
