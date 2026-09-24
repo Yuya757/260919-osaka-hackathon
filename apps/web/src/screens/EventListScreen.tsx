@@ -285,16 +285,29 @@ export function EventListScreen({ mode }: Props) {
             )}
           </p>
         ) : (
-          visible.slice(0, shownCount).map((event) => (
-            <EventCard
-              key={event.eventId}
-              event={event}
-              saved={Boolean(saved[event.eventId])}
-              calendar={calendar[event.eventId]}
-              onToggleSaved={toggleSaved}
-              onOpenCalendar={setSheetEvent}
-            />
-          ))
+          // 探索中は薄くし、結果が届いたら上の行から順に出す（key で描き直す）
+          <div
+            key={mode === 'home' ? agentReply?.text || 'pool' : 'saved'}
+            className={[
+              'list-rows',
+              mode === 'home' && agentPending ? 'is-agent-working' : '',
+              mode === 'home' && agentReply?.text && !agentPending ? 'is-fresh' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-busy={mode === 'home' && agentPending}
+          >
+            {visible.slice(0, shownCount).map((event) => (
+              <EventCard
+                key={event.eventId}
+                event={event}
+                saved={Boolean(saved[event.eventId])}
+                calendar={calendar[event.eventId]}
+                onToggleSaved={toggleSaved}
+                onOpenCalendar={setSheetEvent}
+              />
+            ))}
+          </div>
         ))}
 
       {loadState === 'ready' && shownCount < visible.length && (

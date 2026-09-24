@@ -323,18 +323,24 @@ button {
   display: flex;
   gap: 4px;
   justify-content: flex-end;
-  flex-wrap: wrap;
 }
 
 .topnav a {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 13px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 14px;
   color: var(--dim);
   text-decoration: none;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
 }
 
 .topnav a:hover {
@@ -344,29 +350,57 @@ button {
 
 .topnav a.active {
   color: var(--ink);
+  background: var(--hover);
+  font-weight: 600;
 }
 
-/* 360px幅でも5項目を1行に収める。ブランドは文字をやめてマークだけにする */
-@media (max-width: 479px) {
-  .topbar-inner {
-    gap: 10px;
-  }
-
+/* スマホ: ナビは画面の下のタブ。アイコンを大きく、文字は下に小さく */
+@media (max-width: 599px) {
   .brand-mark {
     display: block;
   }
 
-  .brand-text {
-    display: none;
+  .topbar-inner {
+    min-height: 48px;
   }
 
   .topnav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    justify-content: space-around;
     gap: 0;
+    padding: 4px calc(4px + env(safe-area-inset-right, 0px))
+      calc(4px + env(safe-area-inset-bottom, 0px)) calc(4px + env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
   }
 
   .topnav a {
-    padding: 6px 7px;
-    font-size: 12px;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 56px;
+    padding: 4px 0;
+    font-size: 10px;
+    border-radius: 10px;
+  }
+
+  .topnav a.active {
+    background: transparent;
+  }
+
+  .topnav a.active .nav-icon {
+    stroke-width: 2.2;
+  }
+
+  .nav-icon {
+    width: 24px;
+    height: 24px;
   }
 }
 
@@ -402,28 +436,6 @@ button {
 
 .activity.is-pending {
   border-color: var(--line-strong);
-}
-
-/* 見出しのアイコン: 探索中はグルグル、完了はチェック、警告は ! */
-.activity-icon {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.activity-icon.is-done {
-  background: var(--verified);
-}
-
-.activity-icon.is-warn {
-  background: var(--deadline);
 }
 
 .activity-elapsed {
@@ -2748,4 +2760,231 @@ button.next-title:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+@media (max-width: 599px) {
+  :root {
+    --topbar-h: 48px;
+  }
+}
+
+/* ---------- エージェントの顔と段階（探索パネル） ---------- */
+.agent-orb {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 考え中: 色の輪が回り、外側がゆっくり脈打つ */
+.agent-orb.is-thinking {
+  background: conic-gradient(from 0deg, #c2453b, #b7791f, #2f7d5b, #3b5bc2, #c2453b);
+  animation: spin 1.6s linear infinite;
+}
+
+.agent-orb.is-thinking::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #3b5bc2 35%, transparent);
+  animation: orb-pulse 1.6s ease-out infinite;
+}
+
+.agent-orb-core {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* 回転する輪の中で文字は回さない */
+.agent-orb.is-thinking .agent-orb-core {
+  animation: spin 1.6s linear infinite reverse;
+}
+
+.agent-orb.is-done {
+  background: var(--verified);
+}
+
+.agent-orb.is-warn {
+  background: var(--deadline);
+}
+
+.agent-orb.is-done .agent-orb-core,
+.agent-orb.is-warn .agent-orb-core {
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+}
+
+@keyframes orb-pulse {
+  from {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* 4 段の進み具合。点と線で、いまの段を光らせる */
+.agent-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.agent-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* 段と段をつなぐ線。終わった段から先は色が付く */
+.agent-step + .agent-step::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+  z-index: 0;
+}
+
+.agent-step.is-done + .agent-step::before,
+.agent-step.is-done + .agent-step.is-active::before {
+  background: var(--verified);
+}
+
+.agent-step-dot {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 2px solid var(--line);
+  color: var(--faint);
+}
+
+.agent-step.is-done .agent-step-dot {
+  background: var(--verified);
+  border-color: var(--verified);
+  color: #fff;
+}
+
+.agent-step.is-done .agent-step-name {
+  color: var(--ink);
+}
+
+.agent-step.is-active .agent-step-dot {
+  border-color: var(--ink);
+  color: var(--ink);
+  animation: step-glow 1.2s ease-in-out infinite;
+}
+
+.agent-step.is-active .agent-step-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@keyframes step-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ink) 25%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--ink) 0%, transparent);
+  }
+}
+
+/* 文字を流しているあいだのカーソル */
+.type-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  opacity: 0.5;
+  animation: caret-blink 0.8s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 探索中は一覧を薄くし、エージェントが並べ直していることを見せる */
+.list-rows {
+  transition: opacity 0.2s ease;
+}
+
+.list-rows.is-agent-working {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* 結果が届いたら、上の行から順に現れる */
+.list-rows.is-fresh > .row {
+  animation: row-in 0.35s ease-out both;
+}
+
+.list-rows.is-fresh > .row:nth-child(2) { animation-delay: 0.05s; }
+.list-rows.is-fresh > .row:nth-child(3) { animation-delay: 0.1s; }
+.list-rows.is-fresh > .row:nth-child(4) { animation-delay: 0.15s; }
+.list-rows.is-fresh > .row:nth-child(5) { animation-delay: 0.2s; }
+.list-rows.is-fresh > .row:nth-child(n + 6) { animation-delay: 0.25s; }
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-orb.is-thinking,
+  .agent-orb.is-thinking::after,
+  .agent-orb.is-thinking .agent-orb-core,
+  .agent-step.is-active .agent-step-dot,
+  .type-caret,
+  .list-rows.is-fresh > .row {
+    animation: none;
+  }
+}
+
+/* フィードを開いたとき最新（一番下）まで送る。下のタブに隠れないだけ手前で止める */
+.channel-end {
+  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }

@@ -1,16 +1,19 @@
 /**
- * 画面の外枠。上部に固定ヘッダ（ロゴ + 4つのナビ）、その下に本文。
+ * 画面の外枠。上部に固定ヘッダ（ロゴ + 5つのナビ）、その下に本文。
  * 幅は 760px に収め、スマホでは横 20px の余白だけを残す。
+ * ナビはアイコン付き。スマホでは画面の下にタブとして並べ、指で押しやすくする。
  */
+import type { ComponentType } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { AgentActivityPanel } from './AgentActivityPanel'
+import { BookmarkIcon, CalendarIcon, FeedIcon, HomeIcon, SettingsIcon } from './Icon'
 
-const NAV: [string, string][] = [
-  ['/', 'ホーム'],
-  ['/feed', 'フィード'],
-  ['/calendar', 'カレンダー'],
-  ['/saved', '保存'],
-  ['/settings', '設定'],
+const NAV: [string, string, ComponentType<{ className?: string }>][] = [
+  ['/', 'ホーム', HomeIcon],
+  ['/feed', 'フィード', FeedIcon],
+  ['/calendar', 'カレンダー', CalendarIcon],
+  ['/saved', '保存', BookmarkIcon],
+  ['/settings', '設定', SettingsIcon],
 ]
 
 export function AppShell() {
@@ -19,14 +22,14 @@ export function AppShell() {
       <header className="topbar">
         <div className="topbar-inner">
           <span className="brand">
-            {/* 360px では5項目が入らないので、狭い画面ではマークだけにする */}
-            <img className="brand-mark" src="/favicon.svg" alt="" width={20} height={20} />
+            <img className="brand-mark" src="/favicon.svg" alt="" width={24} height={24} />
             <span className="brand-text">超イベント管理</span>
           </span>
           <nav className="topnav" aria-label="メインナビゲーション">
-            {NAV.map(([to, label]) => (
+            {NAV.map(([to, label, NavIcon]) => (
               <NavLink key={to} to={to} end={to === '/'}>
-                {label}
+                <NavIcon className="nav-icon" />
+                <span className="nav-label">{label}</span>
               </NavLink>
             ))}
           </nav>
