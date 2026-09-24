@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta
 
 from event_agent.config import settings
@@ -26,24 +27,49 @@ def _finished(event: ApiEvent, now: datetime) -> bool:
     return end < now if end else False
 
 
-def candidates(*, now: datetime) -> list[ApiEvent]:
-    """一覧に出してよいプール: 期間内に見た、表示可能で、対象の種別で、まだ終わっていないイベント。"""
+# プールと根拠の読み出しは、一覧を開くたびに数百件の文書を読むので重い。収集は
+# 1 日 1 回なので、短い時間だけメモリに持つ。最新の収集時刻が変われば読み直す
+_cache: tuple[tuple[int, datetime | None], float, list[ApiEvent], dict[str, list[Evidence]]] | None = None
+
+
+def invalidate_pool_cache() -> None:
+    """主催者の編集などで、プールのイベントが収集以外で変わったときに呼ぶ。"""
+    global _cache
+    _cache = None
+
+
+def _recent_with_evidence(now: datetime) -> tuple[list[ApiEvent], dict[str, list[Evidence]]]:
+    global _cache
+    ttl = settings.pool_cache_seconds
+    key = (id(store), store.latest_collection_at())
+    clock = time.monotonic()
+    if ttl > 0 and _cache and _cache[0] == key and clock - _cache[1] < ttl:
+        return _cache[2], _cache[3]
     since = now - timedelta(days=settings.pool_window_days)
-    return [
+    events = [
         e
         for e in store.list_recent_events(since)
-        if e.validation_status in ("verified", "partial")
-        and e.kind in SHOWN_KINDS
-        and not _finished(e, now)
+        if e.validation_status in ("verified", "partial") and e.kind in SHOWN_KINDS
     ]
+    evidence = store.get_evidence_for_events(events)
+    if ttl > 0:
+        _cache = (key, clock, events, evidence)
+    return events, evidence
+
+
+def candidates(*, now: datetime) -> list[ApiEvent]:
+    """一覧に出してよいプール: 期間内に見た、表示可能で、対象の種別で、まだ終わっていないイベント。"""
+    events, _ = _recent_with_evidence(now)
+    return [e for e in events if not _finished(e, now)]
 
 
 def ranked_pool(
     preferences: UserPreferences, *, now: datetime
 ) -> tuple[list[ApiEvent], dict[str, list[Evidence]]]:
     """プールを関心で採点して並べる。スコアはメモリ上だけで、保存しない。"""
-    pool = candidates(now=now)
-    evidence_by_id = store.get_evidence_for_events(pool)
+    recent, all_evidence = _recent_with_evidence(now)
+    pool = [e for e in recent if not _finished(e, now)]
+    evidence_by_id = {e.event_id: all_evidence.get(e.event_id, []) for e in pool}
     scored = [
         e.model_copy(
             update={

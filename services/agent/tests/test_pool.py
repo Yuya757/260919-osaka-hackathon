@@ -79,3 +79,40 @@ async def test_pool_leaves_out_paused_kinds(store_backend):
     await run_theme_collection(theme_by_id("subsidy-dx"), now=FROZEN_NOW)
     assert any(e.kind == "subsidy" for e in store_backend.list_events())
     assert all(e.kind in ("hackathon", "contest") for e in candidates(now=FROZEN_NOW))
+
+
+@pytest.mark.asyncio
+async def test_pool_is_cached_until_the_next_collection(store_backend, monkeypatch):
+    """一覧を開くたびにプールと根拠を読み直さない。収集が進めば読み直す。"""
+    from event_agent.workflows import pool as pool_module
+    from event_agent.workflows.collect import run_theme_collection
+    from event_agent.workflows.themes import theme_by_id
+
+    monkeypatch.setattr(get_settings(), "pool_cache_seconds", 60)
+    pool_module.invalidate_pool_cache()
+    await run_theme_collection(theme_by_id("meetup-study"), now=FROZEN_NOW)
+
+    reads = {"events": 0, "evidence": 0}
+    list_recent, get_evidence = store_backend.list_recent_events, store_backend.get_evidence_for_events
+
+    def counted_list(*args, **kwargs):
+        reads["events"] += 1
+        return list_recent(*args, **kwargs)
+
+    def counted_evidence(*args, **kwargs):
+        reads["evidence"] += 1
+        return get_evidence(*args, **kwargs)
+
+    monkeypatch.setattr(store_backend, "list_recent_events", counted_list)
+    monkeypatch.setattr(store_backend, "get_evidence_for_events", counted_evidence)
+
+    first, _ = ranked_pool(UserPreferences(), now=FROZEN_NOW)
+    second, _ = ranked_pool(UserPreferences(interestsPrompt="Python"), now=FROZEN_NOW)
+    assert reads == {"events": 1, "evidence": 1}
+    assert {e.event_id for e in first} == {e.event_id for e in second}
+
+    # 次の収集で最新の収集時刻が変わる → 読み直す
+    await run_theme_collection(theme_by_id("meetup-talk"), now=FROZEN_NOW)
+    ranked_pool(UserPreferences(), now=FROZEN_NOW)
+    assert reads["events"] == 2
+    pool_module.invalidate_pool_cache()

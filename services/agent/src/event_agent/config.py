@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     manual_runs_enabled: bool = False
     # 一覧に出す共有プールの範囲（lastSeenAt がこの日数以内）
     pool_window_days: int = 30
+    # 一覧を開くたびにプールと根拠を読み直さないよう、この秒数だけメモリに持つ。0 で無効
+    pool_cache_seconds: int = 60
     # 既知ページを再抽出するまでの日数
     known_url_refresh_days: int = 7
     # 1 日あたりの Grounding 検索の上限（全 Run 合計）。
