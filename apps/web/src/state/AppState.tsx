@@ -4,6 +4,7 @@
  * Runの進捗は全タブ共通のバナーで見せる必要があり（画面設計書 §2.2）、
  * チャットを閉じても追えなければならないので、画面ではなくここに置く。
  */
+import { loadCachedEvents, saveCachedEvents } from '../lib/eventsCache'
 import {
   createContext,
   useCallback,
@@ -64,6 +65,8 @@ export type AgentReply = {
 type AppState = {
   events: Event[]
   loadState: LoadState
+  /** 前回分を出したまま、裏で一覧を取り直している */
+  refreshing: boolean
   loadError: string | null
   run: AgentRun | null
   runPending: boolean
@@ -107,8 +110,11 @@ function newSearchId(): string {
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<Event[]>([])
-  const [loadState, setLoadState] = useState<LoadState>('idle')
+  // 前回の一覧があれば、開いた瞬間に出す。取り直しは裏で行う
+  const [cached] = useState(() => loadCachedEvents())
+  const [events, setEvents] = useState<Event[]>(() => displayable(cached?.events ?? []))
+  const [loadState, setLoadState] = useState<LoadState>(cached ? 'ready' : 'idle')
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [run, setRun] = useState<AgentRun | null>(null)
   const [runPending, setRunPending] = useState(false)
@@ -125,7 +131,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [postsState, setPostsState] = useState<LoadState>('idle')
   const [postsError, setPostsError] = useState<string | null>(null)
   const [manualRunsEnabled, setManualRunsEnabled] = useState(true)
-  const [lastCollectedAt, setLastCollectedAt] = useState<string | null>(null)
+  const [lastCollectedAt, setLastCollectedAt] = useState<string | null>(
+    cached?.lastCollectedAt ?? null,
+  )
 
   useEffect(() => {
     getHealth()
@@ -137,16 +145,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async (sourceRunId?: string) => {
     setLoadState((current) => (current === 'ready' ? current : 'loading'))
+    setRefreshing(true)
     try {
       // 共有プールはセッションの関心条件で採点される
       const result = await listEvents(sourceRunId, sourceRunId ? undefined : sessionRef.current)
-      setEvents(displayable(result.events))
+      const shown = displayable(result.events)
+      setEvents(shown)
       setLastCollectedAt(result.lastCollectedAt ?? null)
       setLoadError(null)
       setLoadState('ready')
+      if (!sourceRunId) saveCachedEvents(shown, result.lastCollectedAt ?? null)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'イベントを取得できませんでした。')
-      setLoadState('error')
+      // 前回分を出しているなら、それを消してまでエラーにしない
+      setLoadState((current) => (current === 'ready' ? current : 'error'))
+    } finally {
+      setRefreshing(false)
     }
   }, [])
 
@@ -315,6 +329,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => ({
       events,
       loadState,
+      refreshing,
       loadError,
       run,
       runPending,
@@ -343,6 +358,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [
       events,
       loadState,
+      refreshing,
       loadError,
       run,
       runPending,

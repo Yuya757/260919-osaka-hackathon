@@ -396,8 +396,41 @@ button {
 
 .activity-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+}
+
+.activity.is-pending {
+  border-color: var(--line-strong);
+}
+
+/* 見出しのアイコン: 探索中はグルグル、完了はチェック、警告は ! */
+.activity-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.activity-icon.is-done {
+  background: var(--verified);
+}
+
+.activity-icon.is-warn {
+  background: var(--deadline);
+}
+
+.activity-elapsed {
+  flex: none;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .activity-title {
@@ -538,7 +571,8 @@ button {
 
 .activity-log li {
   display: grid;
-  grid-template-columns: 5.5em 4.5em 1fr;
+  grid-template-columns: 14px 5.5em 4.5em 1fr;
+  align-items: start;
   gap: 8px;
   font-size: 11px;
   line-height: 1.6;
@@ -571,6 +605,101 @@ button {
   .log-dots::after {
     animation: none;
     content: '…';
+  }
+}
+
+.log-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.6em;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--verified);
+}
+
+.activity-log li.is-warn .log-icon {
+  color: var(--deadline);
+}
+
+/* 新しく届いた行はふわっと出す */
+.activity-log li.is-done,
+.activity-log li.is-warn {
+  animation: log-in 0.25s ease-out;
+}
+
+@keyframes log-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* グルグル。探索中の見出しと、いま動いている行に出す */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  background: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner-sm {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 考え中の文字を光が流れるように見せる（GPT / Gemini の考え中表示と同じ考え方） */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--faint) 0%,
+    var(--faint) 40%,
+    var(--ink) 50%,
+    var(--faint) 60%,
+    var(--faint) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  animation: shimmer-text 1.6s linear infinite;
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .shimmer,
+  .activity-log li.is-done,
+  .activity-log li.is-warn {
+    animation: none;
+  }
+
+  .shimmer {
+    color: var(--dim) !important;
+    background: none;
   }
 }
 
@@ -2590,4 +2719,33 @@ button.next-title:hover {
   color: var(--verified);
   font-weight: 600;
   font-size: 13px;
+}
+
+/* ---------- 読み込み中の表示 ---------- */
+.loading-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+  font-size: 13px;
+}
+
+.refreshing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  color: var(--faint);
+}
+
+.list-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 24px;
+}
+
+.ask button.is-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

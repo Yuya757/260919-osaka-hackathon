@@ -4,7 +4,7 @@
  * 一覧の最上部にエージェントへの入力欄を置く。文字を打つとその場で一覧が
  * 絞り込まれ、「探す」で同じ文をエージェントに送る。専用のチャット画面は無い。
  */
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
 import { daysUntil, isFinished, isUrgent, kindLabel, needsCheck } from '../lib/eventView'
@@ -35,10 +35,14 @@ const KIND_ORDER: EventKind[] = [
 
 type Props = { mode: 'home' | 'saved' }
 
+// 一度に描く行の数。数百件を一度に描くと開くのが遅くなるので、スクロールに合わせて足す
+const PAGE_SIZE = 30
+
 export function EventListScreen({ mode }: Props) {
   const {
     events,
     loadState,
+    refreshing,
     loadError,
     saved,
     calendar,
@@ -56,6 +60,8 @@ export function EventListScreen({ mode }: Props) {
   const [kind, setKind] = useState<EventKind | 'all'>('all')
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
+  const [shownCount, setShownCount] = useState(PAGE_SIZE)
+  const moreRef = useRef<HTMLDivElement>(null)
 
   const upcoming = useMemo(() => {
     const open = events.filter((event) => !isFinished(event))
@@ -84,6 +90,27 @@ export function EventListScreen({ mode }: Props) {
     if (filter === 'check') pool = pool.filter(needsCheck)
     return pool
   }, [upcoming, filter, kind, kinds])
+
+  // 絞り込みが変わったら先頭から描き直す
+  useEffect(() => {
+    setShownCount(PAGE_SIZE)
+  }, [visible])
+
+  // 最後の行が見えてきたら次の分を描く
+  useEffect(() => {
+    const sentinel = moreRef.current
+    if (!sentinel || shownCount >= visible.length) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShownCount((count) => count + PAGE_SIZE)
+        }
+      },
+      { rootMargin: '600px 0px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [shownCount, visible.length])
 
   // 締切が確認できているものの中で、いちばん近いもの。不明な締切は候補にしない
   const nextDeadline = useMemo(() => {
@@ -121,8 +148,9 @@ export function EventListScreen({ mode }: Props) {
             placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
             autoComplete="off"
           />
-          <button type="submit" disabled={agentPending}>
-            {agentPending ? '探索中…' : '探す'}
+          <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
+            {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
+            {agentPending ? '探索中' : '探す'}
           </button>
         </form>
 
@@ -200,11 +228,21 @@ export function EventListScreen({ mode }: Props) {
             minute: '2-digit',
           })}
           {mode === 'home' && ' · 毎朝7時に自動収集'}
+          {/* 前回分を出したまま取り直しているあいだ */}
+          {refreshing && loadState === 'ready' && (
+            <span className="refreshing">
+              <span className="spinner spinner-sm" aria-hidden="true" /> 最新に更新中
+            </span>
+          )}
         </p>
       )}
 
       {loadState === 'loading' && (
         <div aria-busy="true">
+          <p className="loading-line">
+            <span className="spinner" aria-hidden="true" />
+            <span className="shimmer">収集済みのイベントを読み込んでいます</span>
+          </p>
           {[0, 1, 2].map((i) => (
             <div className="skeleton-row" key={i} aria-hidden="true" />
           ))}
@@ -242,7 +280,7 @@ export function EventListScreen({ mode }: Props) {
             )}
           </p>
         ) : (
-          visible.map((event) => (
+          visible.slice(0, shownCount).map((event) => (
             <EventCard
               key={event.eventId}
               event={event}
@@ -253,6 +291,12 @@ export function EventListScreen({ mode }: Props) {
             />
           ))
         ))}
+
+      {loadState === 'ready' && shownCount < visible.length && (
+        <div ref={moreRef} className="list-more" aria-hidden="true">
+          <span className="spinner spinner-sm" />
+        </div>
+      )}
 
       <CalendarSheet event={sheetEvent} onClose={() => setSheetEvent(null)} onConfirm={register} />
     </>
