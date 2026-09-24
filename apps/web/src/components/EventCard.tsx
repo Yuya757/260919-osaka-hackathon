@@ -26,7 +26,9 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
   const registered = isCalendarRegistered(calendar)
 
   return (
-    <article className={`row${event.recommendation ? ' has-score' : ''}`}>
+    <article
+      className={`row${event.recommendation ? ' has-score' : ''}${event.organizerEdit ? ' is-verified' : ''}`}
+    >
       <div className="row-main">
         <div className="row-title">
           <button
@@ -38,6 +40,7 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
           </button>
           {/* 既定はハッカソン。混ざったときだけ種別を出す */}
           {event.kind !== 'hackathon' && <span className="tag">{kindLabel(event.kind)}</span>}
+          {event.organizerEdit && <span className="tag tag-verified">✓ 主催者確認済み</span>}
           {partial && <span className="tag">要確認</span>}
         </div>
         <p className="row-meta">

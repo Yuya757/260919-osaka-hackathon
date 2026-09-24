@@ -5,7 +5,7 @@
  * データとして扱い、HTMLとして解釈せずテキストで出す（§10.1）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { goUrl, listEvidence } from '../api/client'
 import { useAppState } from '../state/AppState'
 import {
@@ -137,7 +137,9 @@ export function EventDetailScreen() {
         <p className="eyebrow">
           {categoryLabel(event.category)}
           {post && ' · 主催者投稿'}
-          {post?.organizerConfirmed && <span className="tag tag-confirmed">主催者確認済み</span>}
+          {(post?.organizerConfirmed || event.organizerEdit) && (
+            <span className="tag tag-verified">✓ 主催者確認済み</span>
+          )}
         </p>
         <h1>{event.title}</h1>
         <p className="detail-meta">
@@ -223,6 +225,22 @@ export function EventDetailScreen() {
             nearestStation={event.location.nearestStation || ''}
             venue={event.location.venue || event.location.region || undefined}
           />
+        </section>
+      )}
+
+      {/* 主催者の申請（ADR-013）。AI が集めたイベントを主催者が確かめて直す */}
+      {!post && (
+        <section className="organizer-cta">
+          <p>
+            {event.organizerEdit
+              ? `主催者が情報を確認・更新しました（${new Date(
+                  event.organizerEdit.editedAt ?? event.organizerEdit.verifiedAt,
+                ).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}）。`
+              : 'このイベントの主催者の方へ: 最寄駅や申込締切が違っていたら直せます。'}
+          </p>
+          <Link to={`/events/${encodeURIComponent(event.eventId)}/manage`}>
+            {event.organizerEdit ? '主催者として編集する' : 'このイベントを申請する'}
+          </Link>
         </section>
       )}
 

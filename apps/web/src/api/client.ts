@@ -3,7 +3,11 @@ import type {
   ApiEvent,
   ChatRequest,
   ChatResponse,
+  EventClaimStartResponse,
+  EventClaimVerifyResponse,
+  EventEditResponse,
   EventRouteResponse,
+  OrganizerEditValues,
   EvidenceListResponse,
   OrganizerPostCreateResponse,
   OrganizerPostListResponse,
@@ -96,6 +100,33 @@ export function getPoolSearchActivity(searchId: string): Promise<PoolSearchActiv
   return request<PoolSearchActivity>(
     `/api/pool-search/${encodeURIComponent(searchId)}/activity`,
   )
+}
+
+/** 主催者の申請を始める（ADR-013）。イベントページに書いてもらう確認コードが返る */
+export function startEventClaim(eventId: string): Promise<EventClaimStartResponse> {
+  return request<EventClaimStartResponse>('/api/event-claims', {
+    method: 'POST',
+    body: JSON.stringify({ eventId }),
+  })
+}
+
+/** イベントページの確認コードを確かめてもらう。見つかれば編集用の鍵が一度だけ返る */
+export function verifyEventClaim(claimId: string): Promise<EventClaimVerifyResponse> {
+  return request<EventClaimVerifyResponse>('/api/event-claims/verify', {
+    method: 'POST',
+    body: JSON.stringify({ claimId }),
+  })
+}
+
+export function editClaimedEvent(
+  claimId: string,
+  editToken: string,
+  values: OrganizerEditValues,
+): Promise<EventEditResponse> {
+  return request<EventEditResponse>('/api/event-claims/edit', {
+    method: 'POST',
+    body: JSON.stringify({ claimId, editToken, values }),
+  })
 }
 
 export type HealthResponse = { status: string; demo_mode: boolean; model?: string | null; manualRunsEnabled: boolean }

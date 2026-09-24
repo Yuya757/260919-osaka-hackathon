@@ -161,6 +161,8 @@ button {
 .button-primary:hover {
   background: #000;
   border-color: #000;
+  /* .button:hover が文字を黒にするので、主ボタンでは白に戻す */
+  color: #fff;
 }
 
 .button-primary:disabled {
@@ -2469,4 +2471,123 @@ button.next-title:hover {
 .post-warnings li::before {
   content: '△ ';
   color: var(--deadline);
+}
+
+/* ---------- 主催者確認済み（ADR-013） ---------- */
+.tag-verified {
+  color: var(--verified);
+  border-color: var(--verified);
+  font-weight: 600;
+}
+
+.row.is-verified {
+  background: var(--verified-bg);
+  box-shadow: inset 3px 0 0 var(--verified);
+  padding-left: 14px;
+  padding-right: 10px;
+  border-radius: 6px;
+}
+
+.organizer-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.organizer-cta p {
+  margin: 0;
+  color: var(--dim);
+}
+
+.organizer-cta a {
+  color: var(--verified);
+  font-weight: 600;
+}
+
+/* ---------- 主催者の申請と編集 ---------- */
+.manage-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.manage-steps ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manage-steps p {
+  margin: 0;
+}
+
+.manage-code {
+  margin-top: 8px !important;
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.manage-pages {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.manage-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--verified) 30%, transparent);
+  background: var(--verified-bg);
+  border-radius: 8px;
+}
+
+.manage-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.manage-form input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 16px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.manage-form input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.manage-form .button {
+  align-self: flex-start;
+}
+
+.manage-verified {
+  margin: 0;
+  color: var(--verified);
+  font-weight: 600;
+  font-size: 13px;
 }
