@@ -38,7 +38,8 @@
           "aggregator_only",
           "contest",
           "program",
-          "meetup"
+          "meetup",
+          "user_registered"
         ]
       }
     },
@@ -274,6 +275,11 @@
           }
         }
       }
+    },
+    "registeredUrls": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "利用者が登録したページ（ADR-014）。あれば検索せず、このページだけを読む。searchHits は空にする。"
     }
   }
 }

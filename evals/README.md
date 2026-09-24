@@ -20,8 +20,13 @@ prompt / model / extraction schema / validation rule の各バージョンと、
 | パス | 内容 |
 | --- | --- |
 | `case.schema.json` | ケース定義のJSON Schema。`pytest` が全ケースの適合を検証する |
-| `cases/*.json` | 77件の正解付きケース |
+| `cases/*.json` | 78件の正解付きケース |
 | `results/` | 実行結果の出力先（gitignore） |
+
+検索ヒット（`searchHits`）とページ本文はフィクスチャで、検索グラウンディングは呼ばない。
+本番の収集は検索グラウンディングを使わない（ADR-014）ので、`searchHits` を使うケースは
+抽出・検証・重複判定の測定用で、本番の収集経路そのものではない。`registeredUrls` を持つ
+ケース（`15-user-registered-*`）は、利用者が登録した URL だけを読む本番と同じ経路を通る。
 
 ランナーは `services/agent/src/event_agent/evaluation/` にある。`event_agent`
 を import する必要があるため、データとは別の場所に置いている。

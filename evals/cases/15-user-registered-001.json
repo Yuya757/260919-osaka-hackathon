@@ -1,0 +1,45 @@
+{
+  "caseId": "15-user-registered-001",
+  "categories": [
+    "user_registered",
+    "deadline_clear"
+  ],
+  "note": "利用者が貼った URL だけを読む（ADR-014）。検索はしない。締切と開催日が明記されたハッカソンで、根拠付きの verified になる。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "ハッカソン",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": []
+  },
+  "searchHits": [],
+  "registeredUrls": [
+    "https://hack.example.jp/kobe-iot-2026"
+  ],
+  "pages": [
+    {
+      "url": "https://hack.example.jp/kobe-iot-2026",
+      "body": "<html><head><title>神戸 IoT ハッカソン 2026</title></head><body><h1>神戸 IoT ハッカソン 2026</h1><p>センサーとクラウドでまちの課題を解く2日間のハッカソンです。</p><div>開催日時: 2026年10月24日 10:00〜10月25日 18:00</div><div>申込締切: 2026年10月17日 23:59</div><div>会場: 神戸市産業振興センター</div><div>主催: 神戸IoTコミュニティ</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://hack.example.jp/kobe-iot-2026",
+        "kind": "hackathon",
+        "eventStart": "2026-10-24T10:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "eventEnd": "2026-10-25T18:00:00+09:00",
+        "applicationDeadline": "2026-10-17T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart",
+          "dates.applicationDeadline"
+        ]
+      }
+    ]
+  }
+}
