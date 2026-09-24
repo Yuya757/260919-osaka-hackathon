@@ -2067,6 +2067,267 @@ button.next-title:hover {
   color: inherit;
 }
 
+/* ---------- フィード: Slack 形式のタイムライン ---------- */
+.channel-hash {
+  color: var(--faint);
+  margin-right: 4px;
+  font-weight: 400;
+}
+
+.channel {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 24px;
+}
+
+.channel-pinned {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 12px;
+  margin: 8px 0 4px;
+}
+
+.channel-pinned-label {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: 0.08em;
+}
+
+/* 日付の区切り線。中央に日付のピル */
+.day-divider {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0 4px;
+}
+
+.day-divider::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px solid var(--line);
+}
+
+.day-divider span {
+  position: relative;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.msg {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+}
+
+.msg:hover {
+  background: var(--hover);
+}
+
+.msg.is-match {
+  box-shadow: inset 2px 0 0 var(--deadline);
+}
+
+.msg-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #3a3c42;
+}
+
+.msg-avatar.tone-0 { background: #4a4d55; }
+.msg-avatar.tone-1 { background: #6b6f76; }
+.msg-avatar.tone-2 { background: #8a5a52; }
+.msg-avatar.tone-3 { background: #5b6b63; }
+.msg-avatar.tone-4 { background: #5f5a73; }
+
+.msg-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.msg-head {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+
+.msg-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.msg-badge {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.msg-badge.is-confirmed {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--paper);
+}
+
+.msg-time {
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-title {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.msg-title:hover {
+  color: var(--deadline);
+  text-decoration: underline;
+}
+
+.msg.is-pinned .msg-title {
+  font-weight: 700;
+}
+
+.msg-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Slack の添付。左の線で日程・会場・定員を束ねる */
+.msg-attachment {
+  margin-top: 4px;
+  border-left: 3px solid var(--line-strong);
+  padding: 2px 0 2px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msg.is-match .msg-attachment {
+  border-left-color: var(--deadline);
+}
+
+.msg-attachment .dates {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.msg-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.msg-meta a {
+  color: inherit;
+}
+
+.msg-meta .tag {
+  margin-left: 6px;
+}
+
+.msg-capacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.msg-capacity-text strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-capacity-text .is-full {
+  color: var(--deadline);
+}
+
+.msg-capacity-bar {
+  width: 96px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.msg-capacity-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  border-radius: inherit;
+}
+
+.msg-capacity-asof {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.msg-notes {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.msg-actions .chip-button {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 /* ---------- 投稿フォーム ---------- */
 .post-form {
   padding: 24px 0;
