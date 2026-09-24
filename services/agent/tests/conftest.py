@@ -33,9 +33,13 @@ def reset_store():
     """Clear the in-process store before and after a test."""
     from event_agent.storage.store import store
 
+    from event_agent.workflows.pool import invalidate_pool_cache
+
     store.reset()
+    invalidate_pool_cache()
     yield store
     store.reset()
+    invalidate_pool_cache()
 
 
 # --- store backends -------------------------------------------------------
@@ -62,6 +66,10 @@ EMULATOR_PROJECT = "osaka-hackathon-test"
 def install_store(monkeypatch, backend):
     for module in STORE_HOLDERS:
         monkeypatch.setattr(f"{module}.store", backend)
+    # 前のテストのストアで読んだプールを持ち越さない（id が使い回されることがある）
+    from event_agent.workflows.pool import invalidate_pool_cache
+
+    invalidate_pool_cache()
     return backend
 
 

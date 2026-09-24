@@ -29,6 +29,7 @@ from event_agent.schemas import (
 from event_agent.security import prompt_guard
 from event_agent.security.url_guard import UnsafeUrl, check_hostname, classify_address
 from event_agent.storage.store import store
+from event_agent.workflows.pool import invalidate_pool_cache
 
 # 読み違えやすい文字（0/O、1/I/L）を外す
 _ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -220,4 +221,6 @@ def edit_event(
         editedAt=now,
         values=merged,
     )
-    return store.update_event(event.model_copy(update={"organizer_edit": edit}))
+    updated = store.update_event(event.model_copy(update={"organizer_edit": edit}))
+    invalidate_pool_cache()
+    return updated

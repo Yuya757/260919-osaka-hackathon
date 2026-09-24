@@ -282,6 +282,11 @@ class FirestoreStore:
                 refs.append(collection.document(eid))
                 owners.append((event.event_id, eid))
         by_event: dict[str, dict[str, Evidence]] = {e.event_id: {} for e in events}
+        # (run, 根拠) → それを持つイベント。全イベントを毎回なめると件数の二乗になる
+        wanted: dict[tuple[str, str], list[str]] = {}
+        for event in events:
+            for eid in event.evidence_ids:
+                wanted.setdefault((event.source_run_id, eid), []).append(event.event_id)
         if refs:
             # run を跨いだ参照でも get_all は一度で引ける
             for snapshot in self._db.get_all(refs):
@@ -289,9 +294,8 @@ class FirestoreStore:
                     continue
                 item = Evidence(**(snapshot.to_dict() or {}))
                 run_id = snapshot.reference.parent.parent.id
-                for event in events:
-                    if event.source_run_id == run_id and item.evidence_id in event.evidence_ids:
-                        by_event[event.event_id][item.evidence_id] = item
+                for event_id in wanted.get((run_id, item.evidence_id), []):
+                    by_event[event_id][item.evidence_id] = item
         # 要求順を保つ
         return {
             e.event_id: [by_event[e.event_id][eid] for eid in e.evidence_ids if eid in by_event[e.event_id]]
