@@ -33,6 +33,7 @@ from event_agent.schemas import (
     MetricCounts,
     OrganizerPost,
     PostPlacement,
+    SearchActivity,
     UsageRecord,
     UserPreferences,
 )
@@ -256,6 +257,15 @@ class Store(Protocol):
 
     def get_usage(self, day: str) -> UsageRecord | None: ...
 
+    def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:
+        """Replace the activity of an in-flight pool search (ADR-010).
+
+        Written after every line so that another instance can serve the
+        polling reads while the search request is still open."""
+
+    def get_search_activity(self, search_id: str) -> list[SearchActivity] | None:
+        """None until the search has written its first line."""
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -271,6 +281,7 @@ class MemoryStore:
         self._posts: dict[str, OrganizerPost] = {}
         self._metrics: dict[str, EventMetrics] = {}
         self._usage: dict[str, UsageRecord] = {}
+        self._search_activity: dict[str, list[SearchActivity]] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -285,6 +296,7 @@ class MemoryStore:
             self._posts.clear()
             self._metrics.clear()
             self._usage.clear()
+            self._search_activity.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -431,6 +443,15 @@ class MemoryStore:
     def get_usage(self, day: str) -> UsageRecord | None:
         with self._lock:
             return self._usage.get(day)
+
+    def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:
+        with self._lock:
+            self._search_activity[search_id] = list(lines)
+
+    def get_search_activity(self, search_id: str) -> list[SearchActivity] | None:
+        with self._lock:
+            lines = self._search_activity.get(search_id)
+            return list(lines) if lines is not None else None
 
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         with self._lock:

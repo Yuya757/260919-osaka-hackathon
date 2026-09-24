@@ -614,8 +614,19 @@ class SearchActivity(BaseModel):
 class PoolSearchRequest(BaseModel):
     session_id: str | None = Field(default=None, alias="sessionId")
     query: str = Field(default="", max_length=500)
+    # 渡すと動きを 1 行ずつ保存し、探索中でも読める（PoolSearchActivity）
+    search_id: str | None = Field(
+        default=None, alias="searchId", pattern=r"^[A-Za-z0-9-]{8,64}$"
+    )
 
     model_config = {"populate_by_name": True}
+
+
+class PoolSearchActivity(BaseModel):
+    search_id: str = Field(alias="searchId")
+    activity: list[SearchActivity] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class PoolSearchResponse(BaseModel):

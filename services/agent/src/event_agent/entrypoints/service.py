@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import FastAPI, Header, HTTPException, Path, Query, Response
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,6 +36,7 @@ from event_agent.schemas import (
     OrganizerPostListResponse,
     OrganizerPostPreviewResponse,
     OrganizerPostRequest,
+    PoolSearchActivity,
     PoolSearchRequest,
     PoolSearchResponse,
     PostMetricsResponse,
@@ -252,10 +253,23 @@ async def get_event_route(
 # ---------------------------------------------------------------- pool search
 
 
+@app.get("/api/pool-search/{search_id}/activity", response_model=PoolSearchActivity)
+async def pool_search_activity(
+    search_id: str = Path(pattern=r"^[A-Za-z0-9-]{8,64}$"),
+) -> PoolSearchActivity:
+    """探索中の動き（ADR-010）。画面は探索のリクエストと並行してこれを読み、1 行ずつ出す。
+
+    最初の 1 行が書かれる前に読まれることがあるので、無ければ 404 ではなく空で返す。
+    """
+    return PoolSearchActivity(
+        searchId=search_id, activity=store.get_search_activity(search_id) or []
+    )
+
+
 @app.post("/api/pool-search", response_model=PoolSearchResponse)
 async def pool_search(body: PoolSearchRequest) -> PoolSearchResponse:
     """プール探索エージェント（ADR-010）。Web には出ず、収集済みイベントを問いかけで探す。"""
-    result = await search_pool(body.query, body.session_id)
+    result = await search_pool(body.query, body.session_id, search_id=body.search_id)
     evidence_by_id = store.get_evidence_for_events(result.events)
     result.events = [
         e.model_copy(

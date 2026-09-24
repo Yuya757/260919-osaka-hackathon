@@ -10,7 +10,12 @@
       "required": ["query"],
       "properties": {
         "sessionId": { "type": "string" },
-        "query": { "type": "string", "minLength": 0, "maxLength": 500, "description": "空なら現在の関心条件で並べる" }
+        "query": { "type": "string", "minLength": 0, "maxLength": 500, "description": "空なら現在の関心条件で並べる" },
+        "searchId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9-]{8,64}$",
+          "description": "クライアントが決める探索の ID。渡すと、動きを 1 行ずつ保存し、探索中でも PoolSearchActivity で読める"
+        }
       }
     },
     "SearchIntent": {
@@ -50,6 +55,16 @@
         "message": { "type": "string", "maxLength": 300 },
         "level": { "type": "string", "enum": ["info", "warn"] },
         "at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PoolSearchActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["searchId", "activity"],
+      "description": "探索中の動き。GET /api/pool-search/{searchId}/activity。まだ 1 行も無ければ空配列",
+      "properties": {
+        "searchId": { "type": "string" },
+        "activity": { "type": "array", "items": { "$ref": "#/$defs/SearchActivity" } }
       }
     },
     "PoolSearchResponse": {

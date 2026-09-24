@@ -86,13 +86,21 @@ SCORE_INSTRUCTION = prompt_guard.defended_system_prompt(
 
 
 class Trace:
-    def __init__(self) -> None:
+    """探索の動き。``search_id`` があれば 1 行ごとに保存し、探索中でも読めるようにする。"""
+
+    def __init__(self, search_id: str | None = None) -> None:
         self.lines: list[SearchActivity] = []
+        self.search_id = search_id
 
     def note(self, agent: str, message: str, *, level: str = "info") -> None:
         self.lines.append(
             SearchActivity(agent=agent, message=message[:300], level=level, at=datetime.now(timezone.utc))  # type: ignore[arg-type]
         )
+        if self.search_id:
+            try:
+                store.save_search_activity(self.search_id, self.lines)
+            except Exception:  # noqa: BLE001 — 途中経過が書けなくても探索そのものは続ける
+                logger.warning("search activity could not be saved", exc_info=True)
 
 
 # --------------------------------------------------------------- interpreter
@@ -407,9 +415,15 @@ def _by_date(events: list[ApiEvent], order: str, *, now: datetime, trace: Trace)
 # --------------------------------------------------------------------- entry
 
 
-async def search_pool(query: str, session_id: str | None, *, now: datetime | None = None) -> PoolSearchResponse:
+async def search_pool(
+    query: str,
+    session_id: str | None,
+    *,
+    now: datetime | None = None,
+    search_id: str | None = None,
+) -> PoolSearchResponse:
     now = now or datetime.now(timezone.utc)
-    trace = Trace()
+    trace = Trace(search_id)
     gemini_client.reset_call_budget()
     session = store.get_or_create_session(session_id)
 
