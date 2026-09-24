@@ -12,7 +12,6 @@ from event_agent.entrypoints.job import select_themes
 from event_agent.workflows.collect import run_theme_collection, scheduled_idempotency_key
 from event_agent.workflows.themes import (
     COLLECTION_THEMES,
-    CollectionTheme,
     theme_by_id,
     theme_for_task_index,
 )
@@ -24,6 +23,9 @@ def test_themes_map_to_task_indices():
         "hackathon-hokkaido-tohoku", "hackathon-chugoku-shikoku", "hackathon-kyushu-okinawa",
         "contest-kansai", "contest-kanto", "contest-online",
         "meetup-study", "meetup-talk",
+        "meetup-connpass-kansai", "meetup-connpass-kanto", "meetup-connpass-chubu",
+        "meetup-connpass-hokkaido-tohoku", "meetup-connpass-chugoku-shikoku",
+        "meetup-connpass-kyushu-okinawa", "meetup-connpass-online",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
     assert theme_for_task_index(9).id == "contest-online"
@@ -147,9 +149,21 @@ def test_daily_searches_fit_the_grounding_cap():
     from event_agent.workflows.themes import search_themes
 
     settings = get_settings()
-    per_theme = min(len(CollectionTheme.__dataclass_fields__["site_queries"].default) + 1,
-                    settings.max_search_queries)
-    assert len(search_themes()) * per_theme <= settings.daily_grounding_cap
+    daily = sum(
+        min(len(theme.site_queries) + 1, settings.max_search_queries) for theme in search_themes()
+    )
+    assert daily <= settings.daily_grounding_cap
+
+
+def test_connpass_meetup_themes_search_connpass_for_meetups():
+    from event_agent.workflows.collect import _plan_queries
+
+    theme = theme_by_id("meetup-connpass-kyushu-okinawa")
+    assert theme.kind == "meetup" and theme.allowed_kinds == ("meetup",)
+    queries = _plan_queries(theme.preferences(now=FROZEN_NOW), theme)
+    assert len(queries) == 3
+    assert sum("site:connpass.com" in q for q in queries) == 2
+    assert all("九州" in q for q in queries)
 
 
 def test_task_count_matches_the_deployed_job():

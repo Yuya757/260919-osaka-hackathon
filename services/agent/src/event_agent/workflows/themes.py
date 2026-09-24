@@ -71,6 +71,23 @@ _COCREATION_SITES = (
     "site:growth.creww.me OR site:eiicon.net",
 )
 
+# 技術イベントの告知は connpass に最も集まる。connpass の API はキーが要るので、
+# キーが取れるまでは検索で connpass のページを拾う（ADR-012）。
+# 1 テーマ 3 回（一般検索 + connpass 2 回）で、7 地域 21 回/日
+_MEETUP_SITES = (
+    "site:connpass.com",
+    "site:connpass.com LT会 OR もくもく会",
+)
+
+
+def _meetup_search_theme(theme_id: str, locations: tuple[str, ...], *, online_only: bool = False) -> CollectionTheme:
+    return CollectionTheme(
+        theme_id, "技術勉強会", locations, online_only=online_only,
+        kind="meetup", allowed_kinds=("meetup",), site_queries=_MEETUP_SITES,
+        lead_query="勉強会 参加申込",
+    )
+
+
 COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme("hackathon-kansai", "ハッカソン", ("関西", "大阪", "京都", "神戸")),
     CollectionTheme("hackathon-kanto", "ハッカソン", ("関東", "東京")),
@@ -108,6 +125,14 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         kind="meetup", allowed_kinds=("meetup",),
         source="doorkeeper", keywords=("LT", "Meetup", "カンファレンス"),
     ),
+    # connpass の技術イベントは検索で拾う。地域ごとに分けて、検索結果に出る件数を稼ぐ
+    _meetup_search_theme("meetup-connpass-kansai", ("関西", "大阪", "京都", "神戸")),
+    _meetup_search_theme("meetup-connpass-kanto", ("関東", "東京")),
+    _meetup_search_theme("meetup-connpass-chubu", ("中部", "名古屋")),
+    _meetup_search_theme("meetup-connpass-hokkaido-tohoku", ("北海道", "東北", "札幌", "仙台")),
+    _meetup_search_theme("meetup-connpass-chugoku-shikoku", ("中国地方", "四国", "広島", "岡山")),
+    _meetup_search_theme("meetup-connpass-kyushu-okinawa", ("九州", "沖縄", "福岡")),
+    _meetup_search_theme("meetup-connpass-online", ("オンライン",), online_only=True),
 )
 
 # 一旦止めているテーマ。補助金・アクセラ・共創は一覧のノイズになったため、定期収集は
