@@ -124,3 +124,14 @@ async def test_watch_stops_after_three_failures(store_backend, pages):
     for day in range(1, 4):
         await watch_all(now=FROZEN_NOW + timedelta(days=day))
     assert store_backend.list_watched_pages() == []
+
+
+@pytest.mark.asyncio
+async def test_watched_theme_never_searches_on_its_own(store_backend, pages):
+    """見守りのテーマを定期収集として直接走らせても、検索で拾ったページを載せない。"""
+    from event_agent.workflows.collect import run_theme_collection
+    from event_agent.workflows.themes import WATCHED_THEME
+
+    run, started = await run_theme_collection(WATCHED_THEME, now=FROZEN_NOW)
+    assert started and run.query_count == 0
+    assert store_backend.list_events(run.run_id) == []

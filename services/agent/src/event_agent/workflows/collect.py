@@ -432,7 +432,11 @@ async def execute_collect_workflow(
         # 補助金は jGrants（ADR-011）、技術イベントは Doorkeeper（ADR-012）の公開 API から
         # 貰う。検索・取得・抽出を飛ばし、検証から先は他のジャンルと同じ経路に乗せる。
         from_api = bool(theme and theme.source in _API_SOURCES)
-        # 利用者が登録したページ（ADR-014）。検索はせず、渡されたページだけを読む
+        # 利用者が登録したページ（ADR-014）。検索はせず、渡されたページだけを読む。
+        # 見守りのテーマはページが渡されなくても検索しない（検索すると登録されていない
+        # ページが「利用者が登録」として載る）
+        if seed_pages is None and theme is not None and theme.source == "watched":
+            seed_pages = []
         from_seed = seed_pages is not None
 
         await _set_step(run, "plan")

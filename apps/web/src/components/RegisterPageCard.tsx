@@ -17,6 +17,15 @@ const AGENT_NAME: Record<string, string> = {
   organizer: '整理',
 }
 
+function timeOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 type Props = { onClose: () => void; onAdded: () => void }
 
 export function RegisterPageCard({ onClose, onAdded }: Props) {
@@ -85,7 +94,7 @@ export function RegisterPageCard({ onClose, onAdded }: Props) {
                 <span className="log-icon" aria-hidden="true">
                   {line.level === 'warn' ? '!' : '✓'}
                 </span>
-                <span className="log-time" />
+                <span className="log-time">{timeOf(line.at)}</span>
                 <span className="log-agent">{AGENT_NAME[line.agent] ?? line.agent}</span>
                 <span className="log-message">{line.message}</span>
               </li>
