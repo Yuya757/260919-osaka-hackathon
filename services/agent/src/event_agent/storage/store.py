@@ -295,6 +295,20 @@ class Store(Protocol):
     def get_search_activity(self, search_id: str) -> list[SearchActivity] | None:
         """None until the search has written its first line."""
 
+    # 検索グラウンディング由来のデータを消す管理コマンド（ADR-014）だけが使う
+    def list_all_events(self) -> list[ApiEvent]: ...
+
+    def list_claims(self) -> list[EventClaim]: ...
+
+    def delete_events(self, dedup_keys: list[str]) -> None: ...
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        """Delete the runs together with their evidence and idempotency keys."""
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None: ...
+
+    def delete_claims(self, claim_ids: list[str]) -> None: ...
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -525,6 +539,42 @@ class MemoryStore:
         with self._lock:
             lines = self._search_activity.get(search_id)
             return list(lines) if lines is not None else None
+
+    def list_all_events(self) -> list[ApiEvent]:
+        with self._lock:
+            return list(self._events_by_dedup_key.values())
+
+    def list_claims(self) -> list[EventClaim]:
+        with self._lock:
+            return list(self._claims.values())
+
+    def delete_events(self, dedup_keys: list[str]) -> None:
+        with self._lock:
+            for key in dedup_keys:
+                self._events_by_dedup_key.pop(key, None)
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        doomed = set(run_ids)
+        with self._lock:
+            for run_id in doomed:
+                run = self._runs.pop(run_id, None)
+                if run is not None and self._runs_by_key.get(run.idempotency_key) == run_id:
+                    del self._runs_by_key[run.idempotency_key]
+                self._events_by_run.pop(run_id, None)
+            for key in [k for k in self._evidence if k[0] in doomed]:
+                del self._evidence[key]
+            if self._latest_run_id in doomed:
+                self._latest_run_id = None
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None:
+        with self._lock:
+            for post_id in post_ids:
+                self._posts.pop(post_id, None)
+
+    def delete_claims(self, claim_ids: list[str]) -> None:
+        with self._lock:
+            for claim_id in claim_ids:
+                self._claims.pop(claim_id, None)
 
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         with self._lock:

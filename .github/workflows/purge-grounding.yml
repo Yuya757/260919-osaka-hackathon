@@ -1,0 +1,74 @@
+name: Purge grounding data
+
+# 検索グラウンディングで集めたイベントを共有プールから消す（ADR-014）。
+# まず apply を外して件数だけを確かめ、了承を得てから apply を付けて実行する。
+# イメージは本番の event-agent と同じものを使う（develop のデプロイ後に実行する）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: '実際に消す（外すと件数だけを出す）'
+        type: boolean
+        default: false
+
+concurrency:
+  group: purge-grounding
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  purge:
+    name: Purge grounding-derived data
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy the admin job with the production image
+        run: |
+          IMAGE="$(gcloud run services describe event-agent \
+            --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" \
+            --format='value(spec.template.spec.containers[0].image)')"
+          MODE="${{ inputs.apply && '--apply' || '--dry-run' }}"
+          gcloud run jobs deploy event-agent-admin \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --service-account "event-agent-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --command=python \
+            --args="-m,event_agent.entrypoints.admin,purge-grounding,$MODE" \
+            --tasks 1 \
+            --max-retries 0 \
+            --task-timeout 900s \
+            --set-env-vars "^|^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}|GCP_REGION=${{ vars.GCP_REGION }}|AGENT_DEMO_MODE=false|FIRESTORE_ENABLED=true" \
+            --quiet
+
+      - name: Run it
+        id: run
+        run: |
+          EXECUTION="$(gcloud run jobs execute event-agent-admin \
+            --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}" \
+            --wait --format='value(metadata.name)')"
+          echo "execution=$EXECUTION" >> "$GITHUB_OUTPUT"
+
+      - name: Show the counts
+        # 件数は標準出力の JSON。ログを読む権限が無ければ Cloud Console の実行ログで見る
+        run: |
+          sleep 20
+          gcloud logging read \
+            "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"event-agent-admin\" AND labels.\"run.googleapis.com/execution_name\"=\"${{ steps.run.outputs.execution }}\"" \
+            --project "${{ vars.GCP_PROJECT_ID }}" --order asc --limit 200 \
+            --format='value(textPayload)' \
+            || echo "ログを読めませんでした。Cloud Run Jobs の実行 ${{ steps.run.outputs.execution }} のログを見てください。"

@@ -564,6 +564,46 @@ class FirestoreStore:
         snapshot = self._db.collection(EVENT_CLAIMS).document(_path_id(claim_id)).get()
         return EventClaim(**(snapshot.to_dict() or {})) if snapshot.exists else None
 
+    # ------------------------------------------------------ purge (ADR-014)
+
+    def list_all_events(self) -> list[ApiEvent]:
+        return [ApiEvent(**(s.to_dict() or {})) for s in self._db.collection(EVENTS).stream()]
+
+    def list_claims(self) -> list[EventClaim]:
+        return [EventClaim(**(s.to_dict() or {})) for s in self._db.collection(EVENT_CLAIMS).stream()]
+
+    def _delete_refs(self, refs: list[Any]) -> None:
+        # 1 回のバッチは 500 件まで
+        for start in range(0, len(refs), 400):
+            batch = self._db.batch()
+            for ref in refs[start : start + 400]:
+                batch.delete(ref)
+            batch.commit()
+
+    def delete_events(self, dedup_keys: list[str]) -> None:
+        self._delete_refs([self._db.collection(EVENTS).document(key) for key in dedup_keys])
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        refs: list[Any] = []
+        for run_id in run_ids:
+            run_ref = self._db.collection(RUNS).document(run_id)
+            snapshot = run_ref.get()
+            if snapshot.exists:
+                key = (snapshot.to_dict() or {}).get("idempotencyKey")
+                if key:
+                    refs.append(self._db.collection(RUN_KEYS).document(_path_id(key)))
+            refs.extend(doc.reference for doc in run_ref.collection(EVIDENCE).stream())
+            refs.append(run_ref)
+        self._delete_refs(refs)
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None:
+        self._delete_refs([self._db.collection(ORGANIZER_POSTS).document(pid) for pid in post_ids])
+
+    def delete_claims(self, claim_ids: list[str]) -> None:
+        self._delete_refs(
+            [self._db.collection(EVENT_CLAIMS).document(_path_id(cid)) for cid in claim_ids]
+        )
+
     # --------------------------------------------------------- search activity
 
     def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:

@@ -4,6 +4,7 @@
     PYTHONPATH=src python -m event_agent.entrypoints.admin confirm <postId>
     ... pin <postId> --until 2026-10-15     # PR 枠（JST のその日の終わりまで）
     ... unpin <postId> / hide <postId> / show <postId> / metrics <postId>
+    ... purge-grounding --dry-run | --apply  # 検索グラウンディング由来のデータを消す（ADR-014）
 
 ローカルからは Application Default Credentials で Firestore に書く。Cloud Run Job
 から実行するなら
@@ -17,6 +18,7 @@ import json
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 
+from event_agent.workflows import purge
 from event_agent.workflows.organizer_posts import (
     PostNotFound,
     confirm_post,
@@ -38,12 +40,27 @@ def _parser() -> argparse.ArgumentParser:
     pin = sub.add_parser("pin")
     pin.add_argument("post_id")
     pin.add_argument("--until", required=True, help="YYYY-MM-DD（JST のその日の終わりまで固定）")
+    purge_cmd = sub.add_parser("purge-grounding")
+    mode = purge_cmd.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--dry-run", action="store_true", help="件数だけを出す")
+    mode.add_argument("--apply", action="store_true", help="実際に消す")
     return parser
+
+
+def _purge_grounding(apply: bool) -> int:
+    plan = purge.plan_purge()
+    summary = plan.summary()
+    if apply:
+        purge.apply_purge(plan)
+    print(json.dumps({"applied": apply, **summary}, ensure_ascii=False, indent=2))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     now = datetime.now(timezone.utc)
+    if args.command == "purge-grounding":
+        return _purge_grounding(args.apply)
     try:
         if args.command == "confirm":
             result = confirm_post(args.post_id, now=now)
