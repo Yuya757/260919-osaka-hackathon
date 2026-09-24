@@ -134,25 +134,28 @@ export function EventListScreen({ mode }: Props) {
   return (
     <>
       <div className="list-head">
-        <form className="ask" onSubmit={onAsk}>
-          <span className="ask-mark" aria-hidden="true">
-            ›
-          </span>
-          <label className="sr-only" htmlFor="ask-input">
-            条件やエージェントへの問いかけ
-          </label>
-          <input
-            id="ask-input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
-            autoComplete="off"
-          />
-          <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
-            {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
-            {agentPending ? '探索中' : '探す'}
-          </button>
-        </form>
+        {/* 保存済みは自分で選んだイベントを見返す画面。探索の入力欄は要らない */}
+        {mode === 'home' && (
+          <form className="ask" onSubmit={onAsk}>
+            <span className="ask-mark" aria-hidden="true">
+              ›
+            </span>
+            <label className="sr-only" htmlFor="ask-input">
+              条件やエージェントへの問いかけ
+            </label>
+            <input
+              id="ask-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
+              autoComplete="off"
+            />
+            <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
+              {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
+              {agentPending ? '探索中' : '探す'}
+            </button>
+          </form>
+        )}
 
         {/* ジャンルと状態を 1 行にまとめる。「すべて」は両方の絞り込みを外す */}
         <div className="filters" role="group" aria-label="イベントの絞り込み">
@@ -189,7 +192,7 @@ export function EventListScreen({ mode }: Props) {
           ))}
         </div>
 
-        {(agentReply || agentPending) && (
+        {mode === 'home' && (agentReply || agentPending) && (
           <SearchActivityPanel
             reply={agentReply?.text ?? ''}
             activity={agentReply?.activity ?? []}
@@ -271,6 +274,8 @@ export function EventListScreen({ mode }: Props) {
                 <br />
                 一覧の「保存」を押すと、ここに集まります。
               </>
+            ) : mode === 'saved' ? (
+              <>条件に合う保存済みのイベントはありません。</>
             ) : (
               <>
                 条件に合うイベントはありません。
