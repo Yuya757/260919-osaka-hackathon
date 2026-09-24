@@ -16,6 +16,8 @@ import type {
   PoolSearchActivity,
   PoolSearchRequest,
   PoolSearchResponse,
+  PoolSearchStreamEvent,
+  SearchActivity,
   GoKind,
   PostMetricsResponse,
 } from '../types/api'
@@ -93,6 +95,77 @@ export function poolSearch(body: PoolSearchRequest): Promise<PoolSearchResponse>
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/**
+ * SSE の取り先。Firebase Hosting はストリームをまとめて返すので、本番は Cloud Run を
+ * じかに呼ぶ（ビルド時に VITE_AGENT_STREAM_URL で渡す）。無ければ同じオリジン。
+ */
+const STREAM_BASE = (import.meta.env.VITE_AGENT_STREAM_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+
+/** SSE の途中で切れた。1 行でも届いていれば、問い合わせ方式に戻さずエラーにする */
+export class PoolSearchStreamError extends Error {
+  constructor(
+    message: string,
+    readonly receivedAny: boolean,
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * プール探索を SSE で受ける。動きは届いた順に ``onActivity`` へ渡し、最後の結果を返す。
+ * 繋がらない・途中で切れたときは PoolSearchStreamError（呼び出し側が問い合わせ方式に戻す）。
+ */
+export async function poolSearchStream(
+  body: PoolSearchRequest,
+  onActivity: (line: SearchActivity) => void,
+): Promise<PoolSearchResponse> {
+  let receivedAny = false
+  let response: Response
+  try {
+    response = await fetch(`${STREAM_BASE}/api/pool-search/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new PoolSearchStreamError('探索のストリームに繋がりませんでした。', false)
+  }
+  if (!response.ok || !response.body) {
+    throw new PoolSearchStreamError(await readErrorDetail(response), false)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    // SSE の 1 件は空行で区切られる
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      boundary = buffer.indexOf('\n\n')
+      const data = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => line.slice(6))
+        .join('\n')
+      if (!data) continue
+      const event = JSON.parse(data) as PoolSearchStreamEvent
+      if (event.type === 'activity') {
+        receivedAny = true
+        onActivity(event.activity)
+      } else if (event.type === 'result') {
+        return event.result
+      } else {
+        throw new PoolSearchStreamError(event.message, true)
+      }
+    }
+  }
+  throw new PoolSearchStreamError('探索の結果が届きませんでした。', receivedAny)
 }
 
 /** 探索中の動き。poolSearch と並行して読み、エージェントの処理を 1 行ずつ見せる */

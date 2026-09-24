@@ -286,3 +286,14 @@ def test_event_claim_flow_conforms(client: TestClient, finished_run: str) -> Non
     )
     # デモのページに確認コードは書かれていない。鍵は渡さない
     assert body["status"] == "code_not_found" and not body.get("editToken")
+
+
+def test_pool_search_stream_events_conform(client: TestClient, finished_run: str) -> None:
+    import json as _json
+
+    with client.stream("POST", "/api/pool-search/stream", json={"query": "関西 生成AI"}) as response:
+        frames = [line.removeprefix("data: ") for line in response.iter_lines() if line.startswith("data: ")]
+    assert frames
+    validator = _validator("pool-search.json", "PoolSearchStreamEvent")
+    for frame in frames:
+        _assert_valid(validator, _json.loads(frame), "PoolSearchStreamEvent")

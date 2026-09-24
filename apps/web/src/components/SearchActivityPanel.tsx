@@ -44,6 +44,48 @@ function useElapsed(pending: boolean): number | null {
   return startedAt === null ? null : Math.max(0, now - startedAt) / 1000
 }
 
+/**
+ * 文字を流して出す（ChatGPT / Gemini の返答と同じ見せ方）。
+ * 届いたばかりの文だけ流し、画面を開き直したときに古い文を打ち直さない。
+ */
+function TypeText({ text, animate }: { text: string; animate: boolean }) {
+  const [shown, setShown] = useState(animate ? 0 : text.length)
+  useEffect(() => {
+    if (!animate) {
+      setShown(text.length)
+      return
+    }
+    setShown(0)
+    const step = Math.max(1, Math.round(text.length / 40))
+    const timer = window.setInterval(() => {
+      setShown((count) => {
+        const next = Math.min(text.length, count + step)
+        if (next >= text.length) window.clearInterval(timer)
+        return next
+      })
+    }, 16)
+    return () => window.clearInterval(timer)
+  }, [text, animate])
+  return (
+    <>
+      {text.slice(0, shown)}
+      {shown < text.length && <span className="type-caret" aria-hidden="true" />}
+    </>
+  )
+}
+
+/** 届いてから数秒以内の行だけ流す */
+const isFresh = (iso: string) => Date.now() - new Date(iso).getTime() < 8000
+
+/** エージェントの顔。考え中は色が回って脈打ち、終わると止まってチェックになる */
+function AgentOrb({ state }: { state: 'thinking' | 'done' | 'warn' }) {
+  return (
+    <span className={`agent-orb is-${state}`} aria-hidden="true">
+      <span className="agent-orb-core">{state === 'thinking' ? 'AI' : state === 'warn' ? '!' : '✓'}</span>
+    </span>
+  )
+}
+
 export function SearchActivityPanel({ reply, activity, pending }: Props) {
   // 役割ごとのカードは出さず、動きの行だけを時系列で見せる。探索中は届いた行から順に出る
   const last = activity[activity.length - 1]
@@ -52,19 +94,19 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
     : ROLES[0]
   const elapsed = useElapsed(pending)
   const warned = activity.some((line) => line.level === 'warn')
+  const [replyFresh] = useState(() => pending)
 
   return (
     <div className={`activity${pending ? ' is-pending' : ''}`} role="status" aria-live="polite">
       <div className="activity-head">
-        {/* 探索中はグルグル、終わったらチェック（警告があれば !） */}
-        <span
-          className={`activity-icon ${pending ? 'spinner' : warned ? 'is-warn' : 'is-done'}`}
-          aria-hidden="true"
-        >
-          {pending ? null : warned ? '!' : '✓'}
-        </span>
+        <AgentOrb state={pending ? 'thinking' : warned ? 'warn' : 'done'} />
         <p className={`activity-title${pending ? ' shimmer' : ''}`}>
-          {pending ? `${nextRole.name}: ${nextRole.doing}` : reply}
+          {/* 何をしているかは下の行に出す。見出しは状態だけにして同じことを二度書かない */}
+          {pending ? (
+            'エージェントが探しています'
+          ) : (
+            <TypeText text={reply} animate={replyFresh} />
+          )}
         </p>
         {elapsed !== null && (
           <span className="activity-elapsed">
@@ -72,6 +114,7 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
           </span>
         )}
       </div>
+
       {(activity.length > 0 || pending) && (
         <div className="activity-log">
           <ol>
@@ -82,7 +125,9 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
                 </span>
                 <span className="log-time">{timeOf(line.at)}</span>
                 <span className="log-agent">{roleName(line.agent)}</span>
-                <span className="log-message">{line.message}</span>
+                <span className="log-message">
+                  <TypeText text={line.message} animate={isFresh(line.at)} />
+                </span>
               </li>
             ))}
             {/* いま動いている役割。最後の行の次の役割をグルグルと一緒に出す */}

@@ -134,25 +134,28 @@ export function EventListScreen({ mode }: Props) {
   return (
     <>
       <div className="list-head">
-        <form className="ask" onSubmit={onAsk}>
-          <span className="ask-mark" aria-hidden="true">
-            ›
-          </span>
-          <label className="sr-only" htmlFor="ask-input">
-            条件やエージェントへの問いかけ
-          </label>
-          <input
-            id="ask-input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
-            autoComplete="off"
-          />
-          <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
-            {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
-            {agentPending ? '探索中' : '探す'}
-          </button>
-        </form>
+        {/* 保存済みは自分で選んだイベントを見返す画面。探索の入力欄は要らない */}
+        {mode === 'home' && (
+          <form className="ask" onSubmit={onAsk}>
+            <span className="ask-mark" aria-hidden="true">
+              ›
+            </span>
+            <label className="sr-only" htmlFor="ask-input">
+              条件やエージェントへの問いかけ
+            </label>
+            <input
+              id="ask-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
+              autoComplete="off"
+            />
+            <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
+              {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
+              {agentPending ? '探索中' : '探す'}
+            </button>
+          </form>
+        )}
 
         {/* ジャンルと状態を 1 行にまとめる。「すべて」は両方の絞り込みを外す */}
         <div className="filters" role="group" aria-label="イベントの絞り込み">
@@ -189,7 +192,7 @@ export function EventListScreen({ mode }: Props) {
           ))}
         </div>
 
-        {(agentReply || agentPending) && (
+        {mode === 'home' && (agentReply || agentPending) && (
           <SearchActivityPanel
             reply={agentReply?.text ?? ''}
             activity={agentReply?.activity ?? []}
@@ -237,6 +240,19 @@ export function EventListScreen({ mode }: Props) {
         </p>
       )}
 
+      {/* 前回の一覧を出したまま最新を取れなかった。古い一覧を黙って出さない（ADR-005） */}
+      {loadState === 'ready' && loadError && (
+        <div className="stale-warning" role="alert">
+          <p>
+            最新の一覧を取得できませんでした。表示しているのは前回取得した一覧です。
+            申込前に公式サイトで締切をご確認ください。
+          </p>
+          <button type="button" className="button" onClick={() => void refresh()}>
+            再試行
+          </button>
+        </div>
+      )}
+
       {loadState === 'loading' && (
         <div aria-busy="true">
           <p className="loading-line">
@@ -271,6 +287,8 @@ export function EventListScreen({ mode }: Props) {
                 <br />
                 一覧の「保存」を押すと、ここに集まります。
               </>
+            ) : mode === 'saved' ? (
+              <>条件に合う保存済みのイベントはありません。</>
             ) : (
               <>
                 条件に合うイベントはありません。
@@ -280,16 +298,29 @@ export function EventListScreen({ mode }: Props) {
             )}
           </p>
         ) : (
-          visible.slice(0, shownCount).map((event) => (
-            <EventCard
-              key={event.eventId}
-              event={event}
-              saved={Boolean(saved[event.eventId])}
-              calendar={calendar[event.eventId]}
-              onToggleSaved={toggleSaved}
-              onOpenCalendar={setSheetEvent}
-            />
-          ))
+          // 探索中は薄くし、結果が届いたら上の行から順に出す（key で描き直す）
+          <div
+            key={mode === 'home' ? agentReply?.text || 'pool' : 'saved'}
+            className={[
+              'list-rows',
+              mode === 'home' && agentPending ? 'is-agent-working' : '',
+              mode === 'home' && agentReply?.text && !agentPending ? 'is-fresh' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-busy={mode === 'home' && agentPending}
+          >
+            {visible.slice(0, shownCount).map((event) => (
+              <EventCard
+                key={event.eventId}
+                event={event}
+                saved={Boolean(saved[event.eventId])}
+                calendar={calendar[event.eventId]}
+                onToggleSaved={toggleSaved}
+                onOpenCalendar={setSheetEvent}
+              />
+            ))}
+          </div>
         ))}
 
       {loadState === 'ready' && shownCount < visible.length && (

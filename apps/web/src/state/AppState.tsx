@@ -25,6 +25,8 @@ import {
   pollAgentRun,
   getPoolSearchActivity,
   poolSearch,
+  poolSearchStream,
+  PoolSearchStreamError,
   startAgentRun,
 } from '../api/client'
 import { displayable } from '../lib/eventView'
@@ -37,6 +39,7 @@ import type {
   OrganizerPost,
   OrganizerPostCreateResponse,
   OrganizerPostRequest,
+  PoolSearchResponse,
   SearchActivity,
 } from '../types/api'
 
@@ -240,31 +243,49 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
    * イベントを問いかけで解釈 → 絞り込み → 採点 → 提示する。文に「探して」と
    * 書かなくてもよく、空なら現在の関心条件で並べ直す。
    */
+  /**
+   * 問い合わせ方式（SSE が使えないときの控え）。探索のリクエストは終わるまで返らないので、
+   * そのあいだ保存された動きを 0.5 秒ごとに読みにいく。
+   */
+  const searchWithPolling = useCallback(async (query: string): Promise<PoolSearchResponse> => {
+    const searchId = newSearchId()
+    let finished = false
+    const poll = window.setInterval(() => {
+      getPoolSearchActivity(searchId)
+        .then(({ activity }) => {
+          if (!finished && activity.length) setAgentReply({ text: '', activity })
+        })
+        .catch(() => {
+          // 途中経過が読めなくても、最後の応答でまとめて出る
+        })
+    }, ACTIVITY_POLL_MS)
+    try {
+      return await poolSearch({ sessionId: sessionRef.current, query, searchId })
+    } finally {
+      finished = true
+      window.clearInterval(poll)
+    }
+  }, [])
+
   const ask = useCallback(
     async (message: string) => {
       if (agentPending) return
       setAgentPending(true)
       setAgentReply({ text: '', activity: [] })
-      // 探索のリクエストは終わるまで返らない。そのあいだ動きを読みにいき、
-      // エージェントが解釈 → 絞り込み → 採点 → 提示と進む様子を 1 行ずつ出す
-      const searchId = newSearchId()
-      let finished = false
-      const poll = window.setInterval(() => {
-        getPoolSearchActivity(searchId)
-          .then(({ activity }) => {
-            if (!finished && activity.length) setAgentReply({ text: '', activity })
-          })
-          .catch(() => {
-            // 途中経過が読めなくても、最後の応答でまとめて出る
-          })
-      }, ACTIVITY_POLL_MS)
+      const query = message.trim()
       try {
-        const result = await poolSearch({
-          sessionId: sessionRef.current,
-          query: message.trim(),
-          searchId,
-        })
-        finished = true
+        // エージェントの動きは SSE で届いた順に出す。繋がらなければ問い合わせ方式に戻す
+        let result: PoolSearchResponse
+        try {
+          const lines: SearchActivity[] = []
+          result = await poolSearchStream({ sessionId: sessionRef.current, query }, (line) => {
+            lines.push(line)
+            setAgentReply({ text: '', activity: [...lines] })
+          })
+        } catch (error) {
+          if (!(error instanceof PoolSearchStreamError) || error.receivedAny) throw error
+          result = await searchWithPolling(query)
+        }
         sessionRef.current = result.sessionId
         setAgentReply({ text: result.reply, activity: result.activity })
         setEvents(displayable(result.events))
@@ -280,12 +301,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           activity: [],
         })
       } finally {
-        finished = true
-        window.clearInterval(poll)
         setAgentPending(false)
       }
     },
-    [agentPending],
+    [agentPending, searchWithPolling],
   )
 
   const toggleSaved = useCallback((eventId: string) => {

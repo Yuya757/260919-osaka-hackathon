@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Path, Query, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from event_agent.agents.chat import handle_chat
@@ -310,6 +312,57 @@ async def pool_search_activity(
 async def pool_search(body: PoolSearchRequest) -> PoolSearchResponse:
     """プール探索エージェント（ADR-010）。Web には出ず、収集済みイベントを問いかけで探す。"""
     result = await search_pool(body.query, body.session_id, search_id=body.search_id)
+    return _with_evidence_preview(result)
+
+
+@app.post("/api/pool-search/stream")
+async def pool_search_stream(body: PoolSearchRequest) -> StreamingResponse:
+    """プール探索を SSE で流す（ADR-010）。動きを 1 行ずつ ``activity`` で送り、最後に
+    ``result``（PoolSearchResponse と同じ形）を送る。失敗したら ``error``。
+
+    Firebase Hosting はストリームをまとめて返すので、画面は Cloud Run をじかに呼ぶ。
+    """
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def frame(payload: dict) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+    def on_activity(line) -> None:
+        queue.put_nowait(frame({"type": "activity", "activity": line.model_dump(by_alias=True, mode="json")}))
+
+    async def run() -> None:
+        try:
+            result = await search_pool(
+                body.query, body.session_id, search_id=body.search_id, on_activity=on_activity
+            )
+            finished = _with_evidence_preview(result).model_dump(by_alias=True, mode="json")
+            queue.put_nowait(frame({"type": "result", "result": finished}))
+        except Exception:  # noqa: BLE001 — 画面には理由だけ返し、詳細はログへ
+            logger.exception("pool search stream failed")
+            queue.put_nowait(frame({"type": "error", "message": "探索に失敗しました。"}))
+        finally:
+            queue.put_nowait(None)
+
+    async def events():
+        # 最初の 1 バイトをすぐ送り、途中の中継にバッファさせない
+        yield ": stream\n\n"
+        task = asyncio.create_task(run())
+        try:
+            while (item := await queue.get()) is not None:
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+def _with_evidence_preview(result: PoolSearchResponse) -> PoolSearchResponse:
+    """一覧の行に根拠（出典と引用）を添える。"""
     evidence_by_id = store.get_evidence_for_events(result.events)
     result.events = [
         e.model_copy(

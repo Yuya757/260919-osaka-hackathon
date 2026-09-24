@@ -257,7 +257,7 @@ export function FeedScreen() {
                 {day.posts.map(renderPost)}
               </section>
             ))}
-            <div ref={endRef} />
+            <div ref={endRef} className="channel-end" />
           </div>
         ))}
 

@@ -67,6 +67,29 @@
         "activity": { "type": "array", "items": { "$ref": "#/$defs/SearchActivity" } }
       }
     },
+    "PoolSearchStreamEvent": {
+      "description": "POST /api/pool-search/stream（text/event-stream）の data 1 件。動きを 1 行ずつ activity で送り、最後に result、失敗したら error",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "activity"],
+          "properties": { "type": { "const": "activity" }, "activity": { "$ref": "#/$defs/SearchActivity" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "result"],
+          "properties": { "type": { "const": "result" }, "result": { "$ref": "#/$defs/PoolSearchResponse" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "message"],
+          "properties": { "type": { "const": "error" }, "message": { "type": "string" } }
+        }
+      ]
+    },
     "PoolSearchResponse": {
       "type": "object",
       "additionalProperties": false,
