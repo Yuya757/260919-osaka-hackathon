@@ -18,26 +18,48 @@ from event_agent.workflows.themes import (
 
 
 def test_themes_map_to_task_indices():
-    assert [t.id for t in COLLECTION_THEMES] == [
-        "hackathon-kansai", "hackathon-kanto", "hackathon-chubu", "hackathon-online",
-        "hackathon-hokkaido-tohoku", "hackathon-chugoku-shikoku", "hackathon-kyushu-okinawa",
-        "contest-kansai", "contest-kanto", "contest-online",
-        "meetup-study", "meetup-talk",
-        "meetup-connpass-kansai", "meetup-connpass-kanto", "meetup-connpass-chubu",
-        "meetup-connpass-hokkaido-tohoku", "meetup-connpass-chugoku-shikoku",
-        "meetup-connpass-kyushu-okinawa", "meetup-connpass-online",
-    ]
-    assert theme_for_task_index(3).id == "hackathon-online"
-    assert theme_for_task_index(9).id == "contest-online"
-    # 止めているテーマはタスクに割り当てないが、id では引ける
+    assert [t.id for t in COLLECTION_THEMES] == ["meetup-study", "meetup-talk", "watched-pages"]
+    assert theme_for_task_index(1).id == "meetup-talk"
+    # 止めているテーマ・検索グラウンディングのテーマはタスクに割り当てないが、id では引ける
     assert "subsidy-kansai" not in {t.id for t in COLLECTION_THEMES}
     assert theme_by_id("subsidy-kansai").kind == "subsidy"
+    assert theme_by_id("hackathon-kanto").locations == ("関東", "東京")
     with pytest.raises(ValueError):
         theme_for_task_index(len(COLLECTION_THEMES))
-    assert theme_by_id("hackathon-kanto").locations == ("関東", "東京")
-    assert select_themes(["job"], {"CLOUD_RUN_TASK_INDEX": "2"})[0].id == "hackathon-chubu"
+    assert select_themes(["job"], {"CLOUD_RUN_TASK_INDEX": "0"})[0].id == "meetup-study"
     assert select_themes(["job", "contest-kansai"], {})[0].id == "contest-kansai"
     assert len(select_themes(["job"], {})) == len(COLLECTION_THEMES)
+
+
+def test_scheduled_collection_never_uses_search_grounding():
+    """検索グラウンディングの結果のリンクから読むページを決めて保存・共有することは
+    規約で禁じられている（ADR-014）。毎朝の定期収集は検索を 0 回しか使わない。"""
+    from event_agent.workflows.themes import search_themes
+
+    assert search_themes() == ()
+    assert all(theme.source != "search" for theme in COLLECTION_THEMES)
+
+
+@pytest.mark.asyncio
+async def test_production_refuses_to_search_for_pages(store_backend, monkeypatch):
+    """本番（Vertex）では、どの経路から呼ばれても検索で告知ページを探さない。"""
+    from event_agent.config import Settings
+    from event_agent.workflows import collect
+
+    monkeypatch.setattr(Settings, "use_vertex", property(lambda self: True))
+    calls: list[str] = []
+
+    class Spy:
+        demo_mode = False
+
+        async def search_with_grounding(self, query, **_):
+            calls.append(query)
+            return []
+
+    monkeypatch.setattr(collect, "gemini_client", Spy())
+    hits = await collect._search_step(["ハッカソン 大阪"])
+    assert hits == [] and calls == []
+    assert get_settings().manual_runs_allowed is False
 
 
 def test_contest_themes_target_contest_kind_and_sites():
@@ -152,7 +174,7 @@ def test_daily_searches_fit_the_grounding_cap():
     daily = sum(
         min(len(theme.site_queries) + 1, settings.max_search_queries) for theme in search_themes()
     )
-    assert daily <= settings.daily_grounding_cap
+    assert daily == 0 <= settings.daily_grounding_cap
 
 
 def test_connpass_meetup_themes_search_connpass_for_meetups():

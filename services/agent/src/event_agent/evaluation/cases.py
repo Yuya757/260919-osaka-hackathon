@@ -53,6 +53,8 @@ class EvalCase:
     not_produced: tuple[str, ...] = ()
     allowed_fetch_urls: tuple[str, ...] | None = None
     forbidden_values: tuple[str, ...] = ()
+    # 利用者が登録したページ（ADR-014）。あれば検索を飛ばし、このページだけを読む
+    registered_urls: tuple[str, ...] = ()
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -108,6 +110,7 @@ def parse_case(data: dict[str, Any]) -> EvalCase:
             tuple(group) for group in expected.get("duplicateGroups", [])
         ),
         not_produced=tuple(expected.get("notProduced", ())),
+        registered_urls=tuple(data.get("registeredUrls", ())),
         allowed_fetch_urls=(
             tuple(expected["allowedFetchUrls"])
             if "allowedFetchUrls" in expected

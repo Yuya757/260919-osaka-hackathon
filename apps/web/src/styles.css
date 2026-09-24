@@ -2924,3 +2924,73 @@ button.next-title:hover {
   flex: 1;
   min-width: 200px;
 }
+
+/* ---------- 利用者ごとの Web 検索（ADR-014） ---------- */
+.web-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.web-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.web-card-head .eyebrow {
+  margin: 0;
+}
+
+.web-answer {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.web-sources {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.web-suggestions {
+  width: 100%;
+  border: 0;
+  display: block;
+}
+
+.list-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.list-actions .button {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+/* ---------- 利用者が登録したページ（ADR-014） ---------- */
+.register-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.register-card .fine {
+  margin: 0;
+}

@@ -26,6 +26,7 @@ idempotent by construction instead of by a read-then-search.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -35,6 +36,7 @@ from event_agent.config import get_settings
 from event_agent.schemas import (
     AgentRun,
     EventClaim,
+    WatchedPage,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -52,6 +54,8 @@ from event_agent.storage.store import (
     merge_saved_post,
 )
 
+logger = logging.getLogger(__name__)
+
 RUNS = "agentRuns"
 RUN_KEYS = "agentRunKeys"
 EVIDENCE = "evidence"
@@ -66,6 +70,10 @@ USAGE = "usage"
 SEARCH_ACTIVITY = "searchActivity"
 # 主催者の申請（ADR-013）。鍵はハッシュだけを持つ
 EVENT_CLAIMS = "eventClaims"
+# 利用者ごとの日次の回数（Web 検索・ページ登録、ADR-014）
+QUOTAS = "quotas"
+# 利用者が登録したページ（ADR-014）
+WATCHED_PAGES = "watchedPages"
 SEARCH_ACTIVITY_TTL = timedelta(days=1)
 
 
@@ -115,7 +123,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS, WATCHED_PAGES):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -477,6 +485,49 @@ class FirestoreStore:
                 time.sleep(0.05 * (attempt + 1))
         return False
 
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage:
+        self._db.collection(WATCHED_PAGES).document(page.watch_id).set(_dump(page))
+        return page
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None:
+        snapshot = self._db.collection(WATCHED_PAGES).document(watch_id).get()
+        return WatchedPage(**(snapshot.to_dict() or {})) if snapshot.exists else None
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        # 単一フィールドの等値条件だけにして複合インデックスを要らなくする。並べ替えは手元で
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = self._db.collection(WATCHED_PAGES).where(filter=FieldFilter("active", "==", True))
+        pages = [WatchedPage(**(s.to_dict() or {})) for s in query.stream()]
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(pages, key=lambda p: (p.last_checked_at or oldest, p.watch_id))[:limit]
+
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        from google.cloud import firestore
+
+        ref = self._db.collection(QUOTAS).document(_path_id(key))
+
+        @firestore.transactional
+        def claim(transaction: Any) -> bool:
+            snapshot = ref.get(transaction=transaction)
+            used = int((snapshot.to_dict() or {}).get("used", 0)) if snapshot.exists else 0
+            if used + 1 > cap:
+                return False
+            transaction.set(ref, {"key": key, "used": used + 1, "updatedAt": datetime.now(timezone.utc)})
+            return True
+
+        import time
+
+        for attempt in range(5):
+            try:
+                return bool(claim(self._db.transaction()))
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 4:
+                    logger.warning("quota reservation gave up for %s: %s", key, exc)
+                    return False
+                time.sleep(0.05 * (attempt + 1))
+        return False
+
     def record_model_calls(self, day: str, count: int) -> None:
         from google.cloud import firestore
 
@@ -512,6 +563,46 @@ class FirestoreStore:
     def get_claim(self, claim_id: str) -> EventClaim | None:
         snapshot = self._db.collection(EVENT_CLAIMS).document(_path_id(claim_id)).get()
         return EventClaim(**(snapshot.to_dict() or {})) if snapshot.exists else None
+
+    # ------------------------------------------------------ purge (ADR-014)
+
+    def list_all_events(self) -> list[ApiEvent]:
+        return [ApiEvent(**(s.to_dict() or {})) for s in self._db.collection(EVENTS).stream()]
+
+    def list_claims(self) -> list[EventClaim]:
+        return [EventClaim(**(s.to_dict() or {})) for s in self._db.collection(EVENT_CLAIMS).stream()]
+
+    def _delete_refs(self, refs: list[Any]) -> None:
+        # 1 回のバッチは 500 件まで
+        for start in range(0, len(refs), 400):
+            batch = self._db.batch()
+            for ref in refs[start : start + 400]:
+                batch.delete(ref)
+            batch.commit()
+
+    def delete_events(self, dedup_keys: list[str]) -> None:
+        self._delete_refs([self._db.collection(EVENTS).document(key) for key in dedup_keys])
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        refs: list[Any] = []
+        for run_id in run_ids:
+            run_ref = self._db.collection(RUNS).document(run_id)
+            snapshot = run_ref.get()
+            if snapshot.exists:
+                key = (snapshot.to_dict() or {}).get("idempotencyKey")
+                if key:
+                    refs.append(self._db.collection(RUN_KEYS).document(_path_id(key)))
+            refs.extend(doc.reference for doc in run_ref.collection(EVIDENCE).stream())
+            refs.append(run_ref)
+        self._delete_refs(refs)
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None:
+        self._delete_refs([self._db.collection(ORGANIZER_POSTS).document(pid) for pid in post_ids])
+
+    def delete_claims(self, claim_ids: list[str]) -> None:
+        self._delete_refs(
+            [self._db.collection(EVENT_CLAIMS).document(_path_id(cid)) for cid in claim_ids]
+        )
 
     # --------------------------------------------------------- search activity
 

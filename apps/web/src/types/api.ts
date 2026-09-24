@@ -217,6 +217,8 @@ export type Event = {
   recommendation?: EventRecommendation | null
   firstSeenAt: string
   lastSeenAt: string
+  /** 集めたテーマ。利用者が登録したページは user-registered / watched-pages（ADR-014） */
+  themeId?: string | null
   sourceRunId: string
   status: EventLifecycleStatus
   googleCalendarEventIds?: GoogleCalendarEventIds
@@ -455,3 +457,27 @@ export type EventClaimVerifyResponse = {
 }
 
 export type EventEditResponse = { event: Event }
+
+// ---- 利用者ごとの Web 検索（ADR-014）— packages/contracts/schemas/web-search.json
+
+export type WebSource = { title: string; uri: string }
+
+/** Google 検索による AI の回答。質問した本人にだけ見せ、保存しない */
+export type WebSearchResponse = {
+  sessionId: string
+  answer: string
+  /** Search Suggestions の HTML。無改変で表示する義務がある */
+  searchEntryPointHtml: string | null
+  sources: WebSource[]
+  generatedAt: string
+}
+
+// ---- 利用者が登録したページ（ADR-014）— packages/contracts/schemas/watched-page.json
+
+export type WatchedPageResponse = {
+  status: 'added' | 'exists' | 'rejected'
+  reason?: 'bad_url' | 'quota' | 'robots' | 'unavailable' | 'no_event' | null
+  message: string
+  event?: Event | null
+  activity: RunActivity[]
+}

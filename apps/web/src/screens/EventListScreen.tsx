@@ -11,7 +11,10 @@ import { daysUntil, isFinished, isUrgent, kindLabel, needsCheck } from '../lib/e
 import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import { SearchActivityPanel } from '../components/SearchActivityPanel'
-import type { Event, EventKind } from '../types/api'
+import { WebSearchCard } from '../components/WebSearchCard'
+import { RegisterPageCard } from '../components/RegisterPageCard'
+import { searchTheWeb } from '../api/client'
+import type { Event, EventKind, WebSearchResponse } from '../types/api'
 
 type Filter = 'all' | 'soon' | 'online' | 'check'
 
@@ -61,6 +64,31 @@ export function EventListScreen({ mode }: Props) {
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
+  // 利用者ごとの Web 検索（ADR-014）。結果は画面のメモリにだけ持つ
+  const [web, setWeb] = useState<{
+    result: WebSearchResponse | null
+    pending: boolean
+    error: string | null
+  }>({ result: null, pending: false, error: null })
+  const webSession = useRef<string | undefined>(undefined)
+  const [registering, setRegistering] = useState(false)
+
+  const onWebSearch = async () => {
+    const text = query.trim()
+    if (!text || web.pending) return
+    setWeb({ result: null, pending: true, error: null })
+    try {
+      const result = await searchTheWeb(text, webSession.current)
+      webSession.current = result.sessionId
+      setWeb({ result, pending: false, error: null })
+    } catch (caught) {
+      setWeb({
+        result: null,
+        pending: false,
+        error: caught instanceof Error ? caught.message : 'Web 検索に失敗しました。',
+      })
+    }
+  }
   const moreRef = useRef<HTMLDivElement>(null)
 
   const upcoming = useMemo(() => {
@@ -155,6 +183,34 @@ export function EventListScreen({ mode }: Props) {
               {agentPending ? '探索中' : '探す'}
             </button>
           </form>
+        )}
+
+        {mode === 'home' && (
+          <div className="list-actions">
+            {/* 収集済みの一覧とは別に、Google 検索で Web を調べる。結果は本人にだけ出し、保存しない */}
+            <button
+              type="button"
+              className="button"
+              onClick={() => void onWebSearch()}
+              disabled={!query.trim() || web.pending}
+            >
+              Google 検索で Web からも探す
+            </button>
+            <button type="button" className="button" onClick={() => setRegistering((open) => !open)}>
+              ＋ イベントのページを登録
+            </button>
+          </div>
+        )}
+        {mode === 'home' && registering && (
+          <RegisterPageCard onClose={() => setRegistering(false)} onAdded={() => void refresh()} />
+        )}
+        {mode === 'home' && (
+          <WebSearchCard
+            result={web.result}
+            pending={web.pending}
+            error={web.error}
+            onClose={() => setWeb({ result: null, pending: false, error: null })}
+          />
         )}
 
         {/* ジャンルと状態を 1 行にまとめる。「すべて」は両方の絞り込みを外す */}

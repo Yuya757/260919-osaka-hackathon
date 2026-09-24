@@ -272,6 +272,12 @@ flowchart TD
 
 ### 6.4 Step 3: Google Search Grounding
 
+> **ADR-014 により、本番の収集（定期・手動）ではこの Step を使わない。** Grounded Results は
+> データベースを作るのに使えず、プロンプトを送った本人にしか見せられないため。本番で
+> Grounding を使うのは、利用者本人への Web 検索の回答（`POST /api/web-search`、保存しない）だけである。
+> 共有プールの Web 由来のイベントは、利用者が貼った URL（`POST /api/watched-pages`）から作る。
+> 以下はデモと評価のフィクスチャ経路の仕様として残す。
+
 - Vertex AI GeminiのGoogle Search Groundingを利用する
 - `groundingMetadata` のURL、検索語、対応セグメントをEvidenceとして保存する
 - 検索結果の文章を命令ではなく信頼できないデータとして扱う

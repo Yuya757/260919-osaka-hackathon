@@ -145,63 +145,46 @@ class GeminiClient:
             logger.warning("generate_text failed: %s", exc)
             return None
 
-    async def search_with_grounding(
-        self,
-        query: str,
-        *,
-        since: datetime | None = None,
-        exclude_domains: tuple[str, ...] = (),
-    ) -> list[dict[str, str]]:
-        """Grounding-only call (no tools mixed with other function calling).
+    async def grounded_answer(self, question: str) -> dict | None:
+        """Google 検索グラウンディングで答える（利用者ごとの Web 検索、ADR-014）。
 
-        ``since`` narrows the search to pages from that time on (Google Search
-        の期間指定), and ``exclude_domains`` drops hosts that are never event
-        pages (まとめ記事など). Both are search-side filters, so they cost no
-        extra model calls.
+        返すのは答えの本文・Search Suggestions の HTML・出典（タイトルと URL）だけ。
+        規約上、これは質問した本人にだけ見せ、保存も、出典のリンクを読みに行くことも
+        しない。他の道具と同じリクエストに混ぜない（§6.4）。
         """
         if not self._client or not self._take_call("grounding"):
-            return []
+            return None
         try:
             from google.genai import types
 
-            search = types.GoogleSearch(
-                time_range_filter=types.Interval(start_time=since, end_time=datetime.now(timezone.utc))
-                if since
-                else None,
-                exclude_domains=list(exclude_domains) or None,
-            )
-            tool = types.Tool(google_search=search)
             response = await asyncio.wait_for(
                 self._client.aio.models.generate_content(
                     model=settings.gemini_model,
-                    contents=f"日本のイベント情報: {query}",
+                    contents=question,
                     config=types.GenerateContentConfig(
-                        tools=[tool],
-                        temperature=0.1,
+                        tools=[types.Tool(google_search=types.GoogleSearch())],
+                        temperature=0.2,
                         thinking_config=types.ThinkingConfig(thinking_budget=0),
                     ),
                 ),
                 timeout=settings.model_call_timeout_seconds,
             )
-            hits: list[dict[str, str]] = []
-            candidates = getattr(response, "candidates", None) or []
-            if candidates:
-                gm = getattr(candidates[0], "grounding_metadata", None)
-                if gm:
-                    for chunk in getattr(gm, "grounding_chunks", None) or []:
-                        web = getattr(chunk, "web", None)
-                        if web and getattr(web, "uri", None):
-                            hits.append(
-                                {
-                                    "url": web.uri,
-                                    "title": getattr(web, "title", "") or query,
-                                    "excerpt": (response.text or "")[:400],
-                                }
-                            )
-            return hits[:10]
         except Exception as exc:
-            logger.warning("grounding search failed: %s", exc)
-            return []
+            logger.warning("grounded answer failed: %s", exc)
+            return None
+        candidates = getattr(response, "candidates", None) or []
+        metadata = getattr(candidates[0], "grounding_metadata", None) if candidates else None
+        entry = getattr(metadata, "search_entry_point", None) if metadata else None
+        sources = []
+        for chunk in (getattr(metadata, "grounding_chunks", None) or []) if metadata else []:
+            web = getattr(chunk, "web", None)
+            if web and getattr(web, "uri", None):
+                sources.append({"title": getattr(web, "title", "") or "", "uri": web.uri})
+        return {
+            "answer": (getattr(response, "text", None) or "").strip(),
+            "search_entry_point_html": getattr(entry, "rendered_content", None) if entry else None,
+            "sources": sources,
+        }
 
 
 gemini_client = GeminiClient()

@@ -78,6 +78,15 @@ class Settings(BaseSettings):
             return False
         return bool(self.gcp_project_id and self.gcp_project_id.strip())
 
+    @property
+    def manual_runs_allowed(self) -> bool:
+        """利用者起点の収集 Run を受け付けるか。
+
+        収集 Run は検索グラウンディングの結果のリンクからページを読むので、本番
+        （Vertex）では設定に関わらず受け付けない（ADR-014）。デモと評価だけで使う。
+        """
+        return self.manual_runs_enabled and not self.use_vertex
+
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 

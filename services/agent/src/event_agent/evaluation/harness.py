@@ -13,7 +13,7 @@ from typing import Iterator
 
 from event_agent.config import settings
 from event_agent.evaluation.cases import EvalCase
-from event_agent.clients.page_fetcher import FixturePageSource, PageFetcher, SearchHit
+from event_agent.clients.page_fetcher import FetchedPage, FixturePageSource, PageFetcher, SearchHit
 from event_agent.schemas import AgentRun, ApiEvent
 from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
@@ -80,15 +80,40 @@ def _settings_for_eval() -> Iterator[None]:
         settings.demo_catalog_fallback, settings.step_delay_seconds = saved
 
 
+async def _run_registered(case: EvalCase, trajectory: ToolTrajectory) -> AgentRun:
+    """利用者が URL を登録したときと同じ経路（ADR-014）: 検索せず、そのページだけを読む。"""
+    from event_agent.workflows import collect
+    from event_agent.workflows.watched_pages import REGISTER_THEME
+
+    run = store.create_run(collect._new_run(None))
+    pages: list[FetchedPage] = []
+    for url in case.registered_urls:
+        page = await collect.page_fetcher.fetch(url, trajectory=trajectory)
+        if isinstance(page, FetchedPage):
+            pages.append(page)
+    await collect.execute_collect_workflow(
+        run.run_id,
+        case.preferences,
+        now=case.clock,
+        trajectory=trajectory,
+        theme=REGISTER_THEME,
+        seed_pages=pages,
+    )
+    return store.get_run(run.run_id) or run
+
+
 async def run_case(case: EvalCase) -> CaseResult:
     from event_agent.workflows.collect import run_collect_workflow
 
     store.reset()
     trajectory = ToolTrajectory()
     with _settings_for_eval(), _patched(case, trajectory):
-        run = await run_collect_workflow(
-            case.preferences, True, now=case.clock, trajectory=trajectory
-        )
+        if case.registered_urls:
+            run = await _run_registered(case, trajectory)
+        else:
+            run = await run_collect_workflow(
+                case.preferences, True, now=case.clock, trajectory=trajectory
+            )
     events = store.list_events(run.run_id)
     evidence = {
         e.event_id: store.get_evidence(run.run_id, e.evidence_ids) for e in events

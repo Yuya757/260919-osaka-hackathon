@@ -110,6 +110,24 @@
         "EventEditRequest",
         "EventEditResponse"
       ]
+    },
+    {
+      "id": "web-search",
+      "path": "web-search.json",
+      "definitions": [
+        "WebSearchRequest",
+        "WebSource",
+        "WebSearchResponse"
+      ]
+    },
+    {
+      "id": "watched-page",
+      "path": "watched-page.json",
+      "definitions": [
+        "WatchedPageRequest",
+        "WatchedPageResponse",
+        "WatchedPageStreamEvent"
+      ]
     }
   ]
 }

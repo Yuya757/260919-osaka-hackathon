@@ -162,6 +162,12 @@ async def _search_step(
         note("searcher", f"検索結果 {len(hits)} 件")
         return hits[: settings.max_candidates]
 
+    if settings.use_vertex:
+        # 検索グラウンディングの結果のリンクから読むページを決めて保存・共有することは
+        # 規約で禁じられている（ADR-014）。本番では検索で告知ページを探さない
+        note("searcher", "検索グラウンディングは収集に使えないため、検索を行いません", level="warn")
+        return []
+
     since = datetime.now(timezone.utc) - timedelta(days=settings.search_recency_days)
     for query in queries:
         if trajectory is not None:
@@ -381,8 +387,13 @@ async def execute_collect_workflow(
     now: datetime | None = None,
     trajectory: ToolTrajectory | None = None,
     theme: CollectionTheme | None = None,
+    seed_pages: list[FetchedPage] | None = None,
+    on_note: Callable[[str, str, str], None] | None = None,
 ) -> None:
     """The 8-step collection workflow (§6).
+
+    ``seed_pages`` は利用者が登録したページ（ADR-014）。検索と取得を飛ばし、渡された
+    ページを抽出から先の同じ経路に乗せる。``on_note`` は動きの行を 1 行ずつ外へ渡す（SSE）。
 
     ``theme`` が与えられたときはテーマ単位の定期収集（ADR-008）: 対象カテゴリで
     候補を絞り、年で弾かず、per-user の推薦スコアを保存しない。
@@ -404,6 +415,8 @@ async def execute_collect_workflow(
         """UI の「エージェントの動き」に出す1行。行ごとに保存し、ポーリングで追える。"""
         run.log(agent, message, level=level)  # type: ignore[arg-type]
         store.update_run(run)
+        if on_note:
+            on_note(agent, message, level)
 
     try:
         await _set_step(run, "normalize")
@@ -419,11 +432,19 @@ async def execute_collect_workflow(
         # 補助金は jGrants（ADR-011）、技術イベントは Doorkeeper（ADR-012）の公開 API から
         # 貰う。検索・取得・抽出を飛ばし、検証から先は他のジャンルと同じ経路に乗せる。
         from_api = bool(theme and theme.source in _API_SOURCES)
+        # 利用者が登録したページ（ADR-014）。検索はせず、渡されたページだけを読む。
+        # 見守りのテーマはページが渡されなくても検索しない（検索すると登録されていない
+        # ページが「利用者が登録」として載る）
+        if seed_pages is None and theme is not None and theme.source == "watched":
+            seed_pages = []
+        from_seed = seed_pages is not None
 
         await _set_step(run, "plan")
         await asyncio.sleep(delay)
-        queries = [] if from_api else _plan_queries(normalized, theme)
-        if from_api:
+        queries = [] if from_api or from_seed else _plan_queries(normalized, theme)
+        if from_seed:
+            note("planner", f"利用者が登録したページ {len(seed_pages)} 件を読みます")
+        elif from_api:
             note("planner", f"{_API_SOURCES[theme.source]} のキーワード {len(theme.keywords)} 件で照会")
             for keyword in theme.keywords:
                 note("planner", f"キーワード: {keyword}")
@@ -435,7 +456,12 @@ async def execute_collect_workflow(
         await _set_step(run, "search")
         # 1 日の検索上限（ADR-008 決定5）。予約できなければ検索を飛ばして partial_success
         budget_exhausted = False
-        if from_api:
+        if from_seed:
+            hits = [
+                SearchHit(url=page.requested_url, title="", excerpt="", query="利用者が登録")
+                for page in seed_pages
+            ]
+        elif from_api:
             hits = []
         elif gemini_client.demo_mode or store.reserve_grounding_calls(
             _jst_day(now), len(queries), cap=settings.daily_grounding_cap
@@ -450,7 +476,12 @@ async def execute_collect_workflow(
                 level="warn",
             )
 
-        pages, fetch_rejected = ([], []) if from_api else await _fetch_step(hits, trajectory, note)
+        if from_seed:
+            pages, fetch_rejected = list(seed_pages), []
+        elif from_api:
+            pages, fetch_rejected = [], []
+        else:
+            pages, fetch_rejected = await _fetch_step(hits, trajectory, note)
         # まとめ記事やブログは告知ページではない。記事中の日付を開催日にしない
         articles = [p for p in pages if is_article_host(p.final_url)]
         pages = [p for p in pages if not is_article_host(p.final_url)]
@@ -461,7 +492,8 @@ async def execute_collect_workflow(
         # 最近抽出したページは抽出を省く（ADR-008 決定4）。lastSeenAt だけ進める。
         # テーマ Run だけ。手動 Run はその Run の結果として一覧に返す必要がある
         known: list[ApiEvent] = []
-        if theme:
+        # 登録ページは呼び出し側が内容の変化で読み直すかを決めている
+        if theme and not from_seed:
             pages, known = _split_known_pages(pages, now=now)
         if known:
             store.touch_events([e.dedup_key for e in known], last_seen_at=now)
@@ -475,7 +507,8 @@ async def execute_collect_workflow(
             for page in pages
             for url in (page.final_url, page.requested_url)
         }
-        theme_kind = theme.kind if theme else None
+        # 登録ページは何のイベントか分からない。見出しと本文から決める
+        theme_kind = theme.kind if theme and not from_seed else None
         api_calls = 0
         if from_api:
             collect_from_api = collect_meetups if theme.source == "doorkeeper" else collect_subsidies
@@ -537,7 +570,7 @@ async def execute_collect_workflow(
 
         # 抽出が0件のときだけデモカタログで補う。実運用では抽出結果を使う。
         # 既知ページを省いただけなら「0件」ではない
-        if not from_api and not candidates and not known and settings.demo_catalog_fallback:
+        if not from_api and not from_seed and not candidates and not known and settings.demo_catalog_fallback:
             candidates = _filter_catalog(normalized)
             note("extractor", f"抽出 0 件のためデモカタログ {len(candidates)} 件で補完", level="warn")
 

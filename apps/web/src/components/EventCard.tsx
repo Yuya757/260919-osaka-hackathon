@@ -41,6 +41,9 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
           {/* 既定はハッカソン。混ざったときだけ種別を出す */}
           {event.kind !== 'hackathon' && <span className="tag">{kindLabel(event.kind)}</span>}
           {event.organizerEdit && <span className="tag tag-verified">✓ 主催者確認済み</span>}
+          {(event.themeId === 'user-registered' || event.themeId === 'watched-pages') && (
+            <span className="tag">利用者が登録</span>
+          )}
           {partial && <span className="tag">要確認</span>}
         </div>
         <p className="row-meta">

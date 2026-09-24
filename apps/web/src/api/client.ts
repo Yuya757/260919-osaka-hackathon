@@ -8,6 +8,9 @@ import type {
   EventEditResponse,
   EventRouteResponse,
   OrganizerEditValues,
+  WebSearchResponse,
+  WatchedPageResponse,
+  RunActivity,
   EvidenceListResponse,
   OrganizerPostCreateResponse,
   OrganizerPostListResponse,
@@ -16,7 +19,6 @@ import type {
   PoolSearchActivity,
   PoolSearchRequest,
   PoolSearchResponse,
-  PoolSearchStreamEvent,
   SearchActivity,
   GoKind,
   PostMetricsResponse,
@@ -114,23 +116,24 @@ export class PoolSearchStreamError extends Error {
 }
 
 /**
- * プール探索を SSE で受ける。動きは届いた順に ``onActivity`` へ渡し、最後の結果を返す。
- * 繋がらない・途中で切れたときは PoolSearchStreamError（呼び出し側が問い合わせ方式に戻す）。
+ * SSE（POST）を受ける。``activity`` は届いた順に ``onActivity`` へ渡し、``result`` を返す。
+ * 繋がらない・途中で切れたときは PoolSearchStreamError（receivedAny で 1 行でも届いたか）。
  */
-export async function poolSearchStream(
-  body: PoolSearchRequest,
-  onActivity: (line: SearchActivity) => void,
-): Promise<PoolSearchResponse> {
+async function postEventStream<TActivity, TResult>(
+  path: string,
+  body: unknown,
+  onActivity: (line: TActivity) => void,
+): Promise<TResult> {
   let receivedAny = false
   let response: Response
   try {
-    response = await fetch(`${STREAM_BASE}/api/pool-search/stream`, {
+    response = await fetch(`${STREAM_BASE}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify(body),
     })
   } catch {
-    throw new PoolSearchStreamError('探索のストリームに繋がりませんでした。', false)
+    throw new PoolSearchStreamError('ストリームに繋がりませんでした。', false)
   }
   if (!response.ok || !response.body) {
     throw new PoolSearchStreamError(await readErrorDetail(response), false)
@@ -154,7 +157,10 @@ export async function poolSearchStream(
         .map((line) => line.slice(6))
         .join('\n')
       if (!data) continue
-      const event = JSON.parse(data) as PoolSearchStreamEvent
+      const event = JSON.parse(data) as
+        | { type: 'activity'; activity: TActivity }
+        | { type: 'result'; result: TResult }
+        | { type: 'error'; message: string }
       if (event.type === 'activity') {
         receivedAny = true
         onActivity(event.activity)
@@ -165,7 +171,45 @@ export async function poolSearchStream(
       }
     }
   }
-  throw new PoolSearchStreamError('探索の結果が届きませんでした。', receivedAny)
+  throw new PoolSearchStreamError('結果が届きませんでした。', receivedAny)
+}
+
+/**
+ * プール探索を SSE で受ける。動きは届いた順に ``onActivity`` へ渡し、最後の結果を返す。
+ * 繋がらない・途中で切れたときは PoolSearchStreamError（呼び出し側が問い合わせ方式に戻す）。
+ */
+export function poolSearchStream(
+  body: PoolSearchRequest,
+  onActivity: (line: SearchActivity) => void,
+): Promise<PoolSearchResponse> {
+  return postEventStream<SearchActivity, PoolSearchResponse>('/api/pool-search/stream', body, onActivity)
+}
+
+/**
+ * 利用者がイベントのページを登録する（ADR-014）。エージェントの動きを SSE で受ける。
+ * ストリームに繋がらなければ、通常の POST でまとめて受け取る。
+ */
+export async function registerWatchedPage(
+  url: string,
+  sessionId: string | undefined,
+  onActivity: (line: RunActivity) => void,
+): Promise<WatchedPageResponse> {
+  const body = { url, sessionId }
+  try {
+    return await postEventStream<RunActivity, WatchedPageResponse>(
+      '/api/watched-pages/stream',
+      body,
+      onActivity,
+    )
+  } catch (error) {
+    if (!(error instanceof PoolSearchStreamError) || error.receivedAny) throw error
+    const result = await request<WatchedPageResponse>('/api/watched-pages', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+    result.activity.forEach(onActivity)
+    return result
+  }
 }
 
 /** 探索中の動き。poolSearch と並行して読み、エージェントの処理を 1 行ずつ見せる */
@@ -199,6 +243,14 @@ export function editClaimedEvent(
   return request<EventEditResponse>('/api/event-claims/edit', {
     method: 'POST',
     body: JSON.stringify({ claimId, editToken, values }),
+  })
+}
+
+/** 利用者ごとの Web 検索（ADR-014）。結果は保存しない（画面もメモリに持つだけ） */
+export function searchTheWeb(query: string, sessionId?: string): Promise<WebSearchResponse> {
+  return request<WebSearchResponse>('/api/web-search', {
+    method: 'POST',
+    body: JSON.stringify({ query, sessionId }),
   })
 }
 

@@ -88,7 +88,37 @@ def _meetup_search_theme(theme_id: str, locations: tuple[str, ...], *, online_on
     )
 
 
+# 利用者が登録したページを毎朝見直すテーマ（ADR-014）。検索はしない
+WATCHED_THEME = CollectionTheme(
+    "watched-pages", "利用者が登録したページ", ("全国",),
+    kind="hackathon",
+    allowed_kinds=("hackathon", "contest", "meetup", "accelerator", "cocreation", "exhibition"),
+    source="watched",
+)
+
+# 毎朝の定期収集。Google 検索グラウンディングは使わない（ADR-014）。
+# 収集元は公開 API（Doorkeeper）と、利用者が登録したページの見守りだけ
 COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
+    # 技術イベント（勉強会・LT 会・もくもく会・ハンズオン・カンファレンス）は
+    # Doorkeeper の公開 API から貰う（ADR-012）。検索代ゼロで件数が多い。
+    # 地域は全国まとめて取り、住所の都道府県で読み出し時に絞る
+    CollectionTheme(
+        "meetup-study", "技術勉強会", ("全国",),
+        kind="meetup", allowed_kinds=("meetup",),
+        source="doorkeeper", keywords=("勉強会", "もくもく会", "ハンズオン"),
+    ),
+    CollectionTheme(
+        "meetup-talk", "LT会・カンファレンス", ("全国",),
+        kind="meetup", allowed_kinds=("meetup",),
+        source="doorkeeper", keywords=("LT", "Meetup", "カンファレンス"),
+    ),
+    WATCHED_THEME,
+)
+
+# Google 検索グラウンディングで告知ページを見つけるテーマ。規約上、結果のリンクから
+# 読むページを決めて保存・共有することはできないので、本番では使わない（ADR-014）。
+# デモと評価のフィクスチャのページで、抽出と検証の経路を確かめるためだけに残す
+GROUNDING_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme("hackathon-kansai", "ハッカソン", ("関西", "大阪", "京都", "神戸")),
     CollectionTheme("hackathon-kanto", "ハッカソン", ("関東", "東京")),
     CollectionTheme("hackathon-chubu", "ハッカソン", ("中部", "名古屋")),
@@ -112,19 +142,6 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         online_only=False, kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
         lead_query="応募 締切",
     ),
-    # 技術イベント（勉強会・LT 会・もくもく会・ハンズオン・カンファレンス）は
-    # Doorkeeper の公開 API から貰う（ADR-012）。検索代ゼロで件数が多い。
-    # 地域は全国まとめて取り、住所の都道府県で読み出し時に絞る
-    CollectionTheme(
-        "meetup-study", "技術勉強会", ("全国",),
-        kind="meetup", allowed_kinds=("meetup",),
-        source="doorkeeper", keywords=("勉強会", "もくもく会", "ハンズオン"),
-    ),
-    CollectionTheme(
-        "meetup-talk", "LT会・カンファレンス", ("全国",),
-        kind="meetup", allowed_kinds=("meetup",),
-        source="doorkeeper", keywords=("LT", "Meetup", "カンファレンス"),
-    ),
     # connpass の技術イベントは検索で拾う。地域ごとに分けて、検索結果に出る件数を稼ぐ
     _meetup_search_theme("meetup-connpass-kansai", ("関西", "大阪", "京都", "神戸")),
     _meetup_search_theme("meetup-connpass-kanto", ("関東", "東京")),
@@ -135,9 +152,9 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
     _meetup_search_theme("meetup-connpass-online", ("オンライン",), online_only=True),
 )
 
-# 一旦止めているテーマ。補助金・アクセラ・共創は一覧のノイズになったため、定期収集は
-# ハッカソンとビジコンだけにした。定義は残し、戻すときは COLLECTION_THEMES へ移す。
-# theme_by_id では引けるので、手動の再収集やテストはそのまま使える
+# 一旦止めているテーマ。補助金は一覧のノイズになったため止めた。
+# アクセラ・共創は検索グラウンディングを使うので、本番では使えない（ADR-014）。
+# theme_by_id では引けるので、テストはそのまま使える
 PAUSED_THEMES: tuple[CollectionTheme, ...] = (
     CollectionTheme(
         "accelerator-kansai", "アクセラレータープログラム", ("関西", "大阪", "京都", "神戸"),
@@ -194,11 +211,11 @@ PAUSED_THEMES: tuple[CollectionTheme, ...] = (
     ),
 )
 
-_BY_ID = {theme.id: theme for theme in COLLECTION_THEMES + PAUSED_THEMES}
+_BY_ID = {theme.id: theme for theme in COLLECTION_THEMES + GROUNDING_THEMES + PAUSED_THEMES}
 
 
 def search_themes() -> tuple[CollectionTheme, ...]:
-    """Grounding 検索を使うテーマだけ。検索上限の見積もりに使う。"""
+    """毎朝の定期収集のうち Grounding 検索を使うテーマ。ADR-014 以降は空であるべき。"""
     return tuple(theme for theme in COLLECTION_THEMES if theme.source == "search")
 
 

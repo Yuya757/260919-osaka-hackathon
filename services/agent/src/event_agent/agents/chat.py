@@ -51,7 +51,7 @@ def _demo_reply(preferences: UserPreferences, started_run: bool) -> str:
             f"「{preferences.interests_prompt}」で{preferences.target_year}年の"
             "イベント探索を開始しました。申込締切と開催日を分けて一覧に反映します。"
         )
-    if settings.manual_runs_enabled:
+    if settings.manual_runs_allowed:
         return f"関心条件を「{preferences.interests_prompt}」に更新しました。この条件で探索します。"
     return f"関心条件を「{preferences.interests_prompt}」に更新しました。一覧を並べ替えます。"
 
@@ -96,7 +96,7 @@ async def handle_chat(request: ChatRequest) -> ChatResponse:
         )
 
     if _wants_search(request.message):
-        if settings.manual_runs_enabled:
+        if settings.manual_runs_allowed:
             run = schedule_collect_run(preferences)
             actions.append(AgentRunStartedAction(type="agent_run_started", runId=run.run_id))
             started_run = True

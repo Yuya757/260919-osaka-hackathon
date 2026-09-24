@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/watched-page.json",
+  "title": "WatchedPage",
+  "description": "利用者がイベントのページを登録し、エージェントが毎朝見守る（ADR-014）。利用者が自分で貼った URL だけを読む（検索グラウンディングの結果のリンクは使わない）。",
+  "$defs": {
+    "WatchedPageRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 2000
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchedPageResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "message",
+        "activity"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "added",
+            "exists",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "bad_url",
+            "quota",
+            "robots",
+            "unavailable",
+            "no_event",
+            null
+          ],
+          "description": "rejected の理由。robots は robots.txt で断られたサイト"
+        },
+        "message": {
+          "type": "string"
+        },
+        "event": {
+          "oneOf": [
+            {
+              "$ref": "event.json#/$defs/Event"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "activity": {
+          "type": "array",
+          "items": {
+            "$ref": "agent-run.json#/$defs/RunActivity"
+          }
+        }
+      }
+    },
+    "WatchedPageStreamEvent": {
+      "description": "POST /api/watched-pages/stream（text/event-stream）の data 1 件",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "activity"
+          ],
+          "properties": {
+            "type": {
+              "const": "activity"
+            },
+            "activity": {
+              "$ref": "agent-run.json#/$defs/RunActivity"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "result"
+          ],
+          "properties": {
+            "type": {
+              "const": "result"
+            },
+            "result": {
+              "$ref": "#/$defs/WatchedPageResponse"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "message"
+          ],
+          "properties": {
+            "type": {
+              "const": "error"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -29,6 +29,7 @@ from event_agent.domain.organizer_edit import apply_organizer_edit
 from event_agent.schemas import (
     AgentRun,
     EventClaim,
+    WatchedPage,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -258,6 +259,18 @@ class Store(Protocol):
         reserves nothing when the cap would be exceeded.
         """
 
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage: ...
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None: ...
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        """Active pages, least recently checked first."""
+
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        """Take one from a named counter capped at ``cap`` (e.g. ``web-search:2026-09-24:<session>``).
+
+        Atomic like :meth:`reserve_grounding_calls`. False when the cap is reached."""
+
     def record_model_calls(self, day: str, count: int) -> None:
         """Add text-generation calls to the day's usage. Not capped here."""
 
@@ -282,6 +295,20 @@ class Store(Protocol):
     def get_search_activity(self, search_id: str) -> list[SearchActivity] | None:
         """None until the search has written its first line."""
 
+    # 検索グラウンディング由来のデータを消す管理コマンド（ADR-014）だけが使う
+    def list_all_events(self) -> list[ApiEvent]: ...
+
+    def list_claims(self) -> list[EventClaim]: ...
+
+    def delete_events(self, dedup_keys: list[str]) -> None: ...
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        """Delete the runs together with their evidence and idempotency keys."""
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None: ...
+
+    def delete_claims(self, claim_ids: list[str]) -> None: ...
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -299,6 +326,8 @@ class MemoryStore:
         self._usage: dict[str, UsageRecord] = {}
         self._search_activity: dict[str, list[SearchActivity]] = {}
         self._claims: dict[str, EventClaim] = {}
+        self._quotas: dict[str, int] = {}
+        self._watched: dict[str, WatchedPage] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -315,6 +344,8 @@ class MemoryStore:
             self._usage.clear()
             self._search_activity.clear()
             self._claims.clear()
+            self._quotas.clear()
+            self._watched.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -435,6 +466,29 @@ class MemoryStore:
         with self._lock:
             return self._latest_saved_at
 
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage:
+        with self._lock:
+            self._watched[page.watch_id] = page
+            return page
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None:
+        with self._lock:
+            return self._watched.get(watch_id)
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        with self._lock:
+            active = [p for p in self._watched.values() if p.active]
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(active, key=lambda p: (p.last_checked_at or oldest, p.watch_id))[:limit]
+
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        with self._lock:
+            used = self._quotas.get(key, 0)
+            if used + 1 > cap:
+                return False
+            self._quotas[key] = used + 1
+            return True
+
     def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
         with self._lock:
             current = self._usage.get(day) or UsageRecord(day=day)
@@ -485,6 +539,42 @@ class MemoryStore:
         with self._lock:
             lines = self._search_activity.get(search_id)
             return list(lines) if lines is not None else None
+
+    def list_all_events(self) -> list[ApiEvent]:
+        with self._lock:
+            return list(self._events_by_dedup_key.values())
+
+    def list_claims(self) -> list[EventClaim]:
+        with self._lock:
+            return list(self._claims.values())
+
+    def delete_events(self, dedup_keys: list[str]) -> None:
+        with self._lock:
+            for key in dedup_keys:
+                self._events_by_dedup_key.pop(key, None)
+
+    def delete_runs(self, run_ids: list[str]) -> None:
+        doomed = set(run_ids)
+        with self._lock:
+            for run_id in doomed:
+                run = self._runs.pop(run_id, None)
+                if run is not None and self._runs_by_key.get(run.idempotency_key) == run_id:
+                    del self._runs_by_key[run.idempotency_key]
+                self._events_by_run.pop(run_id, None)
+            for key in [k for k in self._evidence if k[0] in doomed]:
+                del self._evidence[key]
+            if self._latest_run_id in doomed:
+                self._latest_run_id = None
+
+    def delete_organizer_posts(self, post_ids: list[str]) -> None:
+        with self._lock:
+            for post_id in post_ids:
+                self._posts.pop(post_id, None)
+
+    def delete_claims(self, claim_ids: list[str]) -> None:
+        with self._lock:
+            for claim_id in claim_ids:
+                self._claims.pop(claim_id, None)
 
     def save_organizer_post(self, post: OrganizerPost) -> OrganizerPost:
         with self._lock:
