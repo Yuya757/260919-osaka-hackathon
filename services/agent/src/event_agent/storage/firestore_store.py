@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -39,6 +39,7 @@ from event_agent.schemas import (
     EventMetrics,
     OrganizerPost,
     PostPlacement,
+    SearchActivity,
     UsageRecord,
     UserPreferences,
 )
@@ -60,6 +61,9 @@ LATEST_RUN_DOC = "latestRun"
 ORGANIZER_POSTS = "organizerPosts"
 EVENT_METRICS = "eventMetrics"
 USAGE = "usage"
+# 探索中の動き（ADR-010）。expiresAt に TTL ポリシーを掛ければ自動で消える
+SEARCH_ACTIVITY = "searchActivity"
+SEARCH_ACTIVITY_TTL = timedelta(days=1)
 
 
 def _path_id(raw: str) -> str:
@@ -108,7 +112,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -483,3 +487,23 @@ class FirestoreStore:
         if not snapshot.exists:
             return None
         return UsageRecord(**(snapshot.to_dict() or {}))
+
+    # --------------------------------------------------------- search activity
+
+    def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:
+        now = datetime.now(timezone.utc)
+        self._db.collection(SEARCH_ACTIVITY).document(_path_id(search_id)).set(
+            {
+                "searchId": search_id,
+                "activity": [_dump(line) for line in lines],
+                "updatedAt": now,
+                "expiresAt": now + SEARCH_ACTIVITY_TTL,
+            }
+        )
+
+    def get_search_activity(self, search_id: str) -> list[SearchActivity] | None:
+        snapshot = self._db.collection(SEARCH_ACTIVITY).document(_path_id(search_id)).get()
+        if not snapshot.exists:
+            return None
+        data = snapshot.to_dict() or {}
+        return [SearchActivity(**line) for line in data.get("activity") or []]

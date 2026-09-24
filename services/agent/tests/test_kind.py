@@ -45,7 +45,8 @@ class TestKindMapping:
         assert category_of("生成AIハッカソン") == "hackathon"
         assert kind_of("contest") == "contest" and kind_of("pitch") == "contest"
         assert kind_of("acceleration") == "accelerator"
-        assert kind_of("meetup") == "hackathon"  # 既定
+        assert kind_of("meetup") == "meetup" and kind_of("conference") == "meetup"
+        assert kind_of("other") == "hackathon"  # 既定
 
 
 class TestLabelSets:

@@ -38,6 +38,25 @@ KNOWN_LOCATIONS: tuple[str, ...] = (
 )
 
 
+# 都道府県名。「都島区」のように区名に「都」が入るので、正規表現ではなく名前で探す
+PREFECTURES: tuple[str, ...] = (
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県",
+    "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県", "新潟県", "富山県",
+    "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県", "三重県",
+    "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県", "鳥取県", "島根県",
+    "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県",
+    "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+)
+
+
+def prefecture_of(address: str | None) -> str | None:
+    """住所に書かれた都道府県。無ければ None（推測しない）。"""
+    if not address:
+        return None
+    found = [(address.find(name), name) for name in PREFECTURES if name in address]
+    return min(found)[1] if found else None
+
+
 def places_for(location: str) -> tuple[str, ...]:
     """地方名なら含まれる地名に広げる。それ以外（都市名など）はそのまま。"""
     return REGION_PLACES.get(location, (location,))

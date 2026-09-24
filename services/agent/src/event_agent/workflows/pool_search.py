@@ -47,6 +47,8 @@ KIND_WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("accelerator", ("アクセラレーター", "アクセラレータ", "アクセラ", "インキュベーション")),
     ("cocreation", ("オープンイノベーション", "共創")),
     ("exhibition", ("展示会", "見本市", "EXPO")),
+    ("meetup", ("技術イベント", "勉強会", "もくもく会", "もくもく", "LT会", "ハンズオン", "ミートアップ",
+                "カンファレンス", "Meetup", "meetup")),
     ("subsidy", ("補助金", "助成金")),
 )
 KIND_LABELS: dict[str, str] = {
@@ -56,6 +58,7 @@ KIND_LABELS: dict[str, str] = {
     "cocreation": "共創",
     "exhibition": "展示会",
     "subsidy": "補助金",
+    "meetup": "技術イベント",
 }
 MAX_SCORED = 20
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
@@ -67,9 +70,9 @@ INTERPRET_INSTRUCTION = prompt_guard.defended_system_prompt(
     ' "dateFrom": "YYYY-MM-DD"|null, "dateTo": "YYYY-MM-DD"|null, "keywords": string[],'
     ' "kinds": string[], "order": "score"|"deadline"|"held"}\n'
     f"locations は {'/'.join(KNOWN_LOCATIONS)} から。"
-    "kinds は hackathon/contest/accelerator/cocreation/exhibition/subsidy から、"
+    "kinds は hackathon/contest/accelerator/cocreation/exhibition/subsidy/meetup から、"
     "問いかけが種別を指しているときだけ。「ビジコン」「コンテスト」は contest、"
-    "「ハッカソン」は hackathon。種別に触れていなければ空配列にしてください。"
+    "「ハッカソン」は hackathon、「勉強会」「LT会」「もくもく会」「カンファレンス」は meetup。種別に触れていなければ空配列にしてください。"
     "order は「締切が近い順」と言われたら deadline、「実施が近い順」「早く始まる順」なら "
     "held、どちらでもなければ score。"
     "期間は開催日の範囲で、書かれていなければ null。keywords は対象者やテーマの語（学生、"
@@ -86,13 +89,21 @@ SCORE_INSTRUCTION = prompt_guard.defended_system_prompt(
 
 
 class Trace:
-    def __init__(self) -> None:
+    """探索の動き。``search_id`` があれば 1 行ごとに保存し、探索中でも読めるようにする。"""
+
+    def __init__(self, search_id: str | None = None) -> None:
         self.lines: list[SearchActivity] = []
+        self.search_id = search_id
 
     def note(self, agent: str, message: str, *, level: str = "info") -> None:
         self.lines.append(
             SearchActivity(agent=agent, message=message[:300], level=level, at=datetime.now(timezone.utc))  # type: ignore[arg-type]
         )
+        if self.search_id:
+            try:
+                store.save_search_activity(self.search_id, self.lines)
+            except Exception:  # noqa: BLE001 — 途中経過が書けなくても探索そのものは続ける
+                logger.warning("search activity could not be saved", exc_info=True)
 
 
 # --------------------------------------------------------------- interpreter
@@ -407,9 +418,15 @@ def _by_date(events: list[ApiEvent], order: str, *, now: datetime, trace: Trace)
 # --------------------------------------------------------------------- entry
 
 
-async def search_pool(query: str, session_id: str | None, *, now: datetime | None = None) -> PoolSearchResponse:
+async def search_pool(
+    query: str,
+    session_id: str | None,
+    *,
+    now: datetime | None = None,
+    search_id: str | None = None,
+) -> PoolSearchResponse:
     now = now or datetime.now(timezone.utc)
-    trace = Trace()
+    trace = Trace(search_id)
     gemini_client.reset_call_budget()
     session = store.get_or_create_session(session_id)
 

@@ -37,7 +37,8 @@
           "prompt_injection",
           "aggregator_only",
           "contest",
-          "program"
+          "program",
+          "meetup"
         ]
       }
     },
@@ -180,7 +181,7 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
+                "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy", "meetup"]
               },
               "attributes": {
                 "type": "object",

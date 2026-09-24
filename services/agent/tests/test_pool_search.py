@@ -197,3 +197,34 @@ async def test_search_records_model_calls_in_daily_usage(store_backend, monkeypa
     usage = store_backend.get_usage("2026-09-21")
     assert usage is not None and usage.model_calls == result.model_calls
     assert usage.grounding_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_search_saves_each_line_while_it_runs(store_backend, monkeypatch):
+    """動きは終わってからまとめてではなく、1 行ごとに保存される（画面が探索中に読む）。"""
+    from event_agent.workflows import pool_search as module
+
+    seen: list[int] = []
+    original = store_backend.save_search_activity
+
+    def spy(search_id, lines):
+        seen.append(len(lines))
+        original(search_id, lines)
+
+    monkeypatch.setattr(store_backend, "save_search_activity", spy)
+    result = await module.search_pool("関西 ハッカソン", None, search_id="live-search-0001")
+
+    assert seen == list(range(1, len(result.activity) + 1))
+    saved = store_backend.get_search_activity("live-search-0001")
+    assert [line.message for line in saved] == [line.message for line in result.activity]
+
+
+def test_activity_endpoint_rejects_malformed_ids(store_backend):
+    from fastapi.testclient import TestClient
+
+    from event_agent.entrypoints.service import app
+
+    with TestClient(app) as client:
+        assert client.get("/api/pool-search/short/activity").status_code == 422
+        bad = client.post("/api/pool-search", json={"query": "x", "searchId": "../../etc"})
+        assert bad.status_code == 422

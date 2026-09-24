@@ -9,6 +9,7 @@ import type {
   OrganizerPostListResponse,
   OrganizerPostPreviewResponse,
   OrganizerPostRequest,
+  PoolSearchActivity,
   PoolSearchRequest,
   PoolSearchResponse,
   GoKind,
@@ -88,6 +89,13 @@ export function poolSearch(body: PoolSearchRequest): Promise<PoolSearchResponse>
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/** 探索中の動き。poolSearch と並行して読み、エージェントの処理を 1 行ずつ見せる */
+export function getPoolSearchActivity(searchId: string): Promise<PoolSearchActivity> {
+  return request<PoolSearchActivity>(
+    `/api/pool-search/${encodeURIComponent(searchId)}/activity`,
+  )
 }
 
 export type HealthResponse = { status: string; demo_mode: boolean; model?: string | null; manualRunsEnabled: boolean }

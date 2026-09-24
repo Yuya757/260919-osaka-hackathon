@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
-import { daysUntil, isFinished, isUrgent, kindLabel } from '../lib/eventView'
+import { daysUntil, isFinished, isUrgent, kindLabel, needsCheck } from '../lib/eventView'
 import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import { SearchActivityPanel } from '../components/SearchActivityPanel'
@@ -26,6 +26,7 @@ const FILTERS: [Exclude<Filter, 'all'>, string][] = [
 const KIND_ORDER: EventKind[] = [
   'hackathon',
   'contest',
+  'meetup',
   'accelerator',
   'cocreation',
   'exhibition',
@@ -80,7 +81,7 @@ export function EventListScreen({ mode }: Props) {
     if (kind !== 'all' && kinds.includes(kind)) pool = pool.filter((event) => event.kind === kind)
     if (filter === 'soon') pool = pool.filter((event) => isUrgent(event))
     if (filter === 'online') pool = pool.filter((event) => event.location.type !== 'offline')
-    if (filter === 'check') pool = pool.filter((event) => event.validationStatus === 'partial')
+    if (filter === 'check') pool = pool.filter(needsCheck)
     return pool
   }, [upcoming, filter, kind, kinds])
 

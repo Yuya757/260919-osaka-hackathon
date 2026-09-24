@@ -240,6 +240,23 @@ def test_pool_search_conforms(client: TestClient, finished_run: str) -> None:
         response.json(),
         "PoolSearchResponse",
     )
+
+
+def test_pool_search_activity_conforms(client: TestClient, finished_run: str) -> None:
+    # 探索の前（まだ 1 行も無い）でも 404 にせず空で返す
+    before = client.get("/api/pool-search/contract-search-0001/activity")
+    assert before.status_code == 200
+    assert before.json() == {"searchId": "contract-search-0001", "activity": []}
+
+    client.post(
+        "/api/pool-search",
+        json={"query": "関西 ハッカソン", "searchId": "contract-search-0001"},
+    )
+    body = client.get("/api/pool-search/contract-search-0001/activity").json()
+    _assert_valid(
+        _validator("pool-search.json", "PoolSearchActivity"), body, "PoolSearchActivity"
+    )
+    assert body["activity"]
 def test_post_metrics_conform(client: TestClient) -> None:
     created = client.post("/api/organizer-posts", json=POST_BODY).json()["post"]
     response = client.get(f"/api/organizer-posts/{created['postId']}/metrics")
