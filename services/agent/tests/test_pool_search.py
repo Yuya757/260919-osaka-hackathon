@@ -228,3 +228,31 @@ def test_activity_endpoint_rejects_malformed_ids(store_backend):
         assert client.get("/api/pool-search/short/activity").status_code == 422
         bad = client.post("/api/pool-search", json={"query": "x", "searchId": "../../etc"})
         assert bad.status_code == 422
+
+
+def test_stream_sends_each_line_before_the_result(store_backend):
+    """SSE: 動きを 1 行ずつ送り、最後に一覧と同じ形の結果を送る。"""
+    import json as _json
+
+    from fastapi.testclient import TestClient
+
+    from event_agent.entrypoints.service import app
+
+    with TestClient(app) as client:
+        client.post("/api/agent-runs", json={"forceRefresh": True})
+        with client.stream(
+            "POST", "/api/pool-search/stream", json={"query": "関西 ハッカソン"}
+        ) as response:
+            assert response.status_code == 200
+            assert response.headers["content-type"].startswith("text/event-stream")
+            events = [
+                _json.loads(line.removeprefix("data: "))
+                for line in response.iter_lines()
+                if line.startswith("data: ")
+            ]
+    kinds = [e["type"] for e in events]
+    assert kinds[-1] == "result" and kinds.count("result") == 1
+    assert kinds[:-1] and set(kinds[:-1]) == {"activity"}
+    result = events[-1]["result"]
+    assert [a["message"] for a in result["activity"]] == [e["activity"]["message"] for e in events[:-1]]
+    assert "events" in result and "sessionId" in result

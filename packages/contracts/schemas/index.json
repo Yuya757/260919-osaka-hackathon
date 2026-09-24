@@ -95,7 +95,8 @@
         "SearchAgent",
         "SearchActivity",
         "PoolSearchResponse",
-        "PoolSearchActivity"
+        "PoolSearchActivity",
+        "PoolSearchStreamEvent"
       ]
     },
     {

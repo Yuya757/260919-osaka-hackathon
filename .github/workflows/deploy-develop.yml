@@ -214,6 +214,9 @@ jobs:
 
       - name: Build
         working-directory: apps/web
+        # 探索の SSE は Firebase Hosting を通すとまとめて届くので、Cloud Run をじかに呼ぶ
+        env:
+          VITE_AGENT_STREAM_URL: ${{ needs.agent.outputs.service_url }}
         run: pnpm run build
 
       - name: Authenticate to Google Cloud

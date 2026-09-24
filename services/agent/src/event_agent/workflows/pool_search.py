@@ -14,6 +14,8 @@ Web には出ない。毎朝のバッチ収集が貯めた共有プール（ADR-
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import json
 import logging
 import re
@@ -89,16 +91,26 @@ SCORE_INSTRUCTION = prompt_guard.defended_system_prompt(
 
 
 class Trace:
-    """探索の動き。``search_id`` があれば 1 行ごとに保存し、探索中でも読めるようにする。"""
+    """探索の動き。``search_id`` があれば 1 行ごとに保存し、探索中でも読めるようにする。
 
-    def __init__(self, search_id: str | None = None) -> None:
+    ``listener`` があれば 1 行ごとに渡す（SSE で画面へそのまま流す）。
+    """
+
+    def __init__(
+        self,
+        search_id: str | None = None,
+        listener: Callable[[SearchActivity], None] | None = None,
+    ) -> None:
         self.lines: list[SearchActivity] = []
         self.search_id = search_id
+        self.listener = listener
 
     def note(self, agent: str, message: str, *, level: str = "info") -> None:
         self.lines.append(
             SearchActivity(agent=agent, message=message[:300], level=level, at=datetime.now(timezone.utc))  # type: ignore[arg-type]
         )
+        if self.listener:
+            self.listener(self.lines[-1])
         if self.search_id:
             try:
                 store.save_search_activity(self.search_id, self.lines)
@@ -424,9 +436,10 @@ async def search_pool(
     *,
     now: datetime | None = None,
     search_id: str | None = None,
+    on_activity: Callable[[SearchActivity], None] | None = None,
 ) -> PoolSearchResponse:
     now = now or datetime.now(timezone.utc)
-    trace = Trace(search_id)
+    trace = Trace(search_id, on_activity)
     gemini_client.reset_call_budget()
     session = store.get_or_create_session(session_id)
 
