@@ -9,6 +9,7 @@ import {
   placeLabel,
 } from '../lib/eventView'
 import { DualDateBlock } from './DualDateBlock'
+import { ScoreRing } from './ScoreRing'
 
 type Props = {
   event: Event
@@ -24,7 +25,7 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
   const registered = isCalendarRegistered(calendar)
 
   return (
-    <article className="row">
+    <article className={`row${event.recommendation ? ' has-score' : ''}`}>
       <div className="row-main">
         <div className="row-title">
           <button
@@ -64,12 +65,9 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
         ))}
       </div>
 
+      {event.recommendation && <ScoreRing score={event.recommendation.score} />}
+
       <div className="row-side">
-        {event.recommendation ? (
-          <span className="row-score">適合 {event.recommendation.score}</span>
-        ) : (
-          <span className="row-score" aria-hidden="true" />
-        )}
         <div className="row-actions">
           <button
             type="button"
