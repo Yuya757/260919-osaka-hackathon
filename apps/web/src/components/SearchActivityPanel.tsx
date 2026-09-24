@@ -89,10 +89,9 @@ function AgentOrb({ state }: { state: 'thinking' | 'done' | 'warn' }) {
 export function SearchActivityPanel({ reply, activity, pending }: Props) {
   // 役割ごとのカードは出さず、動きの行だけを時系列で見せる。探索中は届いた行から順に出る
   const last = activity[activity.length - 1]
-  const nextIndex = last
-    ? Math.min(ROLES.findIndex((role) => role.id === last.agent) + 1, ROLES.length - 1)
-    : 0
-  const nextRole = ROLES[nextIndex]
+  const nextRole = last
+    ? ROLES[Math.min(ROLES.findIndex((role) => role.id === last.agent) + 1, ROLES.length - 1)]
+    : ROLES[0]
   const elapsed = useElapsed(pending)
   const warned = activity.some((line) => line.level === 'warn')
   const [replyFresh] = useState(() => pending)
@@ -102,8 +101,9 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
       <div className="activity-head">
         <AgentOrb state={pending ? 'thinking' : warned ? 'warn' : 'done'} />
         <p className={`activity-title${pending ? ' shimmer' : ''}`}>
+          {/* 何をしているかは下の行に出す。見出しは状態だけにして同じことを二度書かない */}
           {pending ? (
-            `${nextRole.name}: ${nextRole.doing}`
+            'エージェントが探しています'
           ) : (
             <TypeText text={reply} animate={replyFresh} />
           )}
@@ -114,29 +114,6 @@ export function SearchActivityPanel({ reply, activity, pending }: Props) {
           </span>
         )}
       </div>
-
-      {/* 4 段の進み具合。いまの段が光り、終わった段はチェックになる */}
-      <ol className="agent-steps" aria-label="エージェントの段階">
-        {ROLES.map((role, index) => {
-          const state = !pending
-            ? activity.length > 0
-              ? 'done'
-              : 'waiting'
-            : index < nextIndex
-              ? 'done'
-              : index === nextIndex
-                ? 'active'
-                : 'waiting'
-          return (
-            <li key={role.id} className={`agent-step is-${state}`}>
-              <span className="agent-step-dot" aria-hidden="true">
-                {state === 'done' ? '✓' : index + 1}
-              </span>
-              <span className="agent-step-name">{role.name}</span>
-            </li>
-          )
-        })}
-      </ol>
 
       {(activity.length > 0 || pending) && (
         <div className="activity-log">

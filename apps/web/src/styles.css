@@ -2840,89 +2840,6 @@ button.next-title:hover {
   }
 }
 
-/* 4 段の進み具合。点と線で、いまの段を光らせる */
-.agent-steps {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.agent-step {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--faint);
-}
-
-/* 段と段をつなぐ線。終わった段から先は色が付く */
-.agent-step + .agent-step::before {
-  content: '';
-  position: absolute;
-  top: 10px;
-  right: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--line);
-  z-index: 0;
-}
-
-.agent-step.is-done + .agent-step::before,
-.agent-step.is-done + .agent-step.is-active::before {
-  background: var(--verified);
-}
-
-.agent-step-dot {
-  position: relative;
-  z-index: 1;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--paper);
-  border: 2px solid var(--line);
-  color: var(--faint);
-}
-
-.agent-step.is-done .agent-step-dot {
-  background: var(--verified);
-  border-color: var(--verified);
-  color: #fff;
-}
-
-.agent-step.is-done .agent-step-name {
-  color: var(--ink);
-}
-
-.agent-step.is-active .agent-step-dot {
-  border-color: var(--ink);
-  color: var(--ink);
-  animation: step-glow 1.2s ease-in-out infinite;
-}
-
-.agent-step.is-active .agent-step-name {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-@keyframes step-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ink) 25%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--ink) 0%, transparent);
-  }
-}
-
 /* 文字を流しているあいだのカーソル */
 .type-caret {
   display: inline-block;
@@ -2977,7 +2894,6 @@ button.next-title:hover {
   .agent-orb.is-thinking,
   .agent-orb.is-thinking::after,
   .agent-orb.is-thinking .agent-orb-core,
-  .agent-step.is-active .agent-step-dot,
   .type-caret,
   .list-rows.is-fresh > .row {
     animation: none;
