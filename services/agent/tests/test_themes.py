@@ -23,6 +23,7 @@ def test_themes_map_to_task_indices():
         "hackathon-kansai", "hackathon-kanto", "hackathon-chubu", "hackathon-online",
         "hackathon-hokkaido-tohoku", "hackathon-chugoku-shikoku", "hackathon-kyushu-okinawa",
         "contest-kansai", "contest-kanto", "contest-online",
+        "meetup-study", "meetup-talk",
     ]
     assert theme_for_task_index(3).id == "hackathon-online"
     assert theme_for_task_index(9).id == "contest-online"

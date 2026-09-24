@@ -36,6 +36,7 @@ from event_agent.security import prompt_guard
 from event_agent.storage.store import store
 from event_agent.trajectory import ToolTrajectory
 from event_agent.workflows.organizer_posts import seed_bot_posts
+from event_agent.workflows.meetups import collect_meetups
 from event_agent.workflows.subsidies import collect_subsidies
 from event_agent.workflows.themes import CollectionTheme
 
@@ -53,6 +54,10 @@ Note = Callable[..., None]
 
 def _noop_note(agent: str, message: str, *, level: str = "info") -> None:
     del agent, message, level
+
+
+# 公開 API から構造化データで貰う収集元 → 動きの行に出す名前
+_API_SOURCES = {"jgrants": "jGrants", "doorkeeper": "Doorkeeper"}
 
 
 def _host(url: str) -> str:
@@ -411,15 +416,15 @@ async def execute_collect_workflow(
             f" / {normalized.target_year}年 / オンライン{'可' if normalized.online_allowed else '不可'}",
         )
 
-        # 補助金は Web を検索せず jGrants の公開 API から貰う（ADR-011）。
-        # 検索・取得・抽出を飛ばし、検証から先は他のジャンルと同じ経路に乗せる。
-        from_api = bool(theme and theme.source == "jgrants")
+        # 補助金は jGrants（ADR-011）、技術イベントは Doorkeeper（ADR-012）の公開 API から
+        # 貰う。検索・取得・抽出を飛ばし、検証から先は他のジャンルと同じ経路に乗せる。
+        from_api = bool(theme and theme.source in _API_SOURCES)
 
         await _set_step(run, "plan")
         await asyncio.sleep(delay)
         queries = [] if from_api else _plan_queries(normalized, theme)
         if from_api:
-            note("planner", f"jGrants のキーワード {len(theme.keywords)} 件で照会")
+            note("planner", f"{_API_SOURCES[theme.source]} のキーワード {len(theme.keywords)} 件で照会")
             for keyword in theme.keywords:
                 note("planner", f"キーワード: {keyword}")
         else:
@@ -473,12 +478,12 @@ async def execute_collect_workflow(
         theme_kind = theme.kind if theme else None
         api_calls = 0
         if from_api:
-            candidates, api_calls = await collect_subsidies(
-                theme, run_id=run.run_id, now=now
-            )
+            collect_from_api = collect_meetups if theme.source == "doorkeeper" else collect_subsidies
+            candidates, api_calls = await collect_from_api(theme, run_id=run.run_id, now=now)
             note(
                 "extractor",
-                f"jGrants から {len(candidates)} 件（API 呼び出し {api_calls} 回、検索代なし）",
+                f"{_API_SOURCES[theme.source]} から {len(candidates)} 件"
+                f"（API 呼び出し {api_calls} 回、検索代なし）",
             )
         else:
             candidates = extract_candidates(

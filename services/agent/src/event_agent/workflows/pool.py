@@ -17,7 +17,7 @@ from event_agent.storage.store import store
 
 # 一覧に出す種別。補助金などは収集を止めても過去の分がプールに残るため、読み出しでも絞る
 # （themes.PAUSED_THEMES と対）
-SHOWN_KINDS = ("hackathon", "contest")
+SHOWN_KINDS = ("hackathon", "contest", "meetup")
 
 
 def _finished(event: ApiEvent, now: datetime) -> bool:

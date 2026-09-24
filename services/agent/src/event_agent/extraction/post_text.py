@@ -118,7 +118,7 @@ def derive_event_from_post(
     deadline = d.find_application_deadline(text, fallback_year=fallback_year, kind=kind)
     # 実施日を書かない告知がある（ビジコン・補助金）。締切だけでも載せる。
     # ハッカソンは実施日が必須のまま（§6.6、ジャンル拡張計画 段階1）
-    if start is None and (kind == "hackathon" or deadline is None):
+    if start is None and (kind in ("hackathon", "meetup") or deadline is None):
         if _year_ambiguous(text, years):
             return PostDraft(
                 event=None,

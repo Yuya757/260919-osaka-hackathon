@@ -33,9 +33,11 @@ class CollectionTheme:
     )
     # 先頭の一般検索の語尾。ジャンルで告知の言い回しが違う
     lead_query: str = "イベント 申込"
-    # 収集元。"search" は Grounding 検索、"jgrants" は jGrants の公開 API（段階4）
+    # 収集元。"search" は Grounding 検索、"jgrants" は jGrants の公開 API（段階4）、
+    # "doorkeeper" は Doorkeeper の公開 API（技術イベント、ADR-012）
     source: str = "search"
-    # jGrants のキーワード（API の制約で 2 文字以上）。source="jgrants" のときだけ使う
+    # 公開 API に渡すキーワード。source が "search" 以外のときだけ使う
+    # （jGrants は API の制約で 2 文字以上）
     keywords: tuple[str, ...] = ()
     # 対象地域の絞り込み（jGrants の target_area_search と前方一致）。空なら絞らない
     target_areas: tuple[str, ...] = ()
@@ -92,6 +94,19 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         "contest-online", "ビジネスコンテスト", ("オンライン", "全国"),
         online_only=False, kind="contest", allowed_kinds=("contest",), site_queries=_CONTEST_SITES,
         lead_query="応募 締切",
+    ),
+    # 技術イベント（勉強会・LT 会・もくもく会・ハンズオン・カンファレンス）は
+    # Doorkeeper の公開 API から貰う（ADR-012）。検索代ゼロで件数が多い。
+    # 地域は全国まとめて取り、住所の都道府県で読み出し時に絞る
+    CollectionTheme(
+        "meetup-study", "技術勉強会", ("全国",),
+        kind="meetup", allowed_kinds=("meetup",),
+        source="doorkeeper", keywords=("勉強会", "もくもく会", "ハンズオン"),
+    ),
+    CollectionTheme(
+        "meetup-talk", "LT会・カンファレンス", ("全国",),
+        kind="meetup", allowed_kinds=("meetup",),
+        source="doorkeeper", keywords=("LT", "Meetup", "カンファレンス"),
     ),
 )
 

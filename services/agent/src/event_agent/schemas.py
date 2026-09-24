@@ -194,7 +194,7 @@ class EventLocation(BaseModel):
 
 
 EventKind = Literal[
-    "hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"
+    "hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy", "meetup"
 ]
 
 

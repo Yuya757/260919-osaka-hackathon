@@ -28,7 +28,7 @@
     "EventKind": {
       "type": "string",
       "description": "機会の種別。絞り込みとラベル表の切り替えに使う（ジャンル拡張計画）",
-      "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy"]
+      "enum": ["hackathon", "contest", "accelerator", "cocreation", "exhibition", "subsidy", "meetup"]
     },
     "EventMilestone": {
       "type": "object",

@@ -54,9 +54,10 @@ _KIND_BY_CATEGORY = {
     "cocreation": "cocreation",
     "subsidy": "subsidy",
     "pitch": "contest",
-    "conference": "hackathon",
-    "meetup": "hackathon",
-    "workshop": "hackathon",
+    # 技術イベント（ADR-012）。以前はハッカソン扱いにしていた
+    "conference": "meetup",
+    "meetup": "meetup",
+    "workshop": "meetup",
     "other": "hackathon",
 }
 
@@ -247,6 +248,7 @@ _CATEGORY_BY_KIND = {
     "accelerator": "acceleration",
     "cocreation": "cocreation",
     "subsidy": "subsidy",
+    "meetup": "meetup",
 }
 
 
@@ -305,7 +307,7 @@ def extract_candidate(
         text, fallback_year=fallback_year, kind=resolved_kind
     )
     # 実施日か締切のどちらかは要る。ハッカソンは実施日が必須のまま（§6.6）
-    if start is None and (resolved_kind == "hackathon" or deadline is None):
+    if start is None and (resolved_kind in ("hackathon", "meetup") or deadline is None):
         return None
     if start is not None:
         sources["dates.eventStart"] = FieldSource(

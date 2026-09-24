@@ -149,7 +149,7 @@ def candidate_from_lines(
         deadline = d.deadline_from_fragment(deadline_line, fallback_year=fallback_year)
 
     # 実施日か締切のどちらかは要る。ハッカソンは実施日が必須のまま（§6.6）
-    if start is None and (resolved_kind == "hackathon" or deadline is None):
+    if start is None and (resolved_kind in ("hackathon", "meetup") or deadline is None):
         return None  # 年が確定しない等。推測しない（§6.5）
 
     title = lines.get("title") or (hit.title if hit and hit.title else None)

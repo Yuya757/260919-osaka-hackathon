@@ -1,0 +1,47 @@
+{
+  "caseId": "14-meetup-001",
+  "categories": [
+    "meetup"
+  ],
+  "note": "申込締切と開催日が明記された技術勉強会。kind は meetup（以前はハッカソン扱い）。",
+  "clock": "2026-09-21T09:00:00+09:00",
+  "preferences": {
+    "interestsPrompt": "勉強会 LT会 生成AI",
+    "targetYear": 2026,
+    "onlineAllowed": true,
+    "locations": [
+      "大阪",
+      "関西"
+    ]
+  },
+  "searchHits": [
+    {
+      "url": "https://study1.example.jp/2026-10",
+      "query": "勉強会 2026"
+    }
+  ],
+  "pages": [
+    {
+      "url": "https://study1.example.jp/2026-10",
+      "body": "<html><head><title>生成AI 実践勉強会 #12</title></head><body><h1>生成AI 実践勉強会 #12</h1><p>LLM アプリの設計を学ぶ勉強会です。</p><div>開催日時: 2026年10月16日 19:00〜21:00</div><div>申込締切: 2026年10月14日 23:59</div><div>会場: 大阪イノベーションハブ</div><div>主催: 関西AI勉強会</div></body></html>",
+      "sourceType": "official"
+    }
+  ],
+  "expected": {
+    "events": [
+      {
+        "officialUrl": "https://study1.example.jp/2026-10",
+        "kind": "meetup",
+        "eventStart": "2026-10-16T19:00:00+09:00",
+        "eventStartPrecision": "datetime",
+        "applicationDeadline": "2026-10-14T23:59:00+09:00",
+        "applicationDeadlinePrecision": "datetime",
+        "validationStatus": "verified",
+        "evidenceRequired": [
+          "title",
+          "dates.eventStart"
+        ]
+      }
+    ]
+  }
+}
