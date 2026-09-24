@@ -29,6 +29,7 @@ from event_agent.domain.organizer_edit import apply_organizer_edit
 from event_agent.schemas import (
     AgentRun,
     EventClaim,
+    WatchedPage,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -258,6 +259,13 @@ class Store(Protocol):
         reserves nothing when the cap would be exceeded.
         """
 
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage: ...
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None: ...
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        """Active pages, least recently checked first."""
+
     def reserve_quota(self, key: str, *, cap: int) -> bool:
         """Take one from a named counter capped at ``cap`` (e.g. ``web-search:2026-09-24:<session>``).
 
@@ -305,6 +313,7 @@ class MemoryStore:
         self._search_activity: dict[str, list[SearchActivity]] = {}
         self._claims: dict[str, EventClaim] = {}
         self._quotas: dict[str, int] = {}
+        self._watched: dict[str, WatchedPage] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -322,6 +331,7 @@ class MemoryStore:
             self._search_activity.clear()
             self._claims.clear()
             self._quotas.clear()
+            self._watched.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -441,6 +451,21 @@ class MemoryStore:
     def latest_collection_at(self) -> datetime | None:
         with self._lock:
             return self._latest_saved_at
+
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage:
+        with self._lock:
+            self._watched[page.watch_id] = page
+            return page
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None:
+        with self._lock:
+            return self._watched.get(watch_id)
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        with self._lock:
+            active = [p for p in self._watched.values() if p.active]
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(active, key=lambda p: (p.last_checked_at or oldest, p.watch_id))[:limit]
 
     def reserve_quota(self, key: str, *, cap: int) -> bool:
         with self._lock:

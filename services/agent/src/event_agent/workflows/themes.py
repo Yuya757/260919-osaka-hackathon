@@ -88,6 +88,14 @@ def _meetup_search_theme(theme_id: str, locations: tuple[str, ...], *, online_on
     )
 
 
+# 利用者が登録したページを毎朝見直すテーマ（ADR-014）。検索はしない
+WATCHED_THEME = CollectionTheme(
+    "watched-pages", "利用者が登録したページ", ("全国",),
+    kind="hackathon",
+    allowed_kinds=("hackathon", "contest", "meetup", "accelerator", "cocreation", "exhibition"),
+    source="watched",
+)
+
 # 毎朝の定期収集。Google 検索グラウンディングは使わない（ADR-014）。
 # 収集元は公開 API（Doorkeeper）と、利用者が登録したページの見守りだけ
 COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
@@ -104,6 +112,7 @@ COLLECTION_THEMES: tuple[CollectionTheme, ...] = (
         kind="meetup", allowed_kinds=("meetup",),
         source="doorkeeper", keywords=("LT", "Meetup", "カンファレンス"),
     ),
+    WATCHED_THEME,
 )
 
 # Google 検索グラウンディングで告知ページを見つけるテーマ。規約上、結果のリンクから

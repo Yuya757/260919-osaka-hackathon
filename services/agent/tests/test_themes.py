@@ -18,7 +18,7 @@ from event_agent.workflows.themes import (
 
 
 def test_themes_map_to_task_indices():
-    assert [t.id for t in COLLECTION_THEMES] == ["meetup-study", "meetup-talk"]
+    assert [t.id for t in COLLECTION_THEMES] == ["meetup-study", "meetup-talk", "watched-pages"]
     assert theme_for_task_index(1).id == "meetup-talk"
     # 止めているテーマ・検索グラウンディングのテーマはタスクに割り当てないが、id では引ける
     assert "subsidy-kansai" not in {t.id for t in COLLECTION_THEMES}

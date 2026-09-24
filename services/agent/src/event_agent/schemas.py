@@ -759,3 +759,42 @@ class WebSearchResponse(BaseModel):
     generated_at: datetime = Field(alias="generatedAt")
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+# ---------------------------------------------------------------- watched pages (ADR-014)
+
+
+class WatchedPage(BaseModel):
+    """利用者が登録したページ。毎朝見直して、締切や日程の変更を拾う。"""
+
+    watch_id: str = Field(alias="watchId")
+    url: str
+    normalized_url: str = Field(alias="normalizedUrl")
+    event_id: str | None = Field(default=None, alias="eventId")
+    content_hash: str | None = Field(default=None, alias="contentHash")
+    added_at: datetime = Field(alias="addedAt")
+    last_checked_at: datetime | None = Field(default=None, alias="lastCheckedAt")
+    failures: int = 0
+    active: bool = True
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class WatchedPageRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    session_id: str | None = Field(default=None, alias="sessionId")
+
+    model_config = {"populate_by_name": True}
+
+
+WatchedPageStatus = Literal["added", "exists", "rejected"]
+
+
+class WatchedPageResponse(BaseModel):
+    status: WatchedPageStatus
+    reason: str | None = None
+    message: str
+    event: "ApiEvent | None" = None
+    activity: list[RunActivity] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}

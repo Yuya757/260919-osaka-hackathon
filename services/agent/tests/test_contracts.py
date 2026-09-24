@@ -297,3 +297,21 @@ def test_pool_search_stream_events_conform(client: TestClient, finished_run: str
     validator = _validator("pool-search.json", "PoolSearchStreamEvent")
     for frame in frames:
         _assert_valid(validator, _json.loads(frame), "PoolSearchStreamEvent")
+
+
+def test_watched_page_responses_conform(client: TestClient) -> None:
+    rejected = client.post("/api/watched-pages", json={"url": "http://insecure.example.jp/event"})
+    assert rejected.status_code == 200
+    _assert_valid(_validator("watched-page.json", "WatchedPageResponse"), rejected.json(), "WatchedPageResponse")
+    assert rejected.json()["reason"] == "bad_url"
+
+    import json as _json
+
+    with client.stream(
+        "POST", "/api/watched-pages/stream", json={"url": "https://missing.example.jp/event"}
+    ) as response:
+        frames = [line.removeprefix("data: ") for line in response.iter_lines() if line.startswith("data: ")]
+    validator = _validator("watched-page.json", "WatchedPageStreamEvent")
+    for frame in frames:
+        _assert_valid(validator, _json.loads(frame), "WatchedPageStreamEvent")
+    assert _json.loads(frames[-1])["type"] == "result"

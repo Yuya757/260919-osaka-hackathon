@@ -45,6 +45,8 @@ from event_agent.schemas import (
     OrganizerPostPreviewResponse,
     OrganizerPostRequest,
     PoolSearchActivity,
+    WatchedPageRequest,
+    WatchedPageResponse,
     WebSearchRequest,
     WebSearchResponse,
     PoolSearchRequest,
@@ -58,6 +60,7 @@ from event_agent.workflows.collect import schedule_collect_run
 from event_agent.workflows.pool import ranked_pool
 from event_agent.workflows.pool_search import search_pool
 from event_agent.workflows.web_search import WebSearchRefused, web_search
+from event_agent.workflows.watched_pages import register_page
 from event_agent.workflows.event_claims import ClaimError, edit_event, start_claim, verify_claim
 from event_agent.domain.outbound import with_utm
 from event_agent.workflows.organizer_posts import (
@@ -394,6 +397,67 @@ async def search_the_web(body: WebSearchRequest) -> WebSearchResponse:
         return await web_search(body.query, session.session_id)
     except WebSearchRefused as exc:
         raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+# --------------------------------------------------------- watched pages (ADR-014)
+
+
+@app.post("/api/watched-pages", response_model=WatchedPageResponse)
+async def register_watched_page(body: WatchedPageRequest) -> WatchedPageResponse:
+    """利用者が貼ったイベントのページを読み、一覧に追加して毎朝見守る。"""
+    session = store.get_or_create_session(body.session_id)
+    return await register_page(body.url, session.session_id)
+
+
+@app.post("/api/watched-pages/stream")
+async def register_watched_page_stream(body: WatchedPageRequest) -> StreamingResponse:
+    """ページ登録を SSE で流す。動きを ``activity`` で 1 行ずつ、最後に ``result``。"""
+    session = store.get_or_create_session(body.session_id)
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def frame(payload: dict) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+    def on_note(agent: str, message: str, level: str) -> None:
+        queue.put_nowait(
+            frame(
+                {
+                    "type": "activity",
+                    "activity": {
+                        "agent": agent,
+                        "message": message[:300],
+                        "level": level,
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    },
+                }
+            )
+        )
+
+    async def run() -> None:
+        try:
+            result = await register_page(body.url, session.session_id, on_note=on_note)
+            queue.put_nowait(frame({"type": "result", "result": result.model_dump(by_alias=True, mode="json")}))
+        except Exception:  # noqa: BLE001 — 画面には理由だけ返し、詳細はログへ
+            logger.exception("watched page registration failed")
+            queue.put_nowait(frame({"type": "error", "message": "ページの登録に失敗しました。"}))
+        finally:
+            queue.put_nowait(None)
+
+    async def events():
+        yield ": stream\n\n"
+        task = asyncio.create_task(run())
+        try:
+            while (item := await queue.get()) is not None:
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 # ------------------------------------------------------------ organizer posts

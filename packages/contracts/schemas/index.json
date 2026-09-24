@@ -119,6 +119,15 @@
         "WebSource",
         "WebSearchResponse"
       ]
+    },
+    {
+      "id": "watched-page",
+      "path": "watched-page.json",
+      "definitions": [
+        "WatchedPageRequest",
+        "WatchedPageResponse",
+        "WatchedPageStreamEvent"
+      ]
     }
   ]
 }

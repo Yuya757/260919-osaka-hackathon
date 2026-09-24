@@ -36,6 +36,7 @@ from event_agent.config import get_settings
 from event_agent.schemas import (
     AgentRun,
     EventClaim,
+    WatchedPage,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -71,6 +72,8 @@ SEARCH_ACTIVITY = "searchActivity"
 EVENT_CLAIMS = "eventClaims"
 # 利用者ごとの日次の回数（Web 検索・ページ登録、ADR-014）
 QUOTAS = "quotas"
+# 利用者が登録したページ（ADR-014）
+WATCHED_PAGES = "watchedPages"
 SEARCH_ACTIVITY_TTL = timedelta(days=1)
 
 
@@ -120,7 +123,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS, WATCHED_PAGES):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -481,6 +484,23 @@ class FirestoreStore:
                     return False
                 time.sleep(0.05 * (attempt + 1))
         return False
+
+    def save_watched_page(self, page: WatchedPage) -> WatchedPage:
+        self._db.collection(WATCHED_PAGES).document(page.watch_id).set(_dump(page))
+        return page
+
+    def get_watched_page(self, watch_id: str) -> WatchedPage | None:
+        snapshot = self._db.collection(WATCHED_PAGES).document(watch_id).get()
+        return WatchedPage(**(snapshot.to_dict() or {})) if snapshot.exists else None
+
+    def list_watched_pages(self, *, limit: int = 100) -> list[WatchedPage]:
+        # 単一フィールドの等値条件だけにして複合インデックスを要らなくする。並べ替えは手元で
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = self._db.collection(WATCHED_PAGES).where(filter=FieldFilter("active", "==", True))
+        pages = [WatchedPage(**(s.to_dict() or {})) for s in query.stream()]
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(pages, key=lambda p: (p.last_checked_at or oldest, p.watch_id))[:limit]
 
     def reserve_quota(self, key: str, *, cap: int) -> bool:
         from google.cloud import firestore

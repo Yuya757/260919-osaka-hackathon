@@ -2979,3 +2979,18 @@ button.next-title:hover {
   min-height: 36px;
   font-size: 13px;
 }
+
+/* ---------- 利用者が登録したページ（ADR-014） ---------- */
+.register-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.register-card .fine {
+  margin: 0;
+}

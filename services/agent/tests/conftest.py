@@ -56,6 +56,7 @@ STORE_HOLDERS = (
     "event_agent.workflows.pool_search",
     "event_agent.workflows.event_claims",
     "event_agent.workflows.web_search",
+    "event_agent.workflows.watched_pages",
     "event_agent.entrypoints.service",
     "event_agent.agents.chat",
     "event_agent.evaluation.harness",

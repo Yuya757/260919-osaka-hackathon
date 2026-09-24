@@ -12,6 +12,7 @@ import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import { SearchActivityPanel } from '../components/SearchActivityPanel'
 import { WebSearchCard } from '../components/WebSearchCard'
+import { RegisterPageCard } from '../components/RegisterPageCard'
 import { searchTheWeb } from '../api/client'
 import type { Event, EventKind, WebSearchResponse } from '../types/api'
 
@@ -70,6 +71,7 @@ export function EventListScreen({ mode }: Props) {
     error: string | null
   }>({ result: null, pending: false, error: null })
   const webSession = useRef<string | undefined>(undefined)
+  const [registering, setRegistering] = useState(false)
 
   const onWebSearch = async () => {
     const text = query.trim()
@@ -194,7 +196,13 @@ export function EventListScreen({ mode }: Props) {
             >
               Google 検索で Web からも探す
             </button>
+            <button type="button" className="button" onClick={() => setRegistering((open) => !open)}>
+              ＋ イベントのページを登録
+            </button>
           </div>
+        )}
+        {mode === 'home' && registering && (
+          <RegisterPageCard onClose={() => setRegistering(false)} onAdded={() => void refresh()} />
         )}
         {mode === 'home' && (
           <WebSearchCard

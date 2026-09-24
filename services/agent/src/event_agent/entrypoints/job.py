@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 
 async def collect_theme(theme: CollectionTheme) -> int:
     """Return a process exit code. 0 covers both collecting and skipping."""
+    if theme.source == "watched":
+        # 利用者が登録したページの見守り（ADR-014）。検索はしない
+        from event_agent.workflows.watched_pages import watch_all
+
+        changed, unchanged, started = await watch_all()
+        logger.info(
+            "watched pages: re-read %s, unchanged %s (started=%s)", changed, unchanged, started
+        )
+        return 0
     run, started = await run_theme_collection(theme)
     if not started:
         # 今日の分は別の実行が既に担当している。再試行でもここに来る（§9.3）。
