@@ -108,6 +108,29 @@
         "mainEventId": { "type": ["string", "null"] }
       }
     },
+    "OrganizerEdit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifiedAt", "pageUrl", "values"],
+      "description": "主催者による編集（ADR-013）。確認コードをイベントページで見つけた時刻とページ、直した値",
+      "properties": {
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "pageUrl": { "type": "string", "format": "uri", "description": "確認コードを見つけたページ" },
+        "editedAt": { "type": ["string", "null"], "format": "date-time" },
+        "values": { "$ref": "#/$defs/OrganizerEditValues" }
+      }
+    },
+    "OrganizerEditValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "主催者が直せる項目。書かれていない項目は収集した値のまま",
+      "properties": {
+        "nearestStation": { "type": ["string", "null"], "maxLength": 40 },
+        "venue": { "type": ["string", "null"], "maxLength": 120 },
+        "applicationDeadline": { "type": ["string", "null"], "format": "date-time" },
+        "applicationUrl": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
     "Event": {
       "type": "object",
       "additionalProperties": false,
@@ -162,6 +185,10 @@
         "themeId": { "type": ["string", "null"], "description": "収集したテーマ（ADR-008）。手動 Run 由来は null" },
         "normalizedOfficialUrl": { "type": "string", "description": "officialUrl の正規化形。既知ページの照合キー" },
         "lastExtractedAt": { "type": ["string", "null"], "format": "date-time", "description": "本文から実際に抽出した最終時刻。lastSeenAt と違い、既知ページの省略では進まない" },
+        "organizerEdit": {
+          "oneOf": [{ "$ref": "#/$defs/OrganizerEdit" }, { "type": "null" }],
+          "description": "本人確認した主催者が直した値（ADR-013）。再収集でも保たれ、保存のたびに当て直す"
+        },
         "attributes": {
           "type": "object",
           "maxProperties": 10,

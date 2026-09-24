@@ -39,7 +39,9 @@
         "EventRecommendation",
         "EvidencePreview",
         "GoogleCalendarEventIds",
-        "EventListResponse"
+        "EventListResponse",
+        "OrganizerEdit",
+        "OrganizerEditValues"
       ]
     },
     {
@@ -92,7 +94,20 @@
         "SearchIntent",
         "SearchAgent",
         "SearchActivity",
-        "PoolSearchResponse"
+        "PoolSearchResponse",
+        "PoolSearchActivity"
+      ]
+    },
+    {
+      "id": "event-claim",
+      "path": "event-claim.json",
+      "definitions": [
+        "EventClaimStartRequest",
+        "EventClaimStartResponse",
+        "EventClaimVerifyRequest",
+        "EventClaimVerifyResponse",
+        "EventEditRequest",
+        "EventEditResponse"
       ]
     }
   ]

@@ -34,6 +34,7 @@ from uuid import uuid4
 from event_agent.config import get_settings
 from event_agent.schemas import (
     AgentRun,
+    EventClaim,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -63,6 +64,8 @@ EVENT_METRICS = "eventMetrics"
 USAGE = "usage"
 # 探索中の動き（ADR-010）。expiresAt に TTL ポリシーを掛ければ自動で消える
 SEARCH_ACTIVITY = "searchActivity"
+# 主催者の申請（ADR-013）。鍵はハッシュだけを持つ
+EVENT_CLAIMS = "eventClaims"
 SEARCH_ACTIVITY_TTL = timedelta(days=1)
 
 
@@ -112,7 +115,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -487,6 +490,24 @@ class FirestoreStore:
         if not snapshot.exists:
             return None
         return UsageRecord(**(snapshot.to_dict() or {}))
+
+    # ------------------------------------------------------ organizer edits
+
+    def update_event(self, event: ApiEvent) -> ApiEvent:
+        ref = self._db.collection(EVENTS).document(event.dedup_key)
+        snapshot = ref.get()
+        existing = ApiEvent(**(snapshot.to_dict() or {})) if snapshot.exists else None
+        merged = merge_saved_event(event, existing)
+        ref.set(_dump(merged))
+        return merged
+
+    def save_claim(self, claim: EventClaim) -> EventClaim:
+        self._db.collection(EVENT_CLAIMS).document(_path_id(claim.claim_id)).set(_dump(claim))
+        return claim
+
+    def get_claim(self, claim_id: str) -> EventClaim | None:
+        snapshot = self._db.collection(EVENT_CLAIMS).document(_path_id(claim_id)).get()
+        return EventClaim(**(snapshot.to_dict() or {})) if snapshot.exists else None
 
     # --------------------------------------------------------- search activity
 

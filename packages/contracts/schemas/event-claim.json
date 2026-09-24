@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/event-claim.json",
+  "title": "EventClaim",
+  "description": "主催者がイベントを申請し、本人確認のうえ直す（ADR-013）。確認コードをイベントページに書いてもらい、エージェントがそのページを読んで確かめる。",
+  "$defs": {
+    "EventClaimStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "EventClaimStartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "eventId",
+        "code",
+        "pageUrls",
+        "expiresAt"
+      ],
+      "properties": {
+        "claimId": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^CHO-[A-Z0-9]{4}-[A-Z0-9]{4}$",
+          "description": "イベントページに一時的に書いてもらうコード"
+        },
+        "pageUrls": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "コードを探しに行くページ（公式ページと申込ページ）"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "このコードで確認できる期限"
+        }
+      }
+    },
+    "EventClaimVerifyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId"
+      ],
+      "properties": {
+        "claimId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "EventClaimVerifyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "claimId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "code_not_found",
+            "page_unavailable",
+            "expired",
+            "too_many_attempts"
+          ]
+        },
+        "editToken": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "verified のときだけ。編集に使う鍵で、サーバーはハッシュしか持たない"
+        },
+        "tokenExpiresAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "EventEditRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "editToken",
+        "values"
+      ],
+      "properties": {
+        "claimId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "editToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "values": {
+          "$ref": "event.json#/$defs/OrganizerEditValues"
+        }
+      }
+    },
+    "EventEditResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event"
+      ],
+      "properties": {
+        "event": {
+          "$ref": "event.json#/$defs/Event"
+        }
+      }
+    }
+  }
+}

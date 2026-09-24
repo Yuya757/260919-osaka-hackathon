@@ -345,6 +345,28 @@ def preview_evidence(evidence: list[Evidence], limit: int = 4) -> list[EvidenceP
     return picked
 
 
+class OrganizerEditValues(BaseModel):
+    """主催者が直せる項目（ADR-013）。None は「直していない」で、収集した値のまま。"""
+
+    nearest_station: str | None = Field(default=None, alias="nearestStation", max_length=40)
+    venue: str | None = Field(default=None, max_length=120)
+    application_deadline: datetime | None = Field(default=None, alias="applicationDeadline")
+    application_url: str | None = Field(default=None, alias="applicationUrl")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class OrganizerEdit(BaseModel):
+    """本人確認した主催者が直した値。再収集でも保ち、保存のたびに当て直す（ADR-013）。"""
+
+    verified_at: datetime = Field(alias="verifiedAt")
+    page_url: str = Field(alias="pageUrl")
+    edited_at: datetime | None = Field(default=None, alias="editedAt")
+    values: OrganizerEditValues = Field(default_factory=OrganizerEditValues)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
 class ApiEvent(BaseModel):
     """Event candidate (§7.3). Mirrors packages/contracts/schemas/event.json.
 
@@ -388,6 +410,8 @@ class ApiEvent(BaseModel):
     last_extracted_at: datetime | None = Field(default=None, alias="lastExtractedAt")
     # ジャンル固有の値（賞金・支援内容・対象ステージ…）。ページの行をそのまま持つ
     attributes: dict[str, str] = Field(default_factory=dict)
+    # 本人確認した主催者が直した値（ADR-013）
+    organizer_edit: OrganizerEdit | None = Field(default=None, alias="organizerEdit")
     status: Literal["suggested", "bookmarked", "dismissed"] = "suggested"
     google_calendar_event_ids: GoogleCalendarEventIds = Field(
         default_factory=GoogleCalendarEventIds, alias="googleCalendarEventIds"
@@ -637,5 +661,74 @@ class PoolSearchResponse(BaseModel):
     activity: list[SearchActivity] = Field(default_factory=list)
     last_collected_at: datetime | None = Field(default=None, alias="lastCollectedAt")
     model_calls: int = Field(default=0, ge=0, alias="modelCalls")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+# ---------------------------------------------------------------- event claims (ADR-013)
+
+ClaimStatus = Literal["verified", "code_not_found", "page_unavailable", "expired", "too_many_attempts"]
+
+
+class EventClaim(BaseModel):
+    """主催者の申請。API には出さない（鍵はハッシュだけを持つ）。"""
+
+    claim_id: str = Field(alias="claimId")
+    event_id: str = Field(alias="eventId")
+    code: str
+    page_urls: list[str] = Field(alias="pageUrls")
+    created_at: datetime = Field(alias="createdAt")
+    expires_at: datetime = Field(alias="expiresAt")
+    attempts: int = 0
+    verified_at: datetime | None = Field(default=None, alias="verifiedAt")
+    verified_page_url: str | None = Field(default=None, alias="verifiedPageUrl")
+    edit_token_hash: str | None = Field(default=None, alias="editTokenHash")
+    token_expires_at: datetime | None = Field(default=None, alias="tokenExpiresAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class EventClaimStartRequest(BaseModel):
+    event_id: str = Field(alias="eventId", min_length=1, max_length=64)
+
+    model_config = {"populate_by_name": True}
+
+
+class EventClaimStartResponse(BaseModel):
+    claim_id: str = Field(alias="claimId")
+    event_id: str = Field(alias="eventId")
+    code: str
+    page_urls: list[str] = Field(alias="pageUrls")
+    expires_at: datetime = Field(alias="expiresAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class EventClaimVerifyRequest(BaseModel):
+    claim_id: str = Field(alias="claimId", min_length=1, max_length=64)
+
+    model_config = {"populate_by_name": True}
+
+
+class EventClaimVerifyResponse(BaseModel):
+    claim_id: str = Field(alias="claimId")
+    status: ClaimStatus
+    edit_token: str | None = Field(default=None, alias="editToken")
+    token_expires_at: datetime | None = Field(default=None, alias="tokenExpiresAt")
+    message: str
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class EventEditRequest(BaseModel):
+    claim_id: str = Field(alias="claimId", min_length=1, max_length=64)
+    edit_token: str = Field(alias="editToken", min_length=1, max_length=128)
+    values: OrganizerEditValues
+
+    model_config = {"populate_by_name": True}
+
+
+class EventEditResponse(BaseModel):
+    event: ApiEvent
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
