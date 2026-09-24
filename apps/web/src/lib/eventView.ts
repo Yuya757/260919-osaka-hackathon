@@ -72,7 +72,9 @@ export function dayDate(iso: string, timeZone?: string): Date {
  */
 export function deadlineLabel(event: Event): string {
   const iso = event.dates.applicationDeadline
-  if (!iso) return '未確認'
+  // 技術イベントの告知は締切を書かないことが多い（開催まで受け付ける）。推測はせず、
+  // 「未確認」の代わりに申込ページでの確認を促す
+  if (!iso) return event.kind === 'meetup' ? '申込ページで確認' : '未確認'
   const tz = event.dates.timezone
   if (event.dates.applicationDeadlinePrecision === 'date') return formatDate(iso, tz)
   return `${formatDate(iso, tz)} ${formatTime(iso, tz)}`
@@ -193,6 +195,16 @@ export function validationLabel(status: ValidationStatus): string {
   return status === 'verified' ? '公式情報で確認済み' : '一部未確認'
 }
 
+/**
+ * 「要確認」の印を付けるか。技術イベントは締切を書かないのが普通なので、
+ * 欠けているのが締切だけなら印を付けない（締切の行には「申込ページで確認」と出る）。
+ */
+export function needsCheck(event: Event): boolean {
+  if (event.validationStatus !== 'partial') return false
+  if (event.kind !== 'meetup') return true
+  return missingFields(event).some((field) => field !== '申込締切')
+}
+
 /** `partial` のイベントで何が欠けているかを列挙する。§6.6 により明示が必要。 */
 export function missingFields(event: Event): string[] {
   const missing: string[] = []
@@ -233,6 +245,7 @@ const KIND_LABEL: Record<string, string> = {
   cocreation: '共創',
   exhibition: '展示会',
   subsidy: '補助金',
+  meetup: '技術イベント',
 }
 
 export function kindLabel(kind: string | undefined): string {

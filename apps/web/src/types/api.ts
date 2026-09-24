@@ -104,6 +104,8 @@ export type EventKind =
   | 'cocreation'
   | 'exhibition'
   | 'subsidy'
+  /** 技術イベント（勉強会・LT 会・もくもく会・ハンズオン・カンファレンス） */
+  | 'meetup'
 
 /** 締切と実施日のあいだの節目（一次選考通過、最終審査会、結果発表など） */
 export type EventMilestone = {

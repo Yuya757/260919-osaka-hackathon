@@ -6,6 +6,7 @@ import {
   hostOf,
   isCalendarRegistered,
   kindLabel,
+  needsCheck,
   placeLabel,
 } from '../lib/eventView'
 import { DualDateBlock } from './DualDateBlock'
@@ -21,7 +22,7 @@ type Props = {
 
 export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalendar }: Props) {
   const navigate = useNavigate()
-  const partial = event.validationStatus === 'partial'
+  const partial = needsCheck(event)
   const registered = isCalendarRegistered(calendar)
 
   return (
