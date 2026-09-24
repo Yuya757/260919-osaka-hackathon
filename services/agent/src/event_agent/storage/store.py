@@ -258,6 +258,11 @@ class Store(Protocol):
         reserves nothing when the cap would be exceeded.
         """
 
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        """Take one from a named counter capped at ``cap`` (e.g. ``web-search:2026-09-24:<session>``).
+
+        Atomic like :meth:`reserve_grounding_calls`. False when the cap is reached."""
+
     def record_model_calls(self, day: str, count: int) -> None:
         """Add text-generation calls to the day's usage. Not capped here."""
 
@@ -299,6 +304,7 @@ class MemoryStore:
         self._usage: dict[str, UsageRecord] = {}
         self._search_activity: dict[str, list[SearchActivity]] = {}
         self._claims: dict[str, EventClaim] = {}
+        self._quotas: dict[str, int] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -315,6 +321,7 @@ class MemoryStore:
             self._usage.clear()
             self._search_activity.clear()
             self._claims.clear()
+            self._quotas.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -434,6 +441,14 @@ class MemoryStore:
     def latest_collection_at(self) -> datetime | None:
         with self._lock:
             return self._latest_saved_at
+
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        with self._lock:
+            used = self._quotas.get(key, 0)
+            if used + 1 > cap:
+                return False
+            self._quotas[key] = used + 1
+            return True
 
     def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
         with self._lock:

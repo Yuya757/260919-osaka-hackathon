@@ -732,3 +732,30 @@ class EventEditResponse(BaseModel):
     event: ApiEvent
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+# ---------------------------------------------------------------- web search (ADR-014)
+
+
+class WebSearchRequest(BaseModel):
+    session_id: str | None = Field(default=None, alias="sessionId")
+    query: str = Field(min_length=1, max_length=300)
+
+    model_config = {"populate_by_name": True}
+
+
+class WebSource(BaseModel):
+    title: str
+    uri: str
+
+
+class WebSearchResponse(BaseModel):
+    """Google 検索グラウンディングの答え。質問した本人にだけ返し、保存しない。"""
+
+    session_id: str = Field(alias="sessionId")
+    answer: str
+    search_entry_point_html: str | None = Field(alias="searchEntryPointHtml")
+    sources: list[WebSource] = Field(default_factory=list)
+    generated_at: datetime = Field(alias="generatedAt")
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}

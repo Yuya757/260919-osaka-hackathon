@@ -8,6 +8,7 @@ import type {
   EventEditResponse,
   EventRouteResponse,
   OrganizerEditValues,
+  WebSearchResponse,
   EvidenceListResponse,
   OrganizerPostCreateResponse,
   OrganizerPostListResponse,
@@ -199,6 +200,14 @@ export function editClaimedEvent(
   return request<EventEditResponse>('/api/event-claims/edit', {
     method: 'POST',
     body: JSON.stringify({ claimId, editToken, values }),
+  })
+}
+
+/** 利用者ごとの Web 検索（ADR-014）。結果は保存しない（画面もメモリに持つだけ） */
+export function searchTheWeb(query: string, sessionId?: string): Promise<WebSearchResponse> {
+  return request<WebSearchResponse>('/api/web-search', {
+    method: 'POST',
+    body: JSON.stringify({ query, sessionId }),
   })
 }
 

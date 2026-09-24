@@ -26,6 +26,7 @@ idempotent by construction instead of by a read-then-search.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -52,6 +53,8 @@ from event_agent.storage.store import (
     merge_saved_post,
 )
 
+logger = logging.getLogger(__name__)
+
 RUNS = "agentRuns"
 RUN_KEYS = "agentRunKeys"
 EVIDENCE = "evidence"
@@ -66,6 +69,8 @@ USAGE = "usage"
 SEARCH_ACTIVITY = "searchActivity"
 # 主催者の申請（ADR-013）。鍵はハッシュだけを持つ
 EVENT_CLAIMS = "eventClaims"
+# 利用者ごとの日次の回数（Web 検索・ページ登録、ADR-014）
+QUOTAS = "quotas"
 SEARCH_ACTIVITY_TTL = timedelta(days=1)
 
 
@@ -115,7 +120,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -473,6 +478,32 @@ class FirestoreStore:
             except Exception as exc:  # noqa: BLE001
                 if attempt == 4:
                     logger.warning("grounding reservation gave up for %s: %s", day, exc)
+                    return False
+                time.sleep(0.05 * (attempt + 1))
+        return False
+
+    def reserve_quota(self, key: str, *, cap: int) -> bool:
+        from google.cloud import firestore
+
+        ref = self._db.collection(QUOTAS).document(_path_id(key))
+
+        @firestore.transactional
+        def claim(transaction: Any) -> bool:
+            snapshot = ref.get(transaction=transaction)
+            used = int((snapshot.to_dict() or {}).get("used", 0)) if snapshot.exists else 0
+            if used + 1 > cap:
+                return False
+            transaction.set(ref, {"key": key, "used": used + 1, "updatedAt": datetime.now(timezone.utc)})
+            return True
+
+        import time
+
+        for attempt in range(5):
+            try:
+                return bool(claim(self._db.transaction()))
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 4:
+                    logger.warning("quota reservation gave up for %s: %s", key, exc)
                     return False
                 time.sleep(0.05 * (attempt + 1))
         return False

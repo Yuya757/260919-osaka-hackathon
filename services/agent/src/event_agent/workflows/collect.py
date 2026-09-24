@@ -162,6 +162,12 @@ async def _search_step(
         note("searcher", f"検索結果 {len(hits)} 件")
         return hits[: settings.max_candidates]
 
+    if settings.use_vertex:
+        # 検索グラウンディングの結果のリンクから読むページを決めて保存・共有することは
+        # 規約で禁じられている（ADR-014）。本番では検索で告知ページを探さない
+        note("searcher", "検索グラウンディングは収集に使えないため、検索を行いません", level="warn")
+        return []
+
     since = datetime.now(timezone.utc) - timedelta(days=settings.search_recency_days)
     for query in queries:
         if trajectory is not None:

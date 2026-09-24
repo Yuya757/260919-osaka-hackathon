@@ -45,6 +45,8 @@ from event_agent.schemas import (
     OrganizerPostPreviewResponse,
     OrganizerPostRequest,
     PoolSearchActivity,
+    WebSearchRequest,
+    WebSearchResponse,
     PoolSearchRequest,
     PoolSearchResponse,
     PostMetricsResponse,
@@ -55,6 +57,7 @@ from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 from event_agent.workflows.pool import ranked_pool
 from event_agent.workflows.pool_search import search_pool
+from event_agent.workflows.web_search import WebSearchRefused, web_search
 from event_agent.workflows.event_claims import ClaimError, edit_event, start_claim, verify_claim
 from event_agent.domain.outbound import with_utm
 from event_agent.workflows.organizer_posts import (
@@ -95,7 +98,7 @@ async def health() -> HealthResponse:
         status="ok",
         demo_mode=not settings.use_vertex,
         model=settings.gemini_model if settings.use_vertex else None,
-        manualRunsEnabled=settings.manual_runs_enabled,
+        manualRunsEnabled=settings.manual_runs_allowed,
     )
 
 
@@ -109,7 +112,7 @@ async def create_agent_run(
     body: AgentRunCreateRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentRunCreateResponse:
-    if not settings.manual_runs_enabled:
+    if not settings.manual_runs_allowed:
         # ユーザー起点の Grounding 探索は費用のため既定で受け付けない（ADR-008）
         raise HTTPException(
             status_code=403,
@@ -375,6 +378,22 @@ def _with_evidence_preview(result: PoolSearchResponse) -> PoolSearchResponse:
         for e in result.events
     ]
     return result
+
+
+# ------------------------------------------------------------- web search (ADR-014)
+
+
+@app.post("/api/web-search", response_model=WebSearchResponse)
+async def search_the_web(body: WebSearchRequest) -> WebSearchResponse:
+    """利用者ごとの Web 検索。Google 検索グラウンディングの答えと検索候補を本人にだけ返す。
+
+    保存しない。出典のリンクは読みに行かず、イベントにもしない（ADR-014）。
+    """
+    session = store.get_or_create_session(body.session_id)
+    try:
+        return await web_search(body.query, session.session_id)
+    except WebSearchRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
 
 
 # ------------------------------------------------------------ organizer posts

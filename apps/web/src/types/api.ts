@@ -455,3 +455,17 @@ export type EventClaimVerifyResponse = {
 }
 
 export type EventEditResponse = { event: Event }
+
+// ---- 利用者ごとの Web 検索（ADR-014）— packages/contracts/schemas/web-search.json
+
+export type WebSource = { title: string; uri: string }
+
+/** Google 検索による AI の回答。質問した本人にだけ見せ、保存しない */
+export type WebSearchResponse = {
+  sessionId: string
+  answer: string
+  /** Search Suggestions の HTML。無改変で表示する義務がある */
+  searchEntryPointHtml: string | null
+  sources: WebSource[]
+  generatedAt: string
+}

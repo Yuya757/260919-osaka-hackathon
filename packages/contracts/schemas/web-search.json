@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-agent.local/schemas/web-search.json",
+  "title": "WebSearch",
+  "description": "利用者ごとの Web 検索（ADR-014）。Google 検索グラウンディングの答えと Search Suggestions を、質問した本人にだけ返す。保存しない。出典のリンクを読みに行かない。",
+  "$defs": {
+    "WebSearchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "WebSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "uri"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "WebSearchResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "answer",
+        "searchEntryPointHtml",
+        "sources",
+        "generatedAt"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string",
+          "description": "Google 検索による AI の回答。テキストとして表示する"
+        },
+        "searchEntryPointHtml": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "groundingMetadata.searchEntryPoint.renderedContent。無改変で表示する義務がある（画面設計書 §3.7）"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WebSource"
+          },
+          "description": "出典。計測のリダイレクトを通さずにそのままリンクする"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
