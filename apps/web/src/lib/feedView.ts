@@ -81,7 +81,7 @@ export function originLabel(post: OrganizerPost): string {
   return post.origin === 'bot' ? 'ボット投稿' : '主催者投稿'
 }
 
-/** PR 枠の表示（ADR-009）。期限つきの固定は「PR · 10/15まで」 */
+/** スポンサー枠（PR 枠、ADR-009）の表示。期限つきの固定は「スポンサー · 10/15まで」 */
 export function placementLabel(post: OrganizerPost): string | null {
   const until = post.placement.until
     ? new Date(post.placement.until).toLocaleDateString('ja-JP', {
@@ -90,8 +90,8 @@ export function placementLabel(post: OrganizerPost): string | null {
         day: 'numeric',
       })
     : null
-  if (post.placement.kind === 'pinned') return until ? `PR · ${until}まで` : 'PR'
-  if (post.placement.kind === 'priority') return '優先'
+  if (post.placement.kind === 'pinned') return until ? `スポンサー · ${until}まで` : 'スポンサー'
+  if (post.placement.kind === 'priority') return 'スポンサー'
   return null
 }
 
@@ -111,4 +111,100 @@ export function postedAtLabel(iso: string): string {
     month: 'numeric',
     day: 'numeric',
   })
+}
+
+// ---- Slack 形式のタイムライン ----
+
+const JST = 'Asia/Tokyo'
+
+/** 投稿時刻（HH:MM） */
+export function postedTimeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ja-JP', {
+    timeZone: JST,
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function jstDayKey(iso: string): string {
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: JST })
+}
+
+/** 日付の区切り線。「今日」「昨日」「9月22日（月）」 */
+export function dayDividerLabel(iso: string, now: Date = new Date()): string {
+  const key = jstDayKey(iso)
+  const today = jstDayKey(now.toISOString())
+  const yesterday = jstDayKey(new Date(now.getTime() - 86_400_000).toISOString())
+  if (key === today) return '今日'
+  if (key === yesterday) return '昨日'
+  return new Date(iso).toLocaleDateString('ja-JP', {
+    timeZone: JST,
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  })
+}
+
+export type FeedDay = { key: string; label: string; posts: OrganizerPost[] }
+
+/**
+ * フィードを Slack のように並べる。PR の固定枠は上にまとめ、残りは古い順に
+ * 日付ごとに束ねる（最新が一番下）。
+ */
+export function feedTimeline(
+  posts: OrganizerPost[],
+  now: Date = new Date(),
+): { pinned: OrganizerPost[]; days: FeedDay[] } {
+  const pinned = posts.filter((post) => post.placement.kind === 'pinned')
+  const rest = posts
+    .filter((post) => post.placement.kind !== 'pinned')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.postId.localeCompare(b.postId))
+  const days: FeedDay[] = []
+  for (const post of rest) {
+    const key = jstDayKey(post.createdAt)
+    const last = days[days.length - 1]
+    if (last && last.key === key) last.posts.push(post)
+    else days.push({ key, label: dayDividerLabel(post.createdAt, now), posts: [post] })
+  }
+  return { pinned, days }
+}
+
+/** アイコンの 1 文字。英字は大文字、日本語はそのまま先頭 1 文字 */
+export function avatarInitial(name: string): string {
+  const trimmed = name.trim().replace(/^[「『（(【\s]+/, '')
+  return (trimmed[0] ?? '?').toUpperCase()
+}
+
+/** 名前ごとに決まるアイコンの濃さ（0〜4）。同じ主催者は毎回同じ見た目になる */
+export function avatarTone(name: string): number {
+  let hash = 0
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return hash % 5
+}
+
+function countIn(value: string | undefined): number | null {
+  if (!value) return null
+  const match = value.replace(/,/g, '').match(/\d+/)
+  return match ? Number(match[0]) : null
+}
+
+export type Capacity = {
+  /** 定員。書かれていなければ null */
+  limit: number | null
+  /** 申込（参加登録）人数。書かれていなければ null */
+  registered: number | null
+  /** 人数を見た時点（収集した日時） */
+  asOf: string | null
+}
+
+/**
+ * 定員と申込人数。収集元が教えてくれたときだけ出す（推測しない）。
+ * 申込人数は収集した時点の値なので、いつの値かを添える。
+ */
+export function capacityOf(post: OrganizerPost): Capacity | null {
+  const attributes = post.event.attributes ?? {}
+  const limit = countIn(attributes['定員'])
+  const registered = countIn(attributes['参加登録'] ?? attributes['申込人数'] ?? attributes['参加者'])
+  if (limit === null && registered === null) return null
+  return { limit, registered, asOf: post.event.lastSeenAt ?? post.updatedAt ?? null }
 }

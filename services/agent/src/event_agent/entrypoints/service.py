@@ -28,6 +28,12 @@ from event_agent.schemas import (
     ApiEvent,
     ChatRequest,
     ChatResponse,
+    EventClaimStartRequest,
+    EventClaimStartResponse,
+    EventClaimVerifyRequest,
+    EventClaimVerifyResponse,
+    EventEditRequest,
+    EventEditResponse,
     EventRouteResponse,
     EventsResponse,
     EvidenceListResponse,
@@ -47,6 +53,7 @@ from event_agent.storage.store import store
 from event_agent.workflows.collect import schedule_collect_run
 from event_agent.workflows.pool import ranked_pool
 from event_agent.workflows.pool_search import search_pool
+from event_agent.workflows.event_claims import ClaimError, edit_event, start_claim, verify_claim
 from event_agent.domain.outbound import with_utm
 from event_agent.workflows.organizer_posts import (
     PostNotFound,
@@ -248,6 +255,39 @@ async def get_event_route(
         raise HTTPException(status_code=502, detail="経路検索サービスに接続できませんでした。") from exc
 
     return EventRouteResponse(eventId=event.event_id, arriveBy=event.dates.event_start, route=route)
+
+
+# --------------------------------------------------------- event claims (ADR-013)
+
+
+@app.post("/api/event-claims", response_model=EventClaimStartResponse)
+async def create_event_claim(body: EventClaimStartRequest) -> EventClaimStartResponse:
+    """主催者の申請を始め、イベントページに書いてもらう確認コードを返す。"""
+    try:
+        return start_claim(body.event_id, now=datetime.now(timezone.utc))
+    except ClaimError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+@app.post("/api/event-claims/verify", response_model=EventClaimVerifyResponse)
+async def verify_event_claim(body: EventClaimVerifyRequest) -> EventClaimVerifyResponse:
+    """イベントページを読み、確認コードがあれば編集用の鍵を返す（一度だけ）。"""
+    try:
+        return await verify_claim(body.claim_id, now=datetime.now(timezone.utc))
+    except ClaimError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+@app.post("/api/event-claims/edit", response_model=EventEditResponse)
+async def edit_claimed_event(body: EventEditRequest) -> EventEditResponse:
+    """鍵を確かめて、主催者の値（最寄駅・会場・申込締切・申込ページ）を持たせる。"""
+    try:
+        event = edit_event(
+            body.claim_id, body.edit_token, body.values, now=datetime.now(timezone.utc)
+        )
+    except ClaimError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+    return EventEditResponse(event=event)
 
 
 # ---------------------------------------------------------------- pool search

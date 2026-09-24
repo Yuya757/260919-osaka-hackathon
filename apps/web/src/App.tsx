@@ -9,6 +9,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { AppStateProvider } from './state/AppState'
 import { CalendarScreen } from './screens/CalendarScreen'
+import { EventManageScreen } from './screens/EventManageScreen'
 import { EventDetailScreen } from './screens/EventDetailScreen'
 import { EventListScreen } from './screens/EventListScreen'
 import { FeedScreen } from './screens/FeedScreen'
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="settings" element={<SettingsScreen />} />
             <Route path="settings/profile" element={<ProfileScreen />} />
             <Route path="events/:eventId" element={<EventDetailScreen />} />
+            <Route path="events/:eventId/manage" element={<EventManageScreen />} />
             {/* 旧チャット画面。入力欄は一覧の最上部に統合した */}
             <Route path="agent" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

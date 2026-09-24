@@ -267,3 +267,22 @@ def test_post_metrics_conform(client: TestClient) -> None:
         "PostMetricsResponse",
     )
     assert created["organizerConfirmed"] is False
+
+
+def test_event_claim_flow_conforms(client: TestClient, finished_run: str) -> None:
+    event = client.get("/api/events", params={"sourceRunId": finished_run}).json()["events"][0]
+    started = client.post("/api/event-claims", json={"eventId": event["eventId"]})
+    assert started.status_code == 200
+    _assert_valid(
+        _validator("event-claim.json", "EventClaimStartResponse"),
+        started.json(),
+        "EventClaimStartResponse",
+    )
+    verified = client.post("/api/event-claims/verify", json={"claimId": started.json()["claimId"]})
+    assert verified.status_code == 200
+    body = verified.json()
+    _assert_valid(
+        _validator("event-claim.json", "EventClaimVerifyResponse"), body, "EventClaimVerifyResponse"
+    )
+    # デモのページに確認コードは書かれていない。鍵は渡さない
+    assert body["status"] == "code_not_found" and not body.get("editToken")

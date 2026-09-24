@@ -25,8 +25,10 @@ from threading import Lock
 from typing import Protocol
 from uuid import uuid4
 
+from event_agent.domain.organizer_edit import apply_organizer_edit
 from event_agent.schemas import (
     AgentRun,
+    EventClaim,
     ApiEvent,
     Evidence,
     EventMetrics,
@@ -57,14 +59,18 @@ def merge_saved_event(incoming: ApiEvent, existing: ApiEvent | None) -> ApiEvent
     made. A re-run that clobbered those would un-bookmark saved events.
     """
     if existing is None:
-        return incoming
-    return incoming.model_copy(
-        update={
-            "event_id": existing.event_id,
-            "first_seen_at": existing.first_seen_at,
-            "status": existing.status,
-            "google_calendar_event_ids": existing.google_calendar_event_ids,
-        }
+        return apply_organizer_edit(incoming)
+    # 主催者が直した値（ADR-013）は再収集で消さない。新しい編集があればそちらを使う
+    return apply_organizer_edit(
+        incoming.model_copy(
+            update={
+                "event_id": existing.event_id,
+                "first_seen_at": existing.first_seen_at,
+                "status": existing.status,
+                "google_calendar_event_ids": existing.google_calendar_event_ids,
+                "organizer_edit": incoming.organizer_edit or existing.organizer_edit,
+            }
+        )
     )
 
 
@@ -257,6 +263,16 @@ class Store(Protocol):
 
     def get_usage(self, day: str) -> UsageRecord | None: ...
 
+    def update_event(self, event: ApiEvent) -> ApiEvent:
+        """Overwrite one stored event in place (organizer edits, ADR-013).
+
+        Goes through :func:`merge_saved_event` like a collected event, but does
+        not move the latest-run pointer: an edit is not a collection."""
+
+    def save_claim(self, claim: EventClaim) -> EventClaim: ...
+
+    def get_claim(self, claim_id: str) -> EventClaim | None: ...
+
     def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:
         """Replace the activity of an in-flight pool search (ADR-010).
 
@@ -282,6 +298,7 @@ class MemoryStore:
         self._metrics: dict[str, EventMetrics] = {}
         self._usage: dict[str, UsageRecord] = {}
         self._search_activity: dict[str, list[SearchActivity]] = {}
+        self._claims: dict[str, EventClaim] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -297,6 +314,7 @@ class MemoryStore:
             self._metrics.clear()
             self._usage.clear()
             self._search_activity.clear()
+            self._claims.clear()
 
     def get_or_create_session(self, session_id: str | None) -> SessionState:
         with self._lock:
@@ -443,6 +461,21 @@ class MemoryStore:
     def get_usage(self, day: str) -> UsageRecord | None:
         with self._lock:
             return self._usage.get(day)
+
+    def update_event(self, event: ApiEvent) -> ApiEvent:
+        with self._lock:
+            merged = merge_saved_event(event, self._events_by_dedup_key.get(event.dedup_key))
+            self._events_by_dedup_key[merged.dedup_key] = merged
+            return merged
+
+    def save_claim(self, claim: EventClaim) -> EventClaim:
+        with self._lock:
+            self._claims[claim.claim_id] = claim
+            return claim
+
+    def get_claim(self, claim_id: str) -> EventClaim | None:
+        with self._lock:
+            return self._claims.get(claim_id)
 
     def save_search_activity(self, search_id: str, lines: list[SearchActivity]) -> None:
         with self._lock:

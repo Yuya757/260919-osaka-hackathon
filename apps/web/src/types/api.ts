@@ -222,6 +222,8 @@ export type Event = {
   googleCalendarEventIds?: GoogleCalendarEventIds
   /** ジャンル固有の値（賞金・支援内容・対象ステージなど）。最大10項目 */
   attributes?: Record<string, string>
+  /** 本人確認した主催者が直した値（ADR-013） */
+  organizerEdit?: OrganizerEdit | null
   /** 一覧用の根拠（サーバーが list 応答で添える）。最大4件 */
   evidencePreview?: EvidencePreview[]
   /** @deprecated Phase 1 の表示用文字列。Evidence.sourceType へ統合して廃止する。 */
@@ -404,3 +406,46 @@ export type PoolSearchResponse = {
   lastCollectedAt?: string | null
   modelCalls: number
 }
+
+// ---- 主催者の申請と編集（ADR-013）— packages/contracts/schemas/event-claim.json
+
+/** 主催者が直せる項目。書かれていない項目は収集した値のまま */
+export type OrganizerEditValues = {
+  nearestStation?: string | null
+  venue?: string | null
+  applicationDeadline?: string | null
+  applicationUrl?: string | null
+}
+
+export type OrganizerEdit = {
+  verifiedAt: string
+  /** 確認コードを見つけたページ */
+  pageUrl: string
+  editedAt?: string | null
+  values: OrganizerEditValues
+}
+
+export type EventClaimStartResponse = {
+  claimId: string
+  eventId: string
+  code: string
+  pageUrls: string[]
+  expiresAt: string
+}
+
+export type EventClaimStatus =
+  | 'verified'
+  | 'code_not_found'
+  | 'page_unavailable'
+  | 'expired'
+  | 'too_many_attempts'
+
+export type EventClaimVerifyResponse = {
+  claimId: string
+  status: EventClaimStatus
+  editToken?: string | null
+  tokenExpiresAt?: string | null
+  message: string
+}
+
+export type EventEditResponse = { event: Event }
