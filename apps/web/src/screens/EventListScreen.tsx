@@ -240,6 +240,19 @@ export function EventListScreen({ mode }: Props) {
         </p>
       )}
 
+      {/* 前回の一覧を出したまま最新を取れなかった。古い一覧を黙って出さない（ADR-005） */}
+      {loadState === 'ready' && loadError && (
+        <div className="stale-warning" role="alert">
+          <p>
+            最新の一覧を取得できませんでした。表示しているのは前回取得した一覧です。
+            申込前に公式サイトで締切をご確認ください。
+          </p>
+          <button type="button" className="button" onClick={() => void refresh()}>
+            再試行
+          </button>
+        </div>
+      )}
+
       {loadState === 'loading' && (
         <div aria-busy="true">
           <p className="loading-line">

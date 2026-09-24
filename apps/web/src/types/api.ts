@@ -393,6 +393,12 @@ export type PoolSearchRequest = {
   searchId?: string
 }
 
+/** POST /api/pool-search/stream（SSE）の data 1 件 */
+export type PoolSearchStreamEvent =
+  | { type: 'activity'; activity: SearchActivity }
+  | { type: 'result'; result: PoolSearchResponse }
+  | { type: 'error'; message: string }
+
 /** 探索中の動き。まだ 1 行も無ければ空配列 */
 export type PoolSearchActivity = { searchId: string; activity: SearchActivity[] }
 

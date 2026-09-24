@@ -2904,3 +2904,23 @@ button.next-title:hover {
 .channel-end {
   scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
+
+/* 最新を取れず、前回の一覧を出しているときの注意 */
+.stale-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--deadline);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--deadline);
+}
+
+.stale-warning p {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
