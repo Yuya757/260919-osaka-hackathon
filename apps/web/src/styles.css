@@ -25,6 +25,11 @@
   --unknown: #d9d9d6;
   --selection: #f0e4e2;
   --overlay: rgb(22 22 26 / 35%);
+  /* フィードのスポンサー枠と主催者確認済みの色 */
+  --sponsor: #b7791f;
+  --sponsor-bg: #fdf8ec;
+  --verified: #2f7d5b;
+  --verified-bg: #eff7f2;
 
   --max: 760px;
   --gutter: 20px;
@@ -2140,6 +2145,38 @@ button.next-title:hover {
   box-shadow: inset 2px 0 0 var(--deadline);
 }
 
+/* スポンサー枠と主催者確認済みは、カードの地と添付の線に色を付ける */
+.msg.is-sponsor,
+.msg.is-verified {
+  margin: 4px -8px;
+  border: 1px solid transparent;
+}
+
+.msg.is-sponsor {
+  background: var(--sponsor-bg);
+  border-color: color-mix(in srgb, var(--sponsor) 30%, transparent);
+}
+
+.msg.is-verified {
+  background: var(--verified-bg);
+  border-color: color-mix(in srgb, var(--verified) 25%, transparent);
+}
+
+.msg.is-sponsor .msg-attachment {
+  border-left-color: var(--sponsor);
+}
+
+.msg.is-verified .msg-attachment {
+  border-left-color: var(--verified);
+}
+
+.msg-badge.is-sponsor {
+  color: var(--sponsor);
+  border-color: var(--sponsor);
+  background: var(--paper);
+  font-weight: 600;
+}
+
 .msg-avatar {
   width: 36px;
   height: 36px;
@@ -2192,9 +2229,10 @@ button.next-title:hover {
 }
 
 .msg-badge.is-confirmed {
-  color: var(--ink);
-  border-color: var(--ink);
+  color: var(--verified);
+  border-color: var(--verified);
   background: var(--paper);
+  font-weight: 600;
 }
 
 .msg-time {

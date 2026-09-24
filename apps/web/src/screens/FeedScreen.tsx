@@ -102,7 +102,14 @@ export function FeedScreen() {
     return (
       <article
         key={post.postId}
-        className={`msg${hits.length ? ' is-match' : ''}${pinned ? ' is-pinned' : ''}`}
+        className={[
+          'msg',
+          hits.length ? 'is-match' : '',
+          pinned ? 'is-sponsor' : '',
+          post.organizerConfirmed ? 'is-verified' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         {/* アイコンは主催者ごとに決まる。ボットかどうかは名前の横のバッジで示す */}
         <span className={`msg-avatar tone-${avatarTone(post.organizerName)}`} aria-hidden="true">
@@ -114,13 +121,17 @@ export function FeedScreen() {
             {bot ? (
               <span className="msg-badge">ボット</span>
             ) : (
-              post.organizerConfirmed && <span className="msg-badge is-confirmed">確認済み</span>
+              post.organizerConfirmed && (
+                <span className="msg-badge is-confirmed">
+                  <span aria-hidden="true">✓</span> 主催者確認済み
+                </span>
+              )
             )}
             <time className="msg-time" dateTime={post.createdAt}>
               {pinned ? postedAtLabel(post.createdAt) + ' ' : ''}
               {postedTimeLabel(post.createdAt)}
             </time>
-            {pinned && <span className="tag tag-pr">{pinned}</span>}
+            {pinned && <span className="msg-badge is-sponsor">{pinned}</span>}
           </p>
           <button
             type="button"
