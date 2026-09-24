@@ -382,7 +382,15 @@ export type SearchIntent = {
   kinds: EventKind[]
 }
 
-export type PoolSearchRequest = { sessionId?: string; query: string }
+export type PoolSearchRequest = {
+  sessionId?: string
+  query: string
+  /** 渡すと動きが 1 行ずつ保存され、探索中でも getPoolSearchActivity で読める */
+  searchId?: string
+}
+
+/** 探索中の動き。まだ 1 行も無ければ空配列 */
+export type PoolSearchActivity = { searchId: string; activity: SearchActivity[] }
 
 export type PoolSearchResponse = {
   sessionId: string

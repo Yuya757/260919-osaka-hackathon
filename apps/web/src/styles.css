@@ -542,6 +542,31 @@ button {
   color: var(--deadline);
 }
 
+/* 探索中の「いま動いている役割」の行 */
+.activity-log li.is-running .log-agent,
+.activity-log li.is-running .log-message {
+  color: var(--faint);
+}
+
+.log-dots::after {
+  content: '';
+  animation: log-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes log-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-dots::after {
+    animation: none;
+    content: '…';
+  }
+}
+
 .log-time {
   color: var(--faint);
   font-variant-numeric: tabular-nums;

@@ -22,6 +22,7 @@ import {
   postEventMetric,
   listOrganizerPosts,
   pollAgentRun,
+  getPoolSearchActivity,
   poolSearch,
   startAgentRun,
 } from '../api/client'
@@ -96,6 +97,14 @@ type AppState = {
 }
 
 const Context = createContext<AppState | null>(null)
+
+/** 探索中の動きを読みにいく間隔 */
+const ACTIVITY_POLL_MS = 500
+
+function newSearchId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<Event[]>([])
@@ -221,8 +230,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     async (message: string) => {
       if (agentPending) return
       setAgentPending(true)
+      setAgentReply({ text: '', activity: [] })
+      // 探索のリクエストは終わるまで返らない。そのあいだ動きを読みにいき、
+      // エージェントが解釈 → 絞り込み → 採点 → 提示と進む様子を 1 行ずつ出す
+      const searchId = newSearchId()
+      let finished = false
+      const poll = window.setInterval(() => {
+        getPoolSearchActivity(searchId)
+          .then(({ activity }) => {
+            if (!finished && activity.length) setAgentReply({ text: '', activity })
+          })
+          .catch(() => {
+            // 途中経過が読めなくても、最後の応答でまとめて出る
+          })
+      }, ACTIVITY_POLL_MS)
       try {
-        const result = await poolSearch({ sessionId: sessionRef.current, query: message.trim() })
+        const result = await poolSearch({
+          sessionId: sessionRef.current,
+          query: message.trim(),
+          searchId,
+        })
+        finished = true
         sessionRef.current = result.sessionId
         setAgentReply({ text: result.reply, activity: result.activity })
         setEvents(displayable(result.events))
@@ -238,6 +266,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           activity: [],
         })
       } finally {
+        finished = true
+        window.clearInterval(poll)
         setAgentPending(false)
       }
     },
