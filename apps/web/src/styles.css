@@ -3243,3 +3243,82 @@ button.next-title:hover {
   align-items: flex-start;
   gap: 6px;
 }
+
+/* ---------- ログイン（モック） ---------- */
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px var(--gutter);
+  background: var(--paper);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-brand {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.login-brand img {
+  border-radius: 6px;
+}
+
+.login h1 {
+  margin: 8px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-form label {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.login-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 16px;
+  background: var(--paper);
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.login-form .button {
+  margin-top: 10px;
+}
+
+.login .sheet-warn,
+.login .fine {
+  margin: 0;
+}
+
+.setting-row .button {
+  flex: none;
+  min-height: 34px;
+  font-size: 12px;
+}

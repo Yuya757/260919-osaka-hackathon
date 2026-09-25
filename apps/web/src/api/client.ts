@@ -21,6 +21,7 @@ import type {
   GoKind,
   PostMetricsResponse,
   CalendarCountsResponse,
+  RegistrantCountResponse,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -290,7 +291,26 @@ export function postEventMetric(eventId: string, kind: 'calendar'): Promise<void
   }).then(() => undefined)
 }
 
-/** イベントごとのカレンダー登録数（「N人が登録」）。0 件のイベントは含まれない */
+/**
+ * カレンダーに登録した利用者として数える。同じ利用者は何度呼んでも 1 人。
+ * 戻り値はそのイベントの登録人数。
+ */
+export function addCalendarRegistrant(eventId: string, userId: string): Promise<RegistrantCountResponse> {
+  return request<RegistrantCountResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/registrants/${encodeURIComponent(userId)}`,
+    { method: 'PUT' },
+  )
+}
+
+/** 登録を消したら人数から外す。登録していなければ何もしない */
+export function removeCalendarRegistrant(eventId: string, userId: string): Promise<RegistrantCountResponse> {
+  return request<RegistrantCountResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/registrants/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** イベントごとのカレンダー登録人数（「N人が登録」）。0 人のイベントは含まれない */
 export function getCalendarCounts(): Promise<CalendarCountsResponse> {
   return request<CalendarCountsResponse>('/api/calendar-counts')
 }

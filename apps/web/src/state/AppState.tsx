@@ -17,8 +17,10 @@ import {
 } from 'react'
 import {
   AgentRunPendingError,
+  addCalendarRegistrant,
   createOrganizerPost,
   getCalendarCounts,
+  removeCalendarRegistrant,
   getHealth,
   listEvents,
   postEventMetric,
@@ -46,9 +48,15 @@ import type {
 
 const SAVED_KEY = 'event-agent-saved-v1'
 
-function readSaved(): Record<string, boolean> {
+/** 保存したイベントは利用者ごとに持つ。ログイン前の分は最初にログインした人が引き継ぐ */
+function savedKey(userId: string): string {
+  return `${SAVED_KEY}:${userId}`
+}
+
+function readSaved(userId: string): Record<string, boolean> {
   try {
-    const raw = window.localStorage.getItem(SAVED_KEY)
+    const raw =
+      window.localStorage.getItem(savedKey(userId)) ?? window.localStorage.getItem(SAVED_KEY)
     return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
   } catch {
     return {}
@@ -115,7 +123,7 @@ function newSearchId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 }
 
-export function AppStateProvider({ children }: { children: ReactNode }) {
+export function AppStateProvider({ children, userId }: { children: ReactNode; userId: string }) {
   // 前回の一覧があれば、開いた瞬間に出す。取り直しは裏で行う
   const [cached] = useState(() => loadCachedEvents())
   const [events, setEvents] = useState<Event[]>(() => displayable(cached?.events ?? []))
@@ -124,7 +132,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [run, setRun] = useState<AgentRun | null>(null)
   const [runPending, setRunPending] = useState(false)
-  const [saved, setSaved] = useState<Record<string, boolean>>(() => readSaved())
+  const [saved, setSaved] = useState<Record<string, boolean>>(() => readSaved(userId))
   const [calendar, setCalendar] = useState<Record<string, GoogleCalendarEventIds>>(() =>
     loadRegistrations(),
   )
@@ -198,11 +206,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SAVED_KEY, JSON.stringify(saved))
+      window.localStorage.setItem(savedKey(userId), JSON.stringify(saved))
+      window.localStorage.removeItem(SAVED_KEY)
     } catch {
       // 保存できなくても動作は続ける
     }
-  }, [saved])
+  }, [saved, userId])
 
   const startRun = useCallback(async () => {
     if (runningRef.current) return
@@ -328,13 +337,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const ids = await registerToCalendar(event, selection)
     setCalendar((current) => ({ ...current, [event.eventId]: ids }))
     if (!first) return
-    setCalendarCounts((current) => ({
-      ...current,
-      [event.eventId]: (current[event.eventId] ?? 0) + 1,
-    }))
+    // 「N人が登録」は利用者ごとに 1 回だけ数える。数え直した値で上書きする
+    addCalendarRegistrant(event.eventId, userId)
+      .then(({ count }) => setCalendarCounts((current) => ({ ...current, [event.eventId]: count })))
+      .catch(() => undefined)
     // 成果の計測（ADR-009）。計測に失敗しても登録は済んでいるので無視する
     postEventMetric(event.eventId, 'calendar').catch(() => undefined)
-  }, [])
+  }, [userId])
 
   const unregister = useCallback(async (eventId: string) => {
     await unregisterFromCalendar(eventId)
@@ -343,7 +352,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       delete next[eventId]
       return next
     })
-  }, [])
+    removeCalendarRegistrant(eventId, userId)
+      .then(({ count }) =>
+        setCalendarCounts((current) => {
+          const next = { ...current, [eventId]: count }
+          if (count === 0) delete next[eventId]
+          return next
+        }),
+      )
+      .catch(() => undefined)
+  }, [userId])
 
   // 投稿由来の Event は events には無いので、投稿側も探す（/events/:id を開けるように）
   // ボット投稿は AI 収集イベントの写しなので「投稿由来」には数えない。

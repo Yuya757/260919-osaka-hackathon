@@ -9,6 +9,7 @@
  * 後にのみ呼ばれる。ここから勝手に呼んではならない。
  */
 import type { Event, GoogleCalendarEventIds } from '../types/api'
+import { loadSession, userScopedKey } from './account'
 
 const STORAGE_KEY = 'event-agent-calendar-mock-v1'
 
@@ -27,8 +28,11 @@ export type CalendarEntryPreview = {
 type Store = Record<string, GoogleCalendarEventIds>
 
 function read(): Store {
+  const key = userScopedKey(STORAGE_KEY)
+  if (!key) return {}
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    // ログイン（モック）を入れる前に登録した分は、最初にログインした人が引き継ぐ
+    const raw = window.localStorage.getItem(key) ?? window.localStorage.getItem(STORAGE_KEY)
     return raw ? (JSON.parse(raw) as Store) : {}
   } catch {
     // プライベートウィンドウ等で localStorage が使えないことがある
@@ -37,8 +41,11 @@ function read(): Store {
 }
 
 function write(store: Store): void {
+  const key = userScopedKey(STORAGE_KEY)
+  if (!key) return
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+    window.localStorage.setItem(key, JSON.stringify(store))
+    window.localStorage.removeItem(STORAGE_KEY)
   } catch {
     // 保存できなくても画面は動かす
   }
@@ -67,12 +74,13 @@ export async function registerToCalendar(
 ): Promise<GoogleCalendarEventIds> {
   const store = read()
   const existing = store[event.eventId] ?? {}
+  const userId = loadSession()?.userId ?? event.userId
   const result: GoogleCalendarEventIds = {
     deadlineEventId: selection.deadline
-      ? existing.deadlineEventId ?? `mock-${idempotencyKey(event.userId, event.eventId, 'deadline')}`
+      ? existing.deadlineEventId ?? `mock-${idempotencyKey(userId, event.eventId, 'deadline')}`
       : null,
     mainEventId: selection.main
-      ? existing.mainEventId ?? `mock-${idempotencyKey(event.userId, event.eventId, 'main')}`
+      ? existing.mainEventId ?? `mock-${idempotencyKey(userId, event.eventId, 'main')}`
       : null,
   }
   store[event.eventId] = result

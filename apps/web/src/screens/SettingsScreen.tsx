@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
 import { loadHomeStation, saveHomeStation } from '../lib/homeStation'
 import { loadProfile, summarizeProfile } from '../lib/profile'
-import { ACCOUNT_NAME_MAX, resizeAvatar, saveAccount, type Account } from '../lib/account'
-import { Avatar, useAccount } from '../components/Avatar'
+import { ACCOUNT_NAME_MAX, logOut, resizeAvatar, saveAccount, type Account } from '../lib/account'
+import { Avatar, useAccount, useSession } from '../components/Avatar'
 
 /** 自分のアイコンと表示名。この端末にだけ保存する */
 function AccountCard() {
@@ -149,6 +149,7 @@ function HomeStationCard() {
 export function SettingsScreen() {
   const { run, calendar } = useAppState()
   const navigate = useNavigate()
+  const session = useSession()
   const { profile, notice } = loadProfile()
   const registeredCount = Object.keys(calendar).length
 
@@ -181,10 +182,12 @@ export function SettingsScreen() {
         <p className="eyebrow">アカウントと連携</p>
         <div className="setting-row">
           <span className="setting-key">
-            Googleアカウント
-            <small>yuya@example.com</small>
+            ログイン中（モック）
+            <small>{session?.email}</small>
           </span>
-          <span className="setting-state">モック</span>
+          <button type="button" className="button" onClick={logOut}>
+            ログアウト
+          </button>
         </div>
         <div className="setting-row">
           <span className="setting-key">

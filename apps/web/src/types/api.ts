@@ -346,6 +346,9 @@ export type EventMetrics = {
 /** packages/contracts/schemas/organizer-post.json#CalendarCountsResponse */
 export type CalendarCountsResponse = { counts: Record<string, number> }
 
+/** packages/contracts/schemas/organizer-post.json#RegistrantCountResponse */
+export type RegistrantCountResponse = { eventId: string; count: number }
+
 export type PostMetricsResponse = {
   postId: string
   eventId: string
