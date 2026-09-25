@@ -9,8 +9,6 @@ import type {
   EventRouteResponse,
   OrganizerEditValues,
   WebSearchResponse,
-  WatchedPageResponse,
-  RunActivity,
   EvidenceListResponse,
   OrganizerPostCreateResponse,
   OrganizerPostListResponse,
@@ -22,6 +20,8 @@ import type {
   SearchActivity,
   GoKind,
   PostMetricsResponse,
+  CalendarCountsResponse,
+  RegistrantCountResponse,
 } from '../types/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -185,33 +185,6 @@ export function poolSearchStream(
   return postEventStream<SearchActivity, PoolSearchResponse>('/api/pool-search/stream', body, onActivity)
 }
 
-/**
- * 利用者がイベントのページを登録する（ADR-014）。エージェントの動きを SSE で受ける。
- * ストリームに繋がらなければ、通常の POST でまとめて受け取る。
- */
-export async function registerWatchedPage(
-  url: string,
-  sessionId: string | undefined,
-  onActivity: (line: RunActivity) => void,
-): Promise<WatchedPageResponse> {
-  const body = { url, sessionId }
-  try {
-    return await postEventStream<RunActivity, WatchedPageResponse>(
-      '/api/watched-pages/stream',
-      body,
-      onActivity,
-    )
-  } catch (error) {
-    if (!(error instanceof PoolSearchStreamError) || error.receivedAny) throw error
-    const result = await request<WatchedPageResponse>('/api/watched-pages', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
-    result.activity.forEach(onActivity)
-    return result
-  }
-}
-
 /** 探索中の動き。poolSearch と並行して読み、エージェントの処理を 1 行ずつ見せる */
 export function getPoolSearchActivity(searchId: string): Promise<PoolSearchActivity> {
   return request<PoolSearchActivity>(
@@ -316,6 +289,30 @@ export function postEventMetric(eventId: string, kind: 'calendar'): Promise<void
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind }),
   }).then(() => undefined)
+}
+
+/**
+ * カレンダーに登録した利用者として数える。同じ利用者は何度呼んでも 1 人。
+ * 戻り値はそのイベントの登録人数。
+ */
+export function addCalendarRegistrant(eventId: string, userId: string): Promise<RegistrantCountResponse> {
+  return request<RegistrantCountResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/registrants/${encodeURIComponent(userId)}`,
+    { method: 'PUT' },
+  )
+}
+
+/** 登録を消したら人数から外す。登録していなければ何もしない */
+export function removeCalendarRegistrant(eventId: string, userId: string): Promise<RegistrantCountResponse> {
+  return request<RegistrantCountResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/registrants/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** イベントごとのカレンダー登録人数（「N人が登録」）。0 人のイベントは含まれない */
+export function getCalendarCounts(): Promise<CalendarCountsResponse> {
+  return request<CalendarCountsResponse>('/api/calendar-counts')
 }
 
 export function getPostMetrics(postId: string): Promise<PostMetricsResponse> {

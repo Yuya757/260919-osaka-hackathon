@@ -750,13 +750,6 @@ button {
   border-color: var(--ink);
 }
 
-.ask-mark {
-  flex: none;
-  color: var(--faint);
-  font-size: 13px;
-  line-height: 1;
-}
-
 .ask input {
   flex: 1;
   min-width: 0;
@@ -774,21 +767,53 @@ button {
 
 .ask button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   border: 1px solid var(--line-strong);
   background: var(--paper);
+  color: var(--dim);
   border-radius: 6px;
-  padding: 5px 10px;
   min-height: 32px;
   font-size: 12px;
 }
 
 .ask button:hover:not(:disabled) {
   border-color: var(--ink);
+  color: var(--ink);
 }
 
 .ask button:disabled {
   color: var(--faint);
   cursor: default;
+}
+
+.ask-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* Web 検索のオン・オフ。入れているあいだは塗りつぶす */
+.ask-web {
+  padding: 0 8px;
+}
+
+.ask-web .ask-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ask button.ask-web.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.ask-submit {
+  width: 36px;
+  padding: 0;
 }
 
 /* 1 行に収め、はみ出す分は横にスクロールする。折り返すとチップが 2 段に見える */
@@ -966,35 +991,6 @@ button.next-title:hover {
   line-height: 1.6;
   border-left: 2px solid var(--ink);
   padding-left: 8px;
-}
-
-.row-evidence {
-  margin: 0;
-  font-size: 11px;
-  color: var(--faint);
-  line-height: 1.6;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: baseline;
-}
-
-.row-evidence-field {
-  flex: none;
-  color: var(--dim);
-}
-
-.row-evidence a {
-  flex: none;
-  color: var(--dim);
-}
-
-.row-evidence-quote {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
 }
 
 .row-side {
@@ -2756,11 +2752,6 @@ button.next-title:hover {
   padding: 16px 0 24px;
 }
 
-.ask button.is-busy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 
 @media (max-width: 599px) {
   :root {
@@ -2969,28 +2960,365 @@ button.next-title:hover {
   display: block;
 }
 
-.list-actions {
+/* ---------- 一覧の行の下端: 登録人数と根拠 ---------- */
+.row-foot {
+  /* 根拠の吹き出しは行の幅いっぱいに出す。右端ではみ出さないように */
+  position: relative;
+  margin: 0;
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--faint);
 }
 
-.list-actions .button {
-  min-height: 36px;
+.registered-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.registered-count strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.registered-count-icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* 根拠はカーソルを合わせたとき（スマホでは押したとき）だけ浮かせて見せる */
+.evidence-tip {
+  display: inline-flex;
+}
+
+/* 開いている行を次の行（適合度の円など）より手前に出す */
+.row:has(.evidence-tip:hover),
+.row:has(.evidence-tip:focus-within),
+.row:has(.evidence-tip.is-open) {
+  position: relative;
+  z-index: 3;
+}
+
+.evidence-tip-trigger {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  font-size: 11px;
+  color: var(--dim);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.evidence-tip-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 4;
+  max-width: 420px;
+  /* 引き金から離れても、浮いた中へカーソルを移せるよう隙間を作らない */
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 6px 20px rgb(22 22 26 / 12%);
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evidence-tip:hover .evidence-tip-body,
+.evidence-tip:focus-within .evidence-tip-body,
+.evidence-tip.is-open .evidence-tip-body {
+  display: flex;
+}
+
+.evidence-tip-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+.evidence-tip-field {
+  color: var(--dim);
+}
+
+.evidence-tip-item a {
+  color: var(--dim);
+}
+
+.evidence-tip-quote {
+  flex-basis: 100%;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- フィード: 場所以下を畳む ---------- */
+.msg-attachment-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: 12px;
+  color: var(--dim);
+  cursor: pointer;
+  list-style: none;
+}
+
+.msg-attachment-summary::-webkit-details-marker {
+  display: none;
+}
+
+.msg-attachment-summary:hover {
+  color: var(--ink);
+}
+
+.msg-attachment-chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.msg-attachment[open] .msg-attachment-chevron {
+  transform: rotate(90deg);
+}
+
+.msg-attachment-lead {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-attachment-hint {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.msg-attachment-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+/* ---------- カレンダー: 登録した予定の削除 ---------- */
+.calendar > .filters {
+  margin-bottom: 12px;
+}
+
+.agenda-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.agenda-item .agenda-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.agenda-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.agenda-delete svg {
+  width: 16px;
+  height: 16px;
+}
+
+.agenda-delete:hover {
+  color: var(--deadline);
+  border-color: var(--deadline);
+}
+
+.agenda-confirm {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.agenda-confirm span {
+  flex: 1;
+  min-width: 10em;
+}
+
+.agenda-confirm .button {
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.button.button-danger {
+  background: var(--deadline);
+  border-color: var(--deadline);
+  color: var(--paper);
+}
+
+/* ---------- 自分のアイコン ---------- */
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #4a4d55;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-sm {
+  width: 30px;
+  height: 30px;
   font-size: 13px;
 }
 
-/* ---------- 利用者が登録したページ（ADR-014） ---------- */
-.register-card {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 26px;
 }
 
-.register-card .fine {
+.avatar-icon {
+  width: 60%;
+  height: 60%;
+}
+
+.topbar-account {
+  flex: none;
+  display: inline-flex;
+  border-radius: 999px;
+}
+
+.topbar-account:hover .avatar {
+  box-shadow: 0 0 0 2px var(--line-strong);
+}
+
+@media (max-width: 599px) {
+  .topbar-account {
+    margin-left: auto;
+  }
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.account-avatar-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* ---------- ログイン（モック） ---------- */
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px var(--gutter);
+  background: var(--paper);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-brand {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.login-brand img {
+  border-radius: 6px;
+}
+
+.login h1 {
+  margin: 8px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-form label {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.login-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 16px;
+  background: var(--paper);
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.login-form .button {
+  margin-top: 10px;
+}
+
+.login .sheet-warn,
+.login .fine {
+  margin: 0;
+}
+
+.setting-row .button {
+  flex: none;
+  min-height: 34px;
+  font-size: 12px;
 }

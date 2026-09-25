@@ -1,8 +1,8 @@
 /**
  * S-01 ホーム / S-04 保存済み。
  *
- * 一覧の最上部にエージェントへの入力欄を置く。文字を打つとその場で一覧が
- * 絞り込まれ、「探す」で同じ文をエージェントに送る。専用のチャット画面は無い。
+ * 一覧の最上部にエージェントへの入力欄を置く。虫メガネで同じ文をエージェントに送る。
+ * 左の「Web」を入れておくと、同じ文で Google 検索（ADR-014）もかける。専用のチャット画面は無い。
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,7 +12,7 @@ import { EventCard } from '../components/EventCard'
 import { CalendarSheet } from '../components/CalendarSheet'
 import { SearchActivityPanel } from '../components/SearchActivityPanel'
 import { WebSearchCard } from '../components/WebSearchCard'
-import { RegisterPageCard } from '../components/RegisterPageCard'
+import { GlobeIcon, SearchIcon } from '../components/Icon'
 import { searchTheWeb } from '../api/client'
 import type { Event, EventKind, WebSearchResponse } from '../types/api'
 
@@ -49,6 +49,7 @@ export function EventListScreen({ mode }: Props) {
     loadError,
     saved,
     calendar,
+    calendarCounts,
     query,
     setQuery,
     agentReply,
@@ -71,7 +72,8 @@ export function EventListScreen({ mode }: Props) {
     error: string | null
   }>({ result: null, pending: false, error: null })
   const webSession = useRef<string | undefined>(undefined)
-  const [registering, setRegistering] = useState(false)
+  // Web 検索は既定で切っておく。検索グラウンディングは 1 回ごとに費用がかかる
+  const [webOn, setWebOn] = useState(false)
 
   const onWebSearch = async () => {
     const text = query.trim()
@@ -157,6 +159,7 @@ export function EventListScreen({ mode }: Props) {
   const onAsk = (event: FormEvent) => {
     event.preventDefault()
     void ask(query)
+    if (webOn) void onWebSearch()
   }
 
   return (
@@ -165,9 +168,6 @@ export function EventListScreen({ mode }: Props) {
         {/* 保存済みは自分で選んだイベントを見返す画面。探索の入力欄は要らない */}
         {mode === 'home' && (
           <form className="ask" onSubmit={onAsk}>
-            <span className="ask-mark" aria-hidden="true">
-              ›
-            </span>
             <label className="sr-only" htmlFor="ask-input">
               条件やエージェントへの問いかけ
             </label>
@@ -178,32 +178,33 @@ export function EventListScreen({ mode }: Props) {
               placeholder="どんなイベント？（例：京都で来月 学生向け 生成AI）"
               autoComplete="off"
             />
-            <button type="submit" disabled={agentPending} className={agentPending ? 'is-busy' : ''}>
-              {agentPending && <span className="spinner spinner-sm" aria-hidden="true" />}
-              {agentPending ? '探索中' : '探す'}
+            {/* 入れておくと、収集済みの一覧とは別に Google 検索でも Web を調べる。結果は本人にだけ出し、保存しない */}
+            <button
+              type="button"
+              className={`ask-web${webOn ? ' is-on' : ''}`}
+              aria-pressed={webOn}
+              title={webOn ? 'Web 検索: オン' : 'Web 検索: オフ'}
+              onClick={() => setWebOn((on) => !on)}
+            >
+              <GlobeIcon className="ask-icon" />
+              <span>Web</span>
+            </button>
+            <button
+              type="submit"
+              className={`ask-submit${agentPending ? ' is-busy' : ''}`}
+              disabled={agentPending || (webOn && web.pending)}
+              aria-label={agentPending ? '探索中' : webOn ? '一覧と Web を探す' : '探す'}
+              title="探す"
+            >
+              {agentPending ? (
+                <span className="spinner spinner-sm" aria-hidden="true" />
+              ) : (
+                <SearchIcon className="ask-icon" />
+              )}
             </button>
           </form>
         )}
 
-        {mode === 'home' && (
-          <div className="list-actions">
-            {/* 収集済みの一覧とは別に、Google 検索で Web を調べる。結果は本人にだけ出し、保存しない */}
-            <button
-              type="button"
-              className="button"
-              onClick={() => void onWebSearch()}
-              disabled={!query.trim() || web.pending}
-            >
-              Google 検索で Web からも探す
-            </button>
-            <button type="button" className="button" onClick={() => setRegistering((open) => !open)}>
-              ＋ イベントのページを登録
-            </button>
-          </div>
-        )}
-        {mode === 'home' && registering && (
-          <RegisterPageCard onClose={() => setRegistering(false)} onAdded={() => void refresh()} />
-        )}
         {mode === 'home' && (
           <WebSearchCard
             result={web.result}
@@ -372,6 +373,7 @@ export function EventListScreen({ mode }: Props) {
                 event={event}
                 saved={Boolean(saved[event.eventId])}
                 calendar={calendar[event.eventId]}
+                calendarCount={calendarCounts[event.eventId] ?? 0}
                 onToggleSaved={toggleSaved}
                 onOpenCalendar={setSheetEvent}
               />

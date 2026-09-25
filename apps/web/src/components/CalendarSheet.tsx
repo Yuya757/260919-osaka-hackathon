@@ -13,6 +13,7 @@ import type { Event } from '../types/api'
 import { canRegisterDeadline, deadlineLabel, heldLabel } from '../lib/eventView'
 import { BottomSheet } from './BottomSheet'
 import { CheckIcon } from './Icon'
+import { useSession } from './Avatar'
 
 type Props = {
   event: Event | null
@@ -27,6 +28,7 @@ export function CalendarSheet({ event, onClose, onConfirm }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const session = useSession()
 
   useEffect(() => {
     setDeadline(deadlineAvailable)
@@ -121,7 +123,7 @@ export function CalendarSheet({ event, onClose, onConfirm }: Props) {
 
           <div className="sheet-row">
             <span>登録先</span>
-            <span className="muted">yuya@example.com（モック）</span>
+            <span className="muted">{session?.email ?? '未ログイン'}（モック）</span>
           </div>
 
           <p className="sheet-warn">

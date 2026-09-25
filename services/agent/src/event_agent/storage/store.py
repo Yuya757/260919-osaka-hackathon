@@ -252,6 +252,16 @@ class Store(Protocol):
 
     def get_event_metrics(self, event_id: str) -> EventMetrics | None: ...
 
+    def add_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        """Count ``user_id`` as having registered the event. Idempotent.
+        Returns the event's registrant count afterwards."""
+
+    def remove_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        """Stop counting ``user_id``. A no-op if they were not counted."""
+
+    def list_calendar_counts(self) -> dict[str, int]:
+        """Registrants per event, omitting events with none."""
+
     def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
         """Claim ``count`` searches against the day's cap (ADR-008 決定5).
 
@@ -323,6 +333,7 @@ class MemoryStore:
         self._evidence: dict[tuple[str, str], Evidence] = {}
         self._posts: dict[str, OrganizerPost] = {}
         self._metrics: dict[str, EventMetrics] = {}
+        self._registrants: dict[str, set[str]] = {}
         self._usage: dict[str, UsageRecord] = {}
         self._search_activity: dict[str, list[SearchActivity]] = {}
         self._claims: dict[str, EventClaim] = {}
@@ -341,6 +352,7 @@ class MemoryStore:
             self._evidence.clear()
             self._posts.clear()
             self._metrics.clear()
+            self._registrants.clear()
             self._usage.clear()
             self._search_activity.clear()
             self._claims.clear()
@@ -622,6 +634,22 @@ class MemoryStore:
     def get_event_metrics(self, event_id: str) -> EventMetrics | None:
         with self._lock:
             return self._metrics.get(event_id)
+
+    def add_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        with self._lock:
+            users = self._registrants.setdefault(event_id, set())
+            users.add(user_id)
+            return len(users)
+
+    def remove_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        with self._lock:
+            users = self._registrants.get(event_id, set())
+            users.discard(user_id)
+            return len(users)
+
+    def list_calendar_counts(self) -> dict[str, int]:
+        with self._lock:
+            return {key: len(users) for key, users in self._registrants.items() if users}
 
 
 def create_store() -> Store:

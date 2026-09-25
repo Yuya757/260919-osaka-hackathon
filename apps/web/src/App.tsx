@@ -16,10 +16,15 @@ import { FeedScreen } from './screens/FeedScreen'
 import { PostFormScreen } from './screens/PostFormScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { LoginScreen } from './screens/LoginScreen'
+import { useSession } from './components/Avatar'
 
 export default function App() {
+  // ログイン（モック）するまでは中に入れない。利用者が替わったら状態を作り直す
+  const session = useSession()
+  if (!session) return <LoginScreen />
   return (
-    <AppStateProvider>
+    <AppStateProvider key={session.userId} userId={session.userId}>
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell />}>

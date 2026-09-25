@@ -1,9 +1,97 @@
 /** S-05 設定 */
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/AppState'
 import { loadHomeStation, saveHomeStation } from '../lib/homeStation'
 import { loadProfile, summarizeProfile } from '../lib/profile'
+import { ACCOUNT_NAME_MAX, logOut, resizeAvatar, saveAccount, type Account } from '../lib/account'
+import { Avatar, useAccount, useSession } from '../components/Avatar'
+
+/** 自分のアイコンと表示名。この端末にだけ保存する */
+function AccountCard() {
+  const saved = useAccount()
+  const [draft, setDraft] = useState<Account>(saved)
+  const [message, setMessage] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const changed = draft.name.trim() !== saved.name || draft.avatar !== saved.avatar
+
+  const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const avatar = await resizeAvatar(file)
+      setDraft((current) => ({ ...current, avatar }))
+      setMessage('')
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : '画像を読み込めませんでした。')
+    }
+  }
+
+  const onSave = (event: FormEvent) => {
+    event.preventDefault()
+    if (!saveAccount(draft)) {
+      setMessage('ブラウザに保存できませんでした。プライベートウィンドウでは保存されません。')
+      return
+    }
+    setMessage('アイコンと名前を保存しました。')
+  }
+
+  return (
+    <form className="profile-card account-card" onSubmit={onSave}>
+      <div className="account-row">
+        <Avatar account={draft} size="lg" />
+        <div className="account-avatar-actions">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            id="account-avatar"
+            onChange={(event) => void onPick(event)}
+          />
+          <button type="button" className="button" onClick={() => fileRef.current?.click()}>
+            {draft.avatar ? 'アイコンを変える' : 'アイコンを選ぶ'}
+          </button>
+          {draft.avatar && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setDraft((current) => ({ ...current, avatar: null }))}
+            >
+              アイコンを外す
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="route-form">
+        <label className="sr-only" htmlFor="account-name">
+          表示名
+        </label>
+        <input
+          id="account-name"
+          value={draft.name}
+          placeholder="表示名（例: ゆうや）"
+          maxLength={ACCOUNT_NAME_MAX}
+          autoComplete="nickname"
+          onChange={(event) => {
+            setDraft((current) => ({ ...current, name: event.target.value }))
+            setMessage('')
+          }}
+        />
+        <button type="submit" disabled={!changed}>
+          保存
+        </button>
+      </div>
+      {message && (
+        <p className="fine" role="status">
+          {message}
+        </p>
+      )}
+      <p className="fine">アイコンと名前はこの端末にだけ保存し、サーバーには送信しません。</p>
+    </form>
+  )
+}
 
 /** 最寄駅の登録。経路検索で出発駅として最初から入る */
 function HomeStationCard() {
@@ -61,6 +149,7 @@ function HomeStationCard() {
 export function SettingsScreen() {
   const { run, calendar } = useAppState()
   const navigate = useNavigate()
+  const session = useSession()
   const { profile, notice } = loadProfile()
   const registeredCount = Object.keys(calendar).length
 
@@ -70,6 +159,7 @@ export function SettingsScreen() {
 
       <section className="settings-section">
         <p className="eyebrow">プロフィール</p>
+        <AccountCard />
         <div className="profile-card">
           <p className="profile-summary">
             {profile
@@ -92,10 +182,12 @@ export function SettingsScreen() {
         <p className="eyebrow">アカウントと連携</p>
         <div className="setting-row">
           <span className="setting-key">
-            Yuya Kaneko
-            <small>yuya@example.com</small>
+            ログイン中（モック）
+            <small>{session?.email}</small>
           </span>
-          <span className="setting-state">モック</span>
+          <button type="button" className="button" onClick={logOut}>
+            ログアウト
+          </button>
         </div>
         <div className="setting-row">
           <span className="setting-key">

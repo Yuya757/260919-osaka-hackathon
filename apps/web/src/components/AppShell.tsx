@@ -4,7 +4,8 @@
  * ナビはアイコン付き。スマホでは画面の下にタブとして並べ、指で押しやすくする。
  */
 import type { ComponentType } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Avatar, useAccount } from './Avatar'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { BookmarkIcon, CalendarIcon, FeedIcon, HomeIcon, SettingsIcon } from './Icon'
 
@@ -17,6 +18,7 @@ const NAV: [string, string, ComponentType<{ className?: string }>][] = [
 ]
 
 export function AppShell() {
+  const account = useAccount()
   return (
     <div className="app">
       <header className="topbar">
@@ -33,6 +35,14 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
+          <Link
+            to="/settings"
+            className="topbar-account"
+            aria-label={account.name ? `${account.name}のプロフィール` : 'プロフィールを設定'}
+            title={account.name || 'プロフィールを設定'}
+          >
+            <Avatar account={account} />
+          </Link>
         </div>
       </header>
       <main className="page">

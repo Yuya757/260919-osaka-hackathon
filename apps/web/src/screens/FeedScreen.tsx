@@ -32,6 +32,8 @@ import {
 import { loadProfile } from '../lib/profile'
 import { DualDateBlock } from '../components/DualDateBlock'
 import { CalendarSheet } from '../components/CalendarSheet'
+import { ChevronIcon } from '../components/Icon'
+import { RegisteredCount } from '../components/RegisteredCount'
 import type { Event, OrganizerPost } from '../types/api'
 
 /** 定員と申込人数。両方あれば埋まり具合を棒で見せる */
@@ -71,8 +73,17 @@ function CapacityLine({ capacity }: { capacity: Capacity }) {
 }
 
 export function FeedScreen() {
-  const { posts, postsState, postsError, refreshPosts, saved, calendar, toggleSaved, register } =
-    useAppState()
+  const {
+    posts,
+    postsState,
+    postsError,
+    refreshPosts,
+    saved,
+    calendar,
+    calendarCounts,
+    toggleSaved,
+    register,
+  } = useAppState()
   const [sheetEvent, setSheetEvent] = useState<Event | null>(null)
   const navigate = useNavigate()
   const profile = useMemo(() => loadProfile().profile, [])
@@ -142,8 +153,15 @@ export function FeedScreen() {
           </button>
           {summary && <p className="msg-text">{summary}</p>}
 
-          {/* Slack の添付のように、日程と会場と定員を左の線で束ねる */}
-          <div className="msg-attachment">
+          {/* Slack の添付のように、日程と会場と定員を左の線で束ねる。流れを追いやすいよう普段は畳む */}
+          <details className="msg-attachment">
+            <summary className="msg-attachment-summary">
+              <ChevronIcon className="msg-attachment-chevron" />
+              <span className="msg-attachment-lead">{placeLabel(event)}</span>
+              <span className="msg-attachment-hint">場所・日程{capacity ? '・定員' : ''}</span>
+              {partial && <span className="tag">要確認</span>}
+            </summary>
+            <div className="msg-attachment-body">
             <p className="msg-meta">
               {placeLabel(event)} · {formatLocationType(event.location.type)} ·{' '}
               <a
@@ -153,11 +171,11 @@ export function FeedScreen() {
               >
                 {hostOf(post.contactUrl)}
               </a>
-              {partial && <span className="tag">要確認</span>}
             </p>
             <DualDateBlock event={event} />
             {capacity && <CapacityLine capacity={capacity} />}
-          </div>
+            </div>
+          </details>
 
           {(hits.length > 0 || (!bot && post.linkedEventId)) && (
             <p className="msg-notes">
@@ -186,6 +204,7 @@ export function FeedScreen() {
             >
               {registered ? '登録済' : '登録'}
             </button>
+            <RegisteredCount count={calendarCounts[event.eventId] ?? 0} />
           </div>
         </div>
       </article>
