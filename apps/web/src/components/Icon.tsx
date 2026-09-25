@@ -66,3 +66,48 @@ export function SettingsIcon(p: IconProps) {
     </svg>
   )
 }
+
+// ---- 操作 ----
+
+export function SearchIcon(p: IconProps) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="m15 15 5 5" />
+    </svg>
+  )
+}
+
+export function GlobeIcon(p: IconProps) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M4 12h16M12 4c2.2 2.3 3.2 5 3.2 8s-1 5.7-3.2 8c-2.2-2.3-3.2-5-3.2-8s1-5.7 3.2-8z" />
+    </svg>
+  )
+}
+
+export function TrashIcon(p: IconProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />
+    </svg>
+  )
+}
+
+export function ChevronIcon(p: IconProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  )
+}
+
+export function UserIcon(p: IconProps) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="9" r="3.5" />
+      <path d="M5.5 19.5c1.2-3.2 3.6-4.8 6.5-4.8s5.3 1.6 6.5 4.8" />
+    </svg>
+  )
+}

@@ -343,6 +343,9 @@ export type EventMetrics = {
   updatedAt?: string | null
 }
 
+/** packages/contracts/schemas/organizer-post.json#CalendarCountsResponse */
+export type CalendarCountsResponse = { counts: Record<string, number> }
+
 export type PostMetricsResponse = {
   postId: string
   eventId: string

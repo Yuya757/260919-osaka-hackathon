@@ -18,6 +18,7 @@ import {
 import {
   AgentRunPendingError,
   createOrganizerPost,
+  getCalendarCounts,
   getHealth,
   listEvents,
   postEventMetric,
@@ -75,6 +76,8 @@ type AppState = {
   runPending: boolean
   saved: Record<string, boolean>
   calendar: Record<string, GoogleCalendarEventIds>
+  /** イベントごとのカレンダー登録数（全利用者の合計）。「N人が登録」に使う */
+  calendarCounts: Record<string, number>
   /** 一覧の絞り込み文字列。ホームと保存で共有する */
   query: string
   setQuery: (query: string) => void
@@ -125,6 +128,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [calendar, setCalendar] = useState<Record<string, GoogleCalendarEventIds>>(() =>
     loadRegistrations(),
   )
+  const [calendarCounts, setCalendarCounts] = useState<Record<string, number>>({})
+  const calendarRef = useRef(calendar)
+  calendarRef.current = calendar
   const [query, setQuery] = useState('')
   const [agentReply, setAgentReply] = useState<AgentReply | null>(null)
   const [agentPending, setAgentPending] = useState(false)
@@ -183,6 +189,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh()
     void refreshPosts()
+    getCalendarCounts()
+      .then((result) => setCalendarCounts(result.counts))
+      .catch(() => {
+        // 人数が読めなくても一覧は出す。人数の表示が無くなるだけ
+      })
   }, [refresh, refreshPosts])
 
   useEffect(() => {
@@ -312,8 +323,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (event: Event, selection: CalendarSelection) => {
+    // 登録内容の変更は新しい登録として数えない。数えると「N人が登録」が水増しになる
+    const first = !calendarRef.current[event.eventId]
     const ids = await registerToCalendar(event, selection)
     setCalendar((current) => ({ ...current, [event.eventId]: ids }))
+    if (!first) return
+    setCalendarCounts((current) => ({
+      ...current,
+      [event.eventId]: (current[event.eventId] ?? 0) + 1,
+    }))
     // 成果の計測（ADR-009）。計測に失敗しても登録は済んでいるので無視する
     postEventMetric(event.eventId, 'calendar').catch(() => undefined)
   }, [])
@@ -354,6 +372,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       runPending,
       saved,
       calendar,
+      calendarCounts,
       query,
       setQuery,
       agentReply,
@@ -383,6 +402,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       runPending,
       saved,
       calendar,
+      calendarCounts,
       query,
       agentReply,
       agentPending,

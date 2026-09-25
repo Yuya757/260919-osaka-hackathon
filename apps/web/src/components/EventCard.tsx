@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import type { Event, GoogleCalendarEventIds } from '../types/api'
 import {
   formatLocationType,
-  hostOf,
   isCalendarRegistered,
   kindLabel,
   needsCheck,
@@ -11,19 +10,32 @@ import {
 } from '../lib/eventView'
 import { DualDateBlock } from './DualDateBlock'
 import { ScoreRing } from './ScoreRing'
+import { EvidenceTip } from './EvidenceTip'
+import { RegisteredCount } from './RegisteredCount'
 
 type Props = {
   event: Event
   saved: boolean
   calendar?: GoogleCalendarEventIds
+  /** 全利用者のカレンダー登録数 */
+  calendarCount?: number
   onToggleSaved: (eventId: string) => void
   onOpenCalendar: (event: Event) => void
 }
 
-export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalendar }: Props) {
+export function EventCard({
+  event,
+  saved,
+  calendar,
+  calendarCount = 0,
+  onToggleSaved,
+  onOpenCalendar,
+}: Props) {
   const navigate = useNavigate()
   const partial = needsCheck(event)
   const registered = isCalendarRegistered(calendar)
+  // 根拠（出典と引用）。締切 → 開催日の順で最大2件。全文は詳細で
+  const evidence = (event.evidencePreview ?? []).slice(0, 2)
 
   return (
     <article
@@ -54,22 +66,12 @@ export function EventCard({ event, saved, calendar, onToggleSaved, onOpenCalenda
         {event.recommendation?.reason && (
           <p className="row-reason">{event.recommendation.reason}</p>
         )}
-        {/* 根拠（出典と引用）。締切 → 開催日の順で最大2件。全文は詳細で */}
-        {(event.evidencePreview ?? []).slice(0, 2).map((item) => (
-          <p className="row-evidence" key={`${item.sourceUrl}-${item.excerpt}`}>
-            <span className="row-evidence-field">
-              {item.supports.includes('dates.applicationDeadline')
-                ? '締切の根拠'
-                : item.supports.includes('dates.eventStart')
-                  ? '開催日の根拠'
-                  : '根拠'}
-            </span>
-            <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
-              {hostOf(item.sourceUrl)}
-            </a>
-            <span className="row-evidence-quote">「{item.excerpt}」</span>
+        {(evidence.length > 0 || calendarCount > 0) && (
+          <p className="row-foot">
+            {calendarCount > 0 && <RegisteredCount count={calendarCount} />}
+            {evidence.length > 0 && <EvidenceTip items={evidence} />}
           </p>
-        ))}
+        )}
       </div>
 
       {event.recommendation && <ScoreRing score={event.recommendation.score} />}
