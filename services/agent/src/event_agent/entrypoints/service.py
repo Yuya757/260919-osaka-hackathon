@@ -54,6 +54,7 @@ from event_agent.schemas import (
     PostMetricsResponse,
     MetricEventRequest,
     CalendarCountsResponse,
+    RegistrantCountResponse,
     preview_evidence,
 )
 from event_agent.storage.store import store
@@ -532,8 +533,33 @@ async def record_event_metric(event_id: str, body: MetricEventRequest) -> Respon
 
 @app.get("/api/calendar-counts", response_model=CalendarCountsResponse)
 async def get_calendar_counts() -> CalendarCountsResponse:
-    """イベントごとのカレンダー登録数。一覧で「N人が登録」と見せる（食べログの保存数のように）。"""
+    """イベントごとのカレンダー登録人数。一覧で「N人が登録」と見せる（食べログの保存数のように）。"""
     return CalendarCountsResponse(counts=store.list_calendar_counts())
+
+
+# ログインはモック（メールアドレスから端末で作った ID）。本人確認は無いので、
+# ID は「同じ人を 2 回数えない」ための目印でしかない。形だけは確かめる
+USER_ID_PATTERN = r"^u-[0-9a-f]{24}$"
+
+
+@app.put("/api/events/{event_id}/registrants/{user_id}", response_model=RegistrantCountResponse)
+async def add_registrant(
+    event_id: str, user_id: str = Path(pattern=USER_ID_PATTERN)
+) -> RegistrantCountResponse:
+    """カレンダーに登録した利用者として数える。同じ利用者は何度呼んでも 1 人。"""
+    if not _find_event(event_id):
+        raise HTTPException(status_code=404, detail="Event not found")
+    count = store.add_calendar_registrant(event_id, user_id)
+    return RegistrantCountResponse(eventId=event_id, count=count)
+
+
+@app.delete("/api/events/{event_id}/registrants/{user_id}", response_model=RegistrantCountResponse)
+async def remove_registrant(
+    event_id: str, user_id: str = Path(pattern=USER_ID_PATTERN)
+) -> RegistrantCountResponse:
+    """登録を消した利用者を人数から外す。イベントが一覧から消えていても外せるようにする。"""
+    count = store.remove_calendar_registrant(event_id, user_id)
+    return RegistrantCountResponse(eventId=event_id, count=count)
 
 
 @app.get("/api/organizer-posts/{post_id}/metrics", response_model=PostMetricsResponse)

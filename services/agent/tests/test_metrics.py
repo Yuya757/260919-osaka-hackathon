@@ -115,11 +115,36 @@ def test_admin_cli(store_backend, capsys):
     assert store_backend.get_organizer_post(post.post_id).status == "hidden"
 
 
-def test_calendar_counts_list_only_registered_events(store_backend):
+USER_A = "u-" + "a" * 24
+USER_B = "u-" + "b" * 24
+
+
+def test_registrants_count_each_user_once(store_backend):
     store = store_backend
-    store.increment_event_metric("evt-a", "calendar", jst_date="2026-09-25")
-    store.increment_event_metric("evt-a", "calendar", jst_date="2026-09-26")
-    store.increment_event_metric("evt-b", "official", jst_date="2026-09-25")
+    assert store.add_calendar_registrant("evt-a", USER_A) == 1
+    assert store.add_calendar_registrant("evt-a", USER_A) == 1
+    assert store.add_calendar_registrant("evt-a", USER_B) == 2
+    assert store.add_calendar_registrant("evt-b", USER_A) == 1
+    assert store.remove_calendar_registrant("evt-b", USER_A) == 0
+    assert store.remove_calendar_registrant("evt-b", USER_A) == 0
+    # クリックの計測は人数に入らない
+    store.increment_event_metric("evt-c", "official", jst_date="2026-09-25")
     assert store.list_calendar_counts() == {"evt-a": 2}
-    response = TestClient(app).get("/api/calendar-counts")
-    assert response.status_code == 200 and response.json() == {"counts": {"evt-a": 2}}
+
+
+def test_registrant_api(store_backend):
+    client = TestClient(app)
+    event_id = make_post().event.event_id
+    assert client.put(f"/api/events/no-such-event/registrants/{USER_A}").status_code == 404
+    # 形の違う ID は数えない
+    assert client.put(f"/api/events/{event_id}/registrants/not-a-user").status_code == 422
+
+    for user in (USER_A, USER_A, USER_B):
+        response = client.put(f"/api/events/{event_id}/registrants/{user}")
+        assert response.status_code == 200
+    assert response.json() == {"eventId": event_id, "count": 2}
+    assert client.get("/api/calendar-counts").json() == {"counts": {event_id: 2}}
+
+    response = client.delete(f"/api/events/{event_id}/registrants/{USER_A}")
+    assert response.status_code == 200 and response.json() == {"eventId": event_id, "count": 1}
+    assert client.get("/api/calendar-counts").json() == {"counts": {event_id: 1}}

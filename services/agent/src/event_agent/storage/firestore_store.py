@@ -10,6 +10,7 @@ Collection layout, taken from the data requirements:
 ``appState/latestRun``                      pointer used by ``list_events(None)``
 ``organizerPosts/{postId}``                 F-06 organizer post (ADR-006)
 ``eventMetrics/{eventId}``                  clicks and calendar registrations (ADR-009)
+``calendarRegistrants/{eventId}``           who registered it, for "N人が登録"
 
 Two of those collections are not in §7. ``agentRunKeys`` exists because §9.3
 requires a manual run to be idempotent on the client's ``Idempotency-Key``, and
@@ -65,6 +66,8 @@ APP_STATE = "appState"
 LATEST_RUN_DOC = "latestRun"
 ORGANIZER_POSTS = "organizerPosts"
 EVENT_METRICS = "eventMetrics"
+# 「N人が登録」。同じ利用者を 2 回数えないよう、利用者 ID の集合で持つ
+CALENDAR_REGISTRANTS = "calendarRegistrants"
 USAGE = "usage"
 # 探索中の動き（ADR-010）。expiresAt に TTL ポリシーを掛ければ自動で消える
 SEARCH_ACTIVITY = "searchActivity"
@@ -123,7 +126,7 @@ class FirestoreStore:
             raise RuntimeError(
                 "FirestoreStore.reset() is only allowed against the emulator"
             )
-        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS, WATCHED_PAGES):
+        for name in (RUNS, RUN_KEYS, EVENTS, SESSIONS, APP_STATE, ORGANIZER_POSTS, EVENT_METRICS, CALENDAR_REGISTRANTS, USAGE, SEARCH_ACTIVITY, EVENT_CLAIMS, QUOTAS, WATCHED_PAGES):
             for doc in self._db.collection(name).stream():
                 for sub in doc.reference.collections():
                     for child in sub.stream():
@@ -444,18 +447,53 @@ class FirestoreStore:
             return None
         return EventMetrics(**(snapshot.to_dict() or {}))
 
+    def _update_registrants(self, event_id: str, user_id: str, *, add: bool) -> int:
+        from google.cloud import firestore
+
+        ref = self._db.collection(CALENDAR_REGISTRANTS).document(event_id)
+
+        # 集合と人数を同じ書き込みで揃える。同時に登録されても人数がずれない
+        @firestore.transactional
+        def apply(transaction: Any) -> int:
+            snapshot = ref.get(transaction=transaction)
+            users = set((snapshot.to_dict() or {}).get("users", [])) if snapshot.exists else set()
+            before = len(users)
+            if add:
+                users.add(user_id)
+            else:
+                users.discard(user_id)
+            if len(users) != before:
+                transaction.set(
+                    ref,
+                    {
+                        "eventId": event_id,
+                        "users": sorted(users),
+                        "count": len(users),
+                        "updatedAt": datetime.now(timezone.utc),
+                    },
+                )
+            return len(users)
+
+        return apply(self._db.transaction())
+
+    def add_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        return self._update_registrants(event_id, user_id, add=True)
+
+    def remove_calendar_registrant(self, event_id: str, user_id: str) -> int:
+        return self._update_registrants(event_id, user_id, add=False)
+
     def list_calendar_counts(self) -> dict[str, int]:
         from google.cloud.firestore_v1.base_query import FieldFilter
 
-        # 登録のあったイベントだけを読む。日別の内訳は要らないので calendar だけを取る
+        # 1 人以上いるイベントだけを読む。利用者 ID の一覧は要らないので count だけを取る
         query = (
-            self._db.collection(EVENT_METRICS)
-            .where(filter=FieldFilter("calendar", ">", 0))
-            .select(["calendar"])
+            self._db.collection(CALENDAR_REGISTRANTS)
+            .where(filter=FieldFilter("count", ">", 0))
+            .select(["count"])
         )
         counts: dict[str, int] = {}
         for snapshot in query.stream():
-            value = (snapshot.to_dict() or {}).get("calendar", 0)
+            value = (snapshot.to_dict() or {}).get("count", 0)
             if isinstance(value, int) and value > 0:
                 counts[snapshot.id] = value
         return counts

@@ -181,12 +181,22 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["counts"],
-      "description": "イベントごとのカレンダー登録数（「N人が登録」の表示用）。0 件のイベントは含めない",
+      "description": "イベントごとのカレンダー登録人数（「N人が登録」の表示用）。同じ利用者は 1 人と数え、0 人のイベントは含めない",
       "properties": {
         "counts": {
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 1 }
         }
+      }
+    },
+    "RegistrantCountResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "count"],
+      "description": "PUT / DELETE /api/events/{eventId}/registrants/{userId} の応答。操作後の登録人数",
+      "properties": {
+        "eventId": { "type": "string" },
+        "count": { "type": "integer", "minimum": 0 }
       }
     },
     "OrganizerPostListResponse": {

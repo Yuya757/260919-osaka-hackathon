@@ -580,9 +580,18 @@ class MetricEventRequest(BaseModel):
 
 
 class CalendarCountsResponse(BaseModel):
-    """イベントごとのカレンダー登録数。一覧の「N人が登録」に使う。0 件は含めない。"""
+    """イベントごとのカレンダー登録人数。一覧の「N人が登録」に使う。0 人は含めない。"""
 
     counts: dict[str, int]
+
+
+class RegistrantCountResponse(BaseModel):
+    """登録・取り消しの後の、そのイベントの登録人数。"""
+
+    event_id: str = Field(alias="eventId")
+    count: int = Field(ge=0)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class OrganizerPostPreviewResponse(BaseModel):
