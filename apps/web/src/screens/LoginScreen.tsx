@@ -1,17 +1,18 @@
 /**
  * ログイン（モック）。認証はまだ無いので、メールアドレスと表示名だけで入る。
- * パスワードも本人確認も無い。利用者 ID はメールアドレスから決まり、
+ * デモ用のボブが最初から入っているので、そのまま押せば入れる。パスワードも本人確認も無い。利用者 ID はメールアドレスから決まり、
  * 「N人が登録」で同じ人を 2 回数えないための目印にだけ使う。
  */
 import { useState, type FormEvent } from 'react'
 import { ACCOUNT_NAME_MAX, isValidEmail, logIn } from '../lib/account'
 
-const DEMO_EMAIL = 'demo@example.com'
+// デモですぐ入れるよう、最初から入れておく。書き換えれば別の利用者で入れる
+const DEMO_EMAIL = 'bob@example.com'
 const DEMO_NAME = 'ボブ'
 
 export function LoginScreen() {
-  const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
+  const [email, setEmail] = useState(DEMO_EMAIL)
+  const [name, setName] = useState(DEMO_NAME)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
 
@@ -79,14 +80,6 @@ export function LoginScreen() {
             {pending ? 'ログインしています…' : 'ログイン'}
           </button>
         </form>
-        <button
-          type="button"
-          className="button wide"
-          disabled={pending}
-          onClick={() => void enter(DEMO_EMAIL, DEMO_NAME)}
-        >
-          デモ用アカウントで試す
-        </button>
         <p className="fine">
           メールアドレスはこの端末にだけ保存します。サーバーには、メールアドレスから作った利用者 ID
           （カレンダー登録の人数を数えるための目印）だけを送ります。
