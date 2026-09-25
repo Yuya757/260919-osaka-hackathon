@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react'
 import { ACCOUNT_NAME_MAX, isValidEmail, logIn } from '../lib/account'
 
 const DEMO_EMAIL = 'demo@example.com'
+const DEMO_NAME = 'ボブ'
 
 export function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -82,7 +83,7 @@ export function LoginScreen() {
           type="button"
           className="button wide"
           disabled={pending}
-          onClick={() => void enter(DEMO_EMAIL, 'デモユーザー')}
+          onClick={() => void enter(DEMO_EMAIL, DEMO_NAME)}
         >
           デモ用アカウントで試す
         </button>
