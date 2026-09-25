@@ -177,6 +177,18 @@
       "required": ["kind"],
       "properties": { "kind": { "type": "string", "enum": ["calendar"] } }
     },
+    "CalendarCountsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counts"],
+      "description": "イベントごとのカレンダー登録数（「N人が登録」の表示用）。0 件のイベントは含めない",
+      "properties": {
+        "counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
     "OrganizerPostListResponse": {
       "type": "object",
       "additionalProperties": false,

@@ -444,6 +444,22 @@ class FirestoreStore:
             return None
         return EventMetrics(**(snapshot.to_dict() or {}))
 
+    def list_calendar_counts(self) -> dict[str, int]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        # 登録のあったイベントだけを読む。日別の内訳は要らないので calendar だけを取る
+        query = (
+            self._db.collection(EVENT_METRICS)
+            .where(filter=FieldFilter("calendar", ">", 0))
+            .select(["calendar"])
+        )
+        counts: dict[str, int] = {}
+        for snapshot in query.stream():
+            value = (snapshot.to_dict() or {}).get("calendar", 0)
+            if isinstance(value, int) and value > 0:
+                counts[snapshot.id] = value
+        return counts
+
     # ------------------------------------------------------------------ usage
 
     def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:

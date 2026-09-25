@@ -53,6 +53,7 @@ from event_agent.schemas import (
     PoolSearchResponse,
     PostMetricsResponse,
     MetricEventRequest,
+    CalendarCountsResponse,
     preview_evidence,
 )
 from event_agent.storage.store import store
@@ -527,6 +528,12 @@ async def record_event_metric(event_id: str, body: MetricEventRequest) -> Respon
         raise HTTPException(status_code=404, detail="Event not found")
     store.increment_event_metric(event_id, body.kind, jst_date=_jst_date(datetime.now(timezone.utc)))
     return Response(status_code=204)
+
+
+@app.get("/api/calendar-counts", response_model=CalendarCountsResponse)
+async def get_calendar_counts() -> CalendarCountsResponse:
+    """イベントごとのカレンダー登録数。一覧で「N人が登録」と見せる（食べログの保存数のように）。"""
+    return CalendarCountsResponse(counts=store.list_calendar_counts())
 
 
 @app.get("/api/organizer-posts/{post_id}/metrics", response_model=PostMetricsResponse)

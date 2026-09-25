@@ -113,3 +113,13 @@ def test_admin_cli(store_backend, capsys):
     assert admin_main(["confirm", "missing"]) == 2
     assert admin_main(["hide", post.post_id]) == 0
     assert store_backend.get_organizer_post(post.post_id).status == "hidden"
+
+
+def test_calendar_counts_list_only_registered_events(store_backend):
+    store = store_backend
+    store.increment_event_metric("evt-a", "calendar", jst_date="2026-09-25")
+    store.increment_event_metric("evt-a", "calendar", jst_date="2026-09-26")
+    store.increment_event_metric("evt-b", "official", jst_date="2026-09-25")
+    assert store.list_calendar_counts() == {"evt-a": 2}
+    response = TestClient(app).get("/api/calendar-counts")
+    assert response.status_code == 200 and response.json() == {"counts": {"evt-a": 2}}

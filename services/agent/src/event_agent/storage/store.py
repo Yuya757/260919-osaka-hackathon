@@ -252,6 +252,9 @@ class Store(Protocol):
 
     def get_event_metrics(self, event_id: str) -> EventMetrics | None: ...
 
+    def list_calendar_counts(self) -> dict[str, int]:
+        """Calendar registrations per event, omitting events with none."""
+
     def reserve_grounding_calls(self, day: str, count: int, *, cap: int) -> bool:
         """Claim ``count`` searches against the day's cap (ADR-008 決定5).
 
@@ -622,6 +625,10 @@ class MemoryStore:
     def get_event_metrics(self, event_id: str) -> EventMetrics | None:
         with self._lock:
             return self._metrics.get(event_id)
+
+    def list_calendar_counts(self) -> dict[str, int]:
+        with self._lock:
+            return {key: value.calendar for key, value in self._metrics.items() if value.calendar > 0}
 
 
 def create_store() -> Store:

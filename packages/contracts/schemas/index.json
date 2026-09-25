@@ -83,7 +83,8 @@
         "MetricCounts",
         "EventMetrics",
         "PostMetricsResponse",
-        "MetricEventRequest"
+        "MetricEventRequest",
+        "CalendarCountsResponse"
       ]
     },
     {

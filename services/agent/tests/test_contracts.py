@@ -315,3 +315,13 @@ def test_watched_page_responses_conform(client: TestClient) -> None:
     for frame in frames:
         _assert_valid(validator, _json.loads(frame), "WatchedPageStreamEvent")
     assert _json.loads(frames[-1])["type"] == "result"
+
+
+def test_calendar_counts_conform(client: TestClient) -> None:
+    response = client.get("/api/calendar-counts")
+    assert response.status_code == 200
+    _assert_valid(
+        _validator("organizer-post.json", "CalendarCountsResponse"),
+        response.json(),
+        "CalendarCountsResponse",
+    )

@@ -579,6 +579,12 @@ class MetricEventRequest(BaseModel):
     kind: Literal["calendar"]
 
 
+class CalendarCountsResponse(BaseModel):
+    """イベントごとのカレンダー登録数。一覧の「N人が登録」に使う。0 件は含めない。"""
+
+    counts: dict[str, int]
+
+
 class OrganizerPostPreviewResponse(BaseModel):
     event: ApiEvent | None = None
     linked_event: ApiEvent | None = Field(default=None, alias="linkedEvent")
